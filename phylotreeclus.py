@@ -1,4 +1,5 @@
-# main file
+#!/usr/bin/env python3
+
 from argparse import ArgumentParser
 from PhyloTreeClustering.PhyloTreeClustering import PhyloTreeClustering
 
@@ -11,16 +12,17 @@ if __name__ == "__main__":
         # bottom text
         epilog="By Elisa Billard"
     )
-        
+    # positional arguments  
     parser.add_argument(
-        "-t","--tree_input", 
         dest= "tree_file_path",
         help="The input file : the copy number data"
     )
     parser.add_argument(
-        "-o", "--output_path", dest= "output_path",
+        dest= "output_path",
         help="The output path to save the figure"
     )
+
+    # optional arguments
     parser.add_argument(
         "--th", dest= "threshold",
         help="The threshold where to cut the dendrogram"
@@ -53,3 +55,4 @@ if __name__ == "__main__":
     clus = PhyloTreeClustering(**vars(args))
     clus.run()
     clus.plot_summary()
+    clus.sample_labels()

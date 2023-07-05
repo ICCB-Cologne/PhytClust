@@ -72,12 +72,12 @@ class PhyloTreeClustering:
         '''
         This function initializes the tree depending on where the information comes from.
         '''
-        if tree_file_path is None and (tree is None or dist_matrix is None):
+        if tree_file_path is None and tree is None:
             raise ValueError('The input data is not sufficient, you must give the tree_file_path ' 
-                'or directly the tree and dist_matrix')
+                'or directly the tree ')
         
         if tree is not None : self.tree = deepcopy(tree)
-        else: self.compute_dist_matrix(tree_file_path, only_tree = True) # assigns medicc tree to self.tree
+        elif tree_file_path: self.compute_dist_matrix(tree_file_path, only_tree = True) # assigns medicc tree to self.tree
 
     def init_n_diff_th(self, calinski_harabasz_score, n_diff_th):
         '''
@@ -118,8 +118,6 @@ class PhyloTreeClustering:
         if threshold is not None : return None
         if matrix is None: # no CH matrix is given, so we calculate it
             if dist_matrix is not None: 
-                if tree_file_path is None: 
-                    raise ValueError('The CH_matrix was not provided so the tree_file_path must be given')
                 self.pdm_matrix = self.compute_dist_matrix(tree_file_path) # verify that it will not be calulated twice
             matrix = self.pdm_matrix
         if 'diploid' in matrix.index : 
@@ -173,11 +171,12 @@ class PhyloTreeClustering:
             return 0
         else: return threshold ## add verification that it is no CH
 
-    def compute_dist_matrix(self,tree_file_path, only_tree = False):
+    def compute_dist_matrix(self, tree_file_path = None, only_tree = False):
         '''
         This function computes the distance matrix from the input files.
         '''
-        self.tree = import_tree(tree_file_path, 'diploid')
+        if tree_file_path:
+            self.tree = import_tree(tree_file_path, 'diploid')
         cur_sample_labels = [clade.name for clade in self.tree.get_terminals()]
         if only_tree: return 
 
