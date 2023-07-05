@@ -523,6 +523,7 @@ class PhyloTreeClustering:
             if show_multi_level_clus:
                 for clade_name, th in self.sub_best_th_dict.items():
                     ax.axvline(th, linestyle = '--', color = self.first_color_dict[clade_name], linewidth=2.5)
+        return ax
 
 
     def plot_th_score(self, ax = None, output_path = None ):
@@ -560,6 +561,7 @@ class PhyloTreeClustering:
         if self.output_path:
             plt.savefig(os.path.join(self.output_path, 'th_score_plot.png'))
         plt.show()
+        return ax
 
     def plot_summary(self, axs = None, annotation = True, output_path = None, width_scale =1, height_scale = 1 ):
         '''
@@ -599,7 +601,8 @@ class PhyloTreeClustering:
 
         if self.output_path:
             plt.savefig(os.path.join(self.output_path, 'summary_plot.png'))
-        plt.show()
+        #plt.show()
+        return axs
 
     def sample_labels(self, output_path = None, only_terminal = True ):
 
@@ -614,7 +617,7 @@ class PhyloTreeClustering:
             if only_terminal and 'internal' in name: continue
             if 'C' in label:
                 names.append(name)
-                self.labels_.append(int(label[1]))
+                self.labels_.append(int(label[1:]))
             else: 
                 names.append(name)
                 self.labels_.append(-1)
@@ -623,4 +626,22 @@ class PhyloTreeClustering:
         sample_labels = np.vstack((names, self.labels_ )).T
         if self.output_path:
             np.savetxt(os.path.join(self.output_path, 'sample_labels.txt'), sample_labels, fmt= '%s', delimiter= ':')
+
+        if self.multi_level_clus:
+            color_dict_2 = self.color_dict
+            self.labels_2= []
+            names_2 = []
+            for name, label in color_dict_2.items():
+                if only_terminal and 'internal' in name: continue
+                if 'C' in label:
+                    names_2.append(name)
+                    self.labels_2.append(int(label[1:]))
+                else: 
+                    names_2.append(name)
+                    self.labels_2.append(-1)
+
+            sample_labels_2 = np.vstack((names_2, self.labels_2 )).T
+            if self.output_path:
+                np.savetxt(os.path.join(self.output_path, 'sample_labels_2nd_layer.txt'), sample_labels_2, fmt= '%s', delimiter= ':')
+
         return sample_labels

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 
 from argparse import ArgumentParser
 from PhyloTreeClustering.PhyloTreeClustering import PhyloTreeClustering
@@ -54,5 +55,23 @@ if __name__ == "__main__":
 
     clus = PhyloTreeClustering(**vars(args))
     clus.run()
-    clus.plot_summary()
-    clus.sample_labels()
+
+    input_tree_name = os.path.basename(args.tree_file_path)
+    new_folder_name = 'results_' + input_tree_name
+    new_folder_path = os.path.join(args.output_path, new_folder_name)
+
+    # Specify the base directory name
+    base_folder = new_folder_path
+
+    # Create a counter to append to the folder name
+    counter = 1
+
+    # Check if the folder already exists and add suffix if necessary
+    while os.path.exists(new_folder_path):
+        new_folder_path = f"{base_folder} ({counter})"
+        counter += 1 
+
+    os.makedirs(new_folder_path)
+
+    clus.plot_summary( output_path = new_folder_path)
+    clus.sample_labels( output_path = new_folder_path)

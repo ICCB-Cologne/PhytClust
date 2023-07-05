@@ -43,7 +43,30 @@ After installing PhyloTreeClustering, you can use PhyloTreeClustering functions 
 
 PhyloTreeClustering creates the following output files:
 -   summary_plot.png : dendrogram and medicc tree next to each other, with the clustering
--   
+-   sample_labels.txt : list of all the samples and the cluster they were assigned to 
+-   sample_labels_2nd_layer.txt : list of all the samples and the cluster they were assigned to if the option multi_layer_clustering is chosen
 
 ## Usage example
-For first time users we recommend to have a look at examples/simple_example to get an idea of how input data should look like. Then run PhyloTreeClustering examples/simple_example/simple_example.tsv path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/example_workflows.py shows how the individual functions in the workflow are used.
+For first time users we recommend to have a look at the trees (tsv format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
+
+## References
+
+**For the examples : **
+- Original data from Gao et al. 2016 
+Gao, R., Davis, A., McDonald, T. et al. 
+Punctuated copy number evolution and clonal stasis in triple-negative breast cancer. 
+Nat Genet 48, 1119–1130 (2016). https://doi.org/10.1038/ng.3641
+
+- Original data from Minussi et al. 2021
+Minussi, D.C., Nicholson, M.D., Ye, H. et al. 
+Breast tumours maintain a reservoir of subclonal diversity during expansion. 
+Nature 592, 302–308 (2021). https://doi.org/10.1038/s41586-021-03357-x
+
+**For the file medicc_functions, copied functions from : **
+Kaufmann, T.L., Petkovic, M., Watkins, T.B.K. et al.
+MEDICC2: whole-genome doubling aware copy-number phylogenies for cancer evolution.
+Genome Biol 23, 241 (2022). https://doi.org/10.1186/s13059-022-02794-9
+
+**For the file calinski_harabasz, copied and modified function from : **
+Scikit-learn: Machine Learning in Python, Pedregosa et al., JMLR 12, pp. 2825-2830, 2011.
+

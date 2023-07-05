@@ -1,3 +1,5 @@
+from setuptools import setup
+
 setup(
     name='phylotreeclus',
     version='1.0.0',
