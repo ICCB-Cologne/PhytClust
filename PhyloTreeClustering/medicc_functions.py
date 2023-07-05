@@ -1,19 +1,48 @@
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import os
-
 import Bio
 from Bio import Phylo # I added that 
 
+import logging
+
+import matplotlib as mpl
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+COL_ALLELE_A = mpl.colors.to_rgba('orange')
+COL_ALLELE_B = mpl.colors.to_rgba('teal')
+COL_CLONAL = mpl.colors.to_rgba('lightgrey')
+COL_NORMAL = mpl.colors.to_rgba('dimgray')
+COL_GAIN = mpl.colors.to_rgba('red')
+COL_WGD = mpl.colors.to_rgba('green')
+COL_LOSS = mpl.colors.to_rgba('blue')
+COL_CHR_LABEL = mpl.colors.to_rgba('grey')
 COL_VLINES = '#1f77b4'
 COL_MARKER_INTERNAL = COL_VLINES
 COL_MARKER_TERMINAL = 'black'
 COL_MARKER_NORMAL = 'green'
+COL_SUMMARY_LABEL = 'grey'
+COL_BACKGROUND = 'white'
+COL_BACKGROUND_HATCH = 'lightgray'
+COL_PATCH_BACKGROUND = 'white'
+LINEWIDTH_COPY_NUMBERS = 2
+LINEWIDTH_CHR_BOUNDARY = 1
+LINEWIDTH_SEGMENT_BOUNDARY = 0.5
+ALPHA_PATCHES = 0.15
+ALPHA_PATCHES_WGD = 0.3
+ALPHA_CLONAL = 0.3
+BACKGROUND_HATCH_MARKER = '/////'
 TREE_MARKER_SIZE = 40
+YLABEL_FONT_SIZE = 8
+YLABEL_TICK_SIZE = 6
 XLABEL_FONT_SIZE = 10
 XLABEL_TICK_SIZE = 8
+CHR_LABEL_SIZE = 8
+SMALL_SEGMENTS_LIMIT = 1e7
+
+
 
 def _get_x_positions(tree):
     """Create a mapping of each clade to its horizontal position.
@@ -28,7 +57,7 @@ def _get_x_positions(tree):
 def _get_y_positions(tree, adjust=False, normal_name='diploid'):
     """Create a mapping of each clade to its vertical position.
     Dict of {clade: y-coord}.
-    Coordinates are negative, and integers for tips.
+Coordinates are negative, and integers for tips.
     """
     maxheight = tree.count_terminals()
     heights = {tip: maxheight -1 -i for i,
@@ -239,6 +268,285 @@ def plot_tree(input_tree,
             if clade.confidence is not None:
                 return value_to_str(clade.confidence)
             return None
+
+
+    def draw_clade_lines(
+        use_linecollection=False,
+        orientation="horizontal",
+        y_here=0,
+        x_start=0,
+        x_here=0,
+        y_bot=0,
+        y_top=0,
+        color="black",
+        lw=".1",
+    ):
+        """Create a line with or without a line collection object.
+        Graphical formatting of the lines representing clades in the plot can be
+        customized by altering this function.
+        """
+        if not use_linecollection and orientation == "horizontal":
+            ax.hlines(y_here, x_start, x_here, color=color, lw=lw)
+        elif use_linecollection and orientation == "horizontal":
+            horizontal_linecollections.append(
+                mpcollections.LineCollection(
+                    [[(x_start, y_here), (x_here, y_here)]], color=color, lw=lw
+                )
+            )
+        elif not use_linecollection and orientation == "vertical":
+            ax.vlines(x_here, y_bot, y_top, color=color)
+        elif use_linecollection and orientation == "vertical":
+            vertical_linecollections.append(
+                mpcollections.LineCollection(
+                    [[(x_here, y_bot), (x_here, y_top)]], color=color, lw=lw
+                )
+            )
+
+    def draw_clade(clade, x_start, color, lw):
+        """Recursively draw a tree, down from the given clade."""
+        x_here = x_posns[clade]
+        y_here = y_posns[clade]
+        # phyloXML-only graphics annotations
+        if hasattr(clade, "color") and clade.color is not None:
+            color = clade.color.to_hex()
+        if hasattr(clade, "width") and clade.width is not None:
+            lw = clade.width * plt.rcParams["lines.linewidth"]
+        # Draw a horizontal line from start to here
+        draw_clade_lines(
+            use_linecollection=True,
+            orientation="horizontal",
+            y_here=y_here,
+            x_start=x_start,
+            x_here=x_here,
+            color=color,
+            lw=lw,
+        )
+        # Add node marker
+        if marker_func is not None:
+            marker = marker_func(clade)
+            if marker is not None and clade is not None and not(hide_internal_nodes and not clade.is_terminal()):
+                marker_size, marker_col = marker_func(clade)
+                ax.scatter(x_here, y_here, s=marker_size, c=marker_col, zorder=3)
+
+        # Add node/taxon labels
+        label = label_func(str(clade.name))
+        ax_scale = ax.get_xlim()[1] - ax.get_xlim()[0]
+
+        if label not in (None, clade.__class__.__name__) and \
+                not (hide_internal_nodes and not clade.is_terminal()):
+            ax.text(
+                x_here + min(0.02*ax_scale, 1),
+                y_here,
+                " %s" % label,
+                verticalalignment="center",
+                color=get_label_color(label),
+            )
+        # Add label above the branch
+        conf_label = format_branch_label(clade)
+        if conf_label:
+            ax.text(
+                0.5 * (x_start + x_here),
+                y_here - 0.15,
+                conf_label,
+                fontsize="small",
+                horizontalalignment="center",
+            )
+        # Add support below the branch
+        if show_branch_support:
+            support_value = format_support_value(clade)
+            if support_value:
+                ax.text(
+                    0.5 * (x_start + x_here),
+                    y_here + 0.25,
+                    support_value + '%',
+                    fontsize="small",
+                    color='grey',
+                    horizontalalignment="center",
+                )
+        # Add Events list
+        if show_events and clade.events is not None:
+            ax.text(
+                0.5 * (x_start + x_here),
+                y_here - 0.15,
+                clade.events,
+                fontsize="small",
+                color=COL_MARKER_NORMAL,
+                horizontalalignment="center",
+            )
+        if clade.clades:
+            # Draw a vertical line connecting all children
+            y_top = y_posns[clade.clades[0]]
+            y_bot = y_posns[clade.clades[-1]]
+            # Only apply widths to horizontal lines, like Archaeopteryx
+            draw_clade_lines(
+                use_linecollection=True,
+                orientation="vertical",
+                x_here=x_here,
+                y_bot=y_bot,
+                y_top=y_top,
+                color=color,
+                lw=lw,
+            )
+            # Draw descendents
+            for child in clade:
+                draw_clade(child, x_here, color, lw)
+
+    if line_width is None:
+        line_width = plt.rcParams["lines.linewidth"]
+    draw_clade(input_tree.root, 0, "k", line_width)
+
+    # If line collections were used to create clade lines, here they are added
+    # to the pyplot plot.
+    for i in horizontal_linecollections:
+        ax.add_collection(i)
+    for i in vertical_linecollections:
+        ax.add_collection(i)
+
+    ax.set_xlabel("branch length")
+    ax.set_ylabel("taxa")
+
+    # Add margins around the `tree` to prevent overlapping the ax
+    xmax = max(x_posns.values())
+    #ax.set_xlim(-0.05 * xmax, 1.25 * xmax)
+    ax.set_xlim(-0.05 * xmax, 1.05 * xmax)
+    # Also invert the y-axis (origin at the top)
+    # Add a small vertical margin, but avoid including 0 and N+1 on the y axis
+    ax.set_ylim(max(y_posns.values()) + 0.5, 0.5)
+
+    # Parse and process key word arguments as pyplot options
+    for key, value in kwargs.items():
+        try:
+            # Check that the pyplot option input is iterable, as required
+            list(value)
+        except TypeError:
+            raise ValueError(
+                'Keyword argument "%s=%s" is not in the format '
+                "pyplot_option_name=(tuple), pyplot_option_name=(tuple, dict),"
+                " or pyplot_option_name=(dict) " % (key, value)
+            ) from None
+        if isinstance(value, dict):
+            getattr(plt, str(key))(**dict(value))
+        elif not (isinstance(value[0], tuple)):
+            getattr(plt, str(key))(*value)
+        elif isinstance(value[0], tuple):
+            getattr(plt, str(key))(*value[0], **dict(value[1]))
+
+    if output_name is not None:
+        plt.savefig(output_name + ".png", bbox_inches='tight')
+
+    return plt.gcf()
+
+
+def plot_cn_heatmap(input_df, final_tree=None, y_posns=None, cmax=8, total_copy_numbers=False,
+                    alleles=('cn_a', 'cn_b'), tree_width_ratio=1, cbar_width_ratio=0.05, figsize=(20, 10),
+                    tree_line_width=0.5, tree_marker_size=0, show_internal_nodes=False, title='',
+                    tree_label_colors=None, tree_label_func=None, cmap='coolwarm', normal_name='diploid',
+                    ignore_segment_lengths=False):
+
+    input_df = input_df[alleles].copy()
+    # if len(np.intersect1d(cur_sample_labels, input_df.index.get_level_values('sample_id').unique())) != len(cur_sample_labels):
+    #     raise MEDICCPlotError("tree nodes and labels in dataframe are not the same")
+
+    if not isinstance(alleles, list) and not isinstance(alleles, tuple):
+        alleles = [alleles]
+    nr_alleles = len(alleles)
+
+    cmax = min(cmax, np.max(input_df[alleles].values.astype(int)))
+
+    if final_tree is None:
+        fig, axs = plt.subplots(figsize=figsize, ncols=1+nr_alleles, sharey=False,
+                                gridspec_kw={'width_ratios': nr_alleles*[1] + [cbar_width_ratio]})
+
+        cur_sample_labels = (input_df.index.get_level_values('sample_id').unique())
+        if y_posns is None:
+            y_posns = {s: i for i, s in enumerate(cur_sample_labels)}
+
+        cn_axes = axs[:-1]
+    else:
+        fig, axs = plt.subplots(figsize=figsize, ncols=2+nr_alleles, sharey=False,
+                                gridspec_kw={'width_ratios': [tree_width_ratio] + nr_alleles*[1] + [cbar_width_ratio]})
+        tree_ax = axs[0]
+        cn_axes = axs[1:-1]
+
+        if show_internal_nodes:
+            cur_sample_labels = np.array([x.name for x in list(final_tree.find_clades()) if x.name is not None])
+        else:
+            cur_sample_labels = np.array([x.name for x in final_tree.get_terminals()])
+
+        y_posns = {k.name:v for k, v in _get_y_positions(final_tree, adjust=show_internal_nodes, normal_name=normal_name).items()}
+        
+        _ = plot_tree(final_tree, ax=tree_ax, normal_name=normal_name,
+                      label_func=tree_label_func if tree_label_func is not None else lambda x: '',
+                      hide_internal_nodes=(not show_internal_nodes), show_branch_lengths=False, show_events=False,
+                      line_width=tree_line_width, marker_size=tree_marker_size,
+                      title=title, label_colors=tree_label_colors)
+        tree_ax.set_axis_off()
+        tree_ax.set_axis_off()
+        fig.set_constrained_layout_pads(w_pad=0, h_pad=0, hspace=0.0, wspace=100)
+
+    cax = axs[-1]
+
+    ind = [y_posns.get(x, -1) for x in cur_sample_labels]
+    cur_sample_labels = cur_sample_labels[np.argsort(ind)]
+    color_norm = mcolors.TwoSlopeNorm(vmin=0, vcenter=(2 if total_copy_numbers else 1), vmax=cmax)
+
+    chr_ends = input_df.loc[cur_sample_labels[0]].copy()
+    chr_ends['end_pos'] = np.cumsum([1]*len(chr_ends))
+    chr_ends = chr_ends.reset_index().groupby('chrom').max()['end_pos']
+    chr_ends = chr_ends.dropna()
+    chr_ends = chr_ends.astype(int)
+
+
+    if ignore_segment_lengths:
+        x_pos = np.arange(len(input_df.loc[cur_sample_labels].astype(int).unstack('sample_id'))+1)
+    else:
+        x_pos = np.append([0], np.cumsum(input_df.loc[cur_sample_labels].astype(int).unstack(
+            'sample_id').loc[:, (alleles[0])].loc[:, cur_sample_labels].eval('end-start').values))
+    y_pos = np.arange(len(cur_sample_labels)+1)+0.5
+
+    for ax, allele in zip(cn_axes, alleles):
+        im = ax.pcolormesh(x_pos, y_pos,
+                        input_df.loc[cur_sample_labels].astype(int).unstack(
+                            'sample_id').loc[:, (allele)].loc[:, cur_sample_labels].values.T,
+                        cmap=cmap,
+                        norm=color_norm)
+
+        for _, line in chr_ends.items():
+            ax.axvline(x_pos[line], color='black', linewidth=0.75)
+        
+        xtick_pos = np.append([0], x_pos[chr_ends.values][:-1])
+        xtick_pos = (xtick_pos + np.roll(xtick_pos, -1))/2
+        xtick_pos[-1] += x_pos[-1]/2
+        ax.set_xticks(xtick_pos)
+        ax.set_xticklabels([x[3:] for x in chr_ends.index], ha='center', rotation=90, va='bottom')
+        ax.tick_params(width=0)
+        ax.xaxis.set_tick_params(labelbottom=False, labeltop=True, bottom=False)
+        ax.set_yticks([])
+
+    cax.pcolormesh([0, 1],
+                   np.arange(0, cmax+2),
+                   np.arange(0, cmax+1)[:, np.newaxis],
+                   cmap=cmap,
+                   norm=color_norm)
+
+    cax.set_xticks([])
+    cax.set_yticks(np.arange(0, cmax+1)+0.5)
+    if np.max(input_df.values.astype(int)) > cmax:
+        cax.set_yticklabels([str(x) + '+' if x == cmax else str(x)
+                             for x in np.arange(0, cmax+1)], ha='left')
+    else:
+        cax.set_yticklabels(np.arange(0, cmax+1), ha='left')
+    cax.yaxis.set_tick_params(left=False, labelleft=False, labelright=True)
+
+    for ax in axs[:-1]:
+        ax.set_ylim(len(cur_sample_labels)+0.5, 0.5)
+
+    return fig
+
+
+class MEDICCPlotError(Exception):
+    pass
+
 
 
 def import_tree(tree_file, normal_name='diploid', file_format='newick'):

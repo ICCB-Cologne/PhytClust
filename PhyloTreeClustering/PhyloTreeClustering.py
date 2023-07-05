@@ -85,7 +85,7 @@ class PhyloTreeClustering:
         '''
         if calinski_harabasz_score :
             if n_diff_th == None or n_diff_th == 0: 
-                if self.N > 36 : return round(6*math.sqrt(self.N)) 
+                if self.N > 36 : return round(6*np.sqrt(self.N)) 
                 else: return self.N
             elif n_diff_th <= self.N : 
                 return n_diff_th
@@ -160,7 +160,7 @@ class PhyloTreeClustering:
         This function initializes the minimun size a cluster must have to be considered as such.
         '''
         if min_size_clus == None:
-            min_size_clus = round(math.sqrt(self.N)/2)  
+            min_size_clus = round(np.sqrt(self.N)/2)  
         elif min_size_clus >= self.N:
             raise ValueError("The minimun cluster size entered is bigger than the number of samples")
         return min_size_clus
@@ -526,13 +526,15 @@ class PhyloTreeClustering:
                     ax.axvline(th, linestyle = '--', color = self.first_color_dict[clade_name], linewidth=2.5)
 
 
-    def plot_th_score(self, ax = None):
+    def plot_th_score(self, ax = None, output_path = None ):
         '''
         This function plots the CH score for each threshold tested, the orange dot was the chosen threshold,
         the different colored dots are the thresholds of the 2nd layer clustering.
         '''
         if ax is None:
             fig, ax = plt.subplots(figsize = (5,5))
+        elif len(ax) != 1 :
+            raise ValueError('The plotting of the score per threshold needs only 1 ax')
 
         if self.first_CH_scores is not None: 
             self.CH_scores = self.first_CH_scores
@@ -548,25 +550,38 @@ class PhyloTreeClustering:
                 colors[index_th] = self.first_color_dict[clade_name]
 
         ax.scatter(list(self.CH_scores.keys()), list(self.CH_scores.values()), c= colors, marker='o')
-        ax.set_xlabel('distance threshold')
+        ax.set_xlabel('Distance threshold')
         ax.set_ylabel('Calinski Harabasz score')
 
         plt.xticks(rotation=40)
-        plt.title('Threshold tuning', size = 20)
+        plt.title('Threshold tuning', size = 15)
 
-    def plot_summary(self, axs = None, annotation = True, output_path = None ):
+        if output_path is not None : self.output_path = output_path
+
+        if self.output_path:
+            plt.savefig(os.path.join(self.output_path, 'th_score_plot.png'))
+        plt.show()
+
+    def plot_summary(self, axs = None, annotation = True, output_path = None, width_scale =1, height_scale = 1 ):
         '''
         This function plots a summary of the algorithm, with the dendrogram next to the medicc tree.
         '''
+        plot_height = 5 + height_scale * np.sqrt(10*self.N) * 0.1
+        max_leaf_to_root_distances = np.max([np.sum([x.branch_length for x in self.tree.get_path(leaf)])
+                            for leaf in self.tree.get_terminals()])
+        plot_width = 7 + np.max([0, width_scale * np.log10(max_leaf_to_root_distances / 100) * 5])
+       
         if self.multi_level_clus:
-            if axs is None: fig, axs = plt.subplots(ncols=4, nrows=1,figsize=(50,10))
+            if axs is None: 
+                fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(4*min(250, plot_width), min(250, plot_height)))
             elif len(axs) != 4 : 
                 raise ValueError('The axs parameter must be of length 4')
             color_dict = self.first_color_dict
         else: 
-            if axs is None: fig, axs = plt.subplots(ncols=2, nrows=1,figsize=(30,10))
+            if axs is None: 
+                fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(2*min(250, plot_width), min(250, plot_height)))
             elif len(axs) != 2 : 
-                raise ValueError('The axs parameter must be of length 4')
+                raise ValueError('The axs parameter must be of length 2')
             self.first_best_CH = self.best_CH
         
         self.plot_dendro(ax = axs[0], annotation= annotation)
@@ -586,3 +601,27 @@ class PhyloTreeClustering:
         if self.output_path:
             plt.savefig(os.path.join(self.output_path, 'summary_plot.png'))
         plt.show()
+
+    def sample_labels(self, output_path = None, only_terminal = True ):
+
+        if self.multi_level_clus:
+            color_dict = self.first_color_dict
+        else: 
+            color_dict = self.color_dict
+
+        self.labels_= []
+        names = []
+        for name, label in color_dict.items():
+            if only_terminal and 'internal' in name: continue
+            if 'C' in label:
+                names.append(name)
+                self.labels_.append(int(label[1]))
+            else: 
+                names.append(name)
+                self.labels_.append(-1)
+
+        #sample_labels = [[key, value] for key, value in color_dict.items()]
+        sample_labels = np.vstack((names, self.labels_ )).T
+        if self.output_path:
+            np.savetxt(os.path.join(self.output_path, 'sample_labels.txt'), sample_labels, fmt= '%s', delimiter= ':')
+        return sample_labels
