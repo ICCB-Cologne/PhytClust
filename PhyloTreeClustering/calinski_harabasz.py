@@ -59,6 +59,8 @@ def calinski_harabasz_score(X, labels):
 
     n_samples, _ = X.shape
     n_labels = len(le.classes_)
+    matrix_mean = np.mean(np.mean(X))
+    outliers_penalty = matrix_mean**2 * 8
 
     check_number_of_labels(n_labels, n_samples)
     extra_disp, intra_disp = 0.0, 0.0
@@ -70,7 +72,7 @@ def calinski_harabasz_score(X, labels):
 
         extra_disp += len(cluster_k) * np.sum((mean_k - mean) ** 2)
         if len(cluster_k) <= 1: # outliers
-            intra_disp += 80000 # instead of 0
+            intra_disp += outliers_penalty # instead of 0
         else: 
             intra_disp += np.sum((cluster_k - mean_k) ** 2)
 
