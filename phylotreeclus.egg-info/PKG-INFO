@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: phylotreeclus
-Version: 1.0.1
+Version: 1.0.2
 Summary: Clustering algorithm for phylogenetic cancer evolution trees
 Home-page: https://bitbucket.org/schwarzlab/phylotreeclustering
 Author: Elisa Billard

@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='phylotreeclus',
-    version='1.0.1',
+    version='1.0.2',
     author='Elisa Billard',
     author_email='elisabillard1905@gmail.com',
     description='Clustering algorithm for phylogenetic cancer evolution trees',
@@ -20,10 +20,10 @@ setup(
     packages=['PhyloTreeClustering'],
     scripts=['phylotreeclus'],
     install_requires=[
-        'numpy>=1.25.0',
-        'pandas>=1.5.3',
-        'biopython>=1.78',
-        'matplotlib>=3.7.1',
-        'scikit-learn>=1.2.2'
+        'numpy',
+        'pandas',
+        'biopython',
+        'matplotlib',
+        'scikit-learn'
     ]
 )
