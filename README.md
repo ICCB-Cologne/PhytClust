@@ -1,5 +1,5 @@
 # PhyloTreeClustering 
-Clustering method for phylogenetic trees.
+Clustering method for phylogenetic cancer evolution trees.
 
 ## Installation
 Install PhyloTreeClustering via pip or from source.
@@ -55,11 +55,14 @@ PhyloTreeClustering creates the following output files:
 
 ## Usage example
 
-For first time users we recommend to have a look at the trees (Newick format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
+For first time users we recommend to have a look at the trees (Newick format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree.new path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
+
+![Clustering example](example_data/example_summary_plot_readme.png)
 
 ## References
 
 **For the examples :**
+
 - Original data from Gao et al. 2016 
 Gao, R., Davis, A., McDonald, T. et al. 
 Punctuated copy number evolution and clonal stasis in triple-negative breast cancer. 

@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: phylotreeclus
-Version: 1.0.2
+Version: 1.0.3
 Summary: Clustering algorithm for phylogenetic cancer evolution trees
 Home-page: https://bitbucket.org/schwarzlab/phylotreeclustering
 Author: Elisa Billard
@@ -10,55 +10,53 @@ Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Description-Content-Type: text/markdown
 
-# README #
-
 # PhyloTreeClustering 
-Clustering method for phylogenetic trees.
+Clustering method for phylogenetic cancer evolution trees.
 
 ## Installation
 Install PhyloTreeClustering via pip or from source.
 
 ### Intallation via pip (recommended)
-It is best to use a dedicated conda environment for your PhyloTreeClustering installation with 'conda create -n phylo_env'.
-After activating the environment with 'conda activate phylo_env' you can install PhyloTreeCLustering via 'pip install phylotreeclus'
+It is best to use a dedicated conda environment for your PhyloTreeClustering installation with `conda create -n phylo_env`.
+After activating the environment with `conda activate phylo_env` you can install PhyloTreeCLustering via `pip install phylotreeclus`
 
 ### Installation from source
-Clone the PhyloTreeClustering repository using 'git clone https://bitbucket.org/schwarzlab/phylotreeclustering'. 
+Clone the PhyloTreeClustering repository using `git clone https://bitbucket.org/schwarzlab/phylotreeclustering`. 
 
-Then, inside the PhyloTreeClustering folder, run pip install . to install PhyloTreeClustering to your environment.
+Then, inside the PhyloTreeClustering folder, run `pip install . `to install PhyloTreeClustering to your environment.
 
 ## Usage
-After installing PhyloTreeClustering, you can use PhyloTreeClustering functions in python scripts (through import PhyloTreeClustering) and from the command line. General usage from the command line is 'phylotreeclus path/to/input/file path/to/output/folder'. Run phylotreeclus --help for information on optional arguments.
+After installing PhyloTreeClustering, you can use PhyloTreeClustering functions in python scripts (through import PhyloTreeClustering) and from the command line. General usage from the command line is `phylotreeclus path/to/input/file path/to/output/folder`. Run phylotreeclus --help for information on optional arguments.
 
 ## Command line Flags
 
--   'tree_file_path': tree you want to cluster, in Newick format
+-   `tree_file_path`: tree you want to cluster, in Newick format
 
--   'output_path': path to save figures and files produced by algorithm
+-   `output_path`: path to save figures and files produced by algorithm
 
--   'tree': directly the tree you want to cluster
+-   `tree`: directly the tree you want to cluster
 
--   'dist_matrix': panda dataframe, matrix of the distances between all leaves of the tree, index are the names of the leaves 
-                The default None means the distance matrix will be calculated by the function calculate_pdm_from_tree.
+-   `dist_matrix`: panda dataframe, matrix of the distances between all leaves of the tree, index are the names of the leaves 
+                The default None means the distance matrix will be calculated by the function `calculate_pdm_from_tree`.
 
--   'threshold': manually choose the cutting threshold (not recommended)
+-   `threshold`: manually choose the cutting threshold (not recommended)
 
--   'calinski_harabasz_score': if True, the algorithm chooses the best threshold based on the clustering with the highest score
+-   `calinski_harabasz_score`: if True, the algorithm chooses the best threshold based on the clustering with the highest score
 
--   'n_diff_th': number of repetition of scoring, meaning the number of different threshold cuts will be tested.
-                The default None means this number will be calculated according to the size of the tree in init_n_diff_th.
+-   `n_diff_th`: number of repetition of scoring, meaning the number of different threshold cuts will be tested.
+                The default None means this number will be calculated according to the size of the tree in `init_n_diff_th`.
             
--   'CH_matrix': distance matrix that will be used to evaluate the clusering with the CH score
+-   `CH_matrix`: distance matrix that will be used to evaluate the clusering with the CH score
                 If no matrix is given, the normal dist_matrix will be used
         
--   'min_size_clus': minimum size of a cluster. 
+-   `min_size_clus`: minimum size of a cluster. 
                 If no value is given, it is calculated in init_min_size_clus according to the size of the tree
         
--   'multi_level_clus': if True, make a second level of clusters.
+-   `multi_level_clus`: if True, make a second level of clusters.
                 The default is False, so only one level of clustering will be performed
         
--   'dist_type': distance calculation used to compute the new dendrogram distances.
-                The default and recommended distance is 'half_max'. The others are 'mean', 'median' and 'max'
+-   `dist_type`: distance calculation used to compute the new dendrogram distances.
+                The default and recommended distance is `half_max`. The others are `mean`, `median` and `max`
 
 ## Output plot
 
@@ -73,7 +71,8 @@ For first time users we recommend to have a look at the trees (Newick format) in
 
 ## References
 
-**For the examples : **
+**For the examples :**
+
 - Original data from Gao et al. 2016 
 Gao, R., Davis, A., McDonald, T. et al. 
 Punctuated copy number evolution and clonal stasis in triple-negative breast cancer. 
@@ -84,11 +83,11 @@ Minussi, D.C., Nicholson, M.D., Ye, H. et al.
 Breast tumours maintain a reservoir of subclonal diversity during expansion. 
 Nature 592, 302–308 (2021). https://doi.org/10.1038/s41586-021-03357-x
 
-**For the file medicc_functions, copied functions from : **
+**For the file medicc_functions, copied functions from :**
 Kaufmann, T.L., Petkovic, M., Watkins, T.B.K. et al.
 MEDICC2: whole-genome doubling aware copy-number phylogenies for cancer evolution.
 Genome Biol 23, 241 (2022). https://doi.org/10.1186/s13059-022-02794-9
 
-**For the file calinski_harabasz, copied and modified function from : **
+**For the file calinski_harabasz, copied and modified function from :**
 Scikit-learn: Machine Learning in Python, Pedregosa et al., JMLR 12, pp. 2825-2830, 2011.
 
