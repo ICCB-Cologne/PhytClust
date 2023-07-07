@@ -1,5 +1,6 @@
 README.md
 phylotreeclus
+pyproject.toml
 setup.py
 PhyloTreeClustering/PhyloTreeClustering.py
 PhyloTreeClustering/__init__.py
