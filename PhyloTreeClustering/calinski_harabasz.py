@@ -60,7 +60,7 @@ def calinski_harabasz_score(X, labels):
     n_samples, _ = X.shape
     n_labels = len(le.classes_)
     matrix_mean = np.mean(np.mean(X))
-    outliers_penalty = matrix_mean**2 * 8
+    outliers_penalty = matrix_mean**2 * 9
 
     check_number_of_labels(n_labels, n_samples)
     extra_disp, intra_disp = 0.0, 0.0
