@@ -4,18 +4,27 @@
 Clustering method for phylogenetic trees.
 
 ## Installation
-Install PhyloTreeClustering via conda.
+Install PhyloTreeClustering via pip or from source.
+
+### Intallation via pip (recommended)
+It is best to use a dedicated conda environment for your PhyloTreeClustering installation with 'conda create -n phylo_env'.
+After activating the environment with 'conda activate phylo_env' you can install PhyloTreeCLustering via 'pip install phylotreeclus'
+
+### Installation from source
+Clone the PhyloTreeClustering repository using 'git clone https://bitbucket.org/schwarzlab/phylotreeclustering'. 
+
+Then, inside the PhyloTreeClustering folder, run pip install . to install PhyloTreeClustering to your environment.
 
 ## Usage
 After installing PhyloTreeClustering, you can use PhyloTreeClustering functions in python scripts (through import PhyloTreeClustering) and from the command line. General usage from the command line is 'phylotreeclus path/to/input/file path/to/output/folder'. Run phylotreeclus --help for information on optional arguments.
 
 ## Command line Flags
 
--   'tree_file_path': tree you want to cluster, in new format
+-   'tree_file_path': tree you want to cluster, in Newick format
 
--   'output_path': path to save figure produced by algorithm
+-   'output_path': path to save figures and files produced by algorithm
 
--   'tree': directly tree you want to cluster
+-   'tree': directly the tree you want to cluster
 
 -   'dist_matrix': panda dataframe, matrix of the distances between all leaves of the tree, index are the names of the leaves 
                 The default None means the distance matrix will be calculated by the function calculate_pdm_from_tree.
@@ -47,7 +56,8 @@ PhyloTreeClustering creates the following output files:
 -   sample_labels_2nd_layer.txt : list of all the samples and the cluster they were assigned to if the option multi_layer_clustering is chosen
 
 ## Usage example
-For first time users we recommend to have a look at the trees (tsv format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
+
+For first time users we recommend to have a look at the trees (Newick format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
 
 ## References
 
