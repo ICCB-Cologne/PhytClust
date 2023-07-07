@@ -57,7 +57,7 @@ PhyloTreeClustering creates the following output files:
 
 For first time users we recommend to have a look at the trees (Newick format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree.new path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
 
-![Clustering example](example_data/example_summary_plot_readme.png)
+![Clustering example](https://bitbucket.org/schwarzlab/phylotreeclustering/raw/master/example_data/example_summary_plot_readme.png)
 
 ## References
 
