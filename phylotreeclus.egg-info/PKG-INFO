@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: phylotreeclus
-Version: 1.0.0
+Version: 1.0.1
 Summary: Clustering algorithm for phylogenetic cancer evolution trees
 Home-page: https://bitbucket.org/schwarzlab/phylotreeclustering
 Author: Elisa Billard
@@ -11,7 +11,7 @@ Classifier: Operating System :: OS Independent
 Description-Content-Type: text/markdown
 
 # PhyloTreeClustering 
-Clustering method for phylogenetic cancer evolution trees.
+Clustering algorithm for phylogenetic cancer evolution trees.
 
 ## Installation
 Install PhyloTreeClustering via pip or from source.
@@ -26,50 +26,51 @@ Clone the PhyloTreeClustering repository using `git clone https://bitbucket.org/
 Then, inside the PhyloTreeClustering folder, run `pip install . `to install PhyloTreeClustering to your environment.
 
 ## Usage
-After installing PhyloTreeClustering, you can use PhyloTreeClustering functions in python scripts (through import PhyloTreeClustering) and from the command line. General usage from the command line is `phylotreeclus path/to/input/file path/to/output/folder`. Run phylotreeclus --help for information on optional arguments.
+After installing PhyloTreeClustering, you can use PhyloTreeClustering functions in python scripts (through `import PhyloTreeClustering`) and from the command line. General usage from the command line is `phylotreeclus path/to/input/file path/to/output/folder`. Run `phylotreeclus --help` for information on optional arguments.
 
 ## Command line Flags
 
--   `tree_file_path`: tree you want to cluster, in Newick format
+-   `tree_file_path`: tree you want to cluster, in Newick format.
 
--   `output_path`: path to save figures and files produced by algorithm
+-   `output_path`: path to save figures and files produced by algorithm.
 
--   `tree`: directly the tree you want to cluster
+-   `tree`: directly the tree you want to cluster.
 
 -   `dist_matrix`: panda dataframe, matrix of the distances between all leaves of the tree, index are the names of the leaves 
                 The default None means the distance matrix will be calculated by the function `calculate_pdm_from_tree`.
 
--   `threshold`: manually choose the cutting threshold (not recommended)
+-   `threshold`: manually choose the cutting threshold (not recommended).
 
--   `calinski_harabasz_score`: if True, the algorithm chooses the best threshold based on the clustering with the highest score
+-   `calinski_harabasz_score`: if True, the algorithm chooses the best threshold based on the clustering with the highest score,
+                                True by default.
 
--   `n_diff_th`: number of repetition of scoring, meaning the number of different threshold cuts will be tested.
+-   `n_diff_th`: number of different threshold that will be tested.
                 The default None means this number will be calculated according to the size of the tree in `init_n_diff_th`.
             
--   `CH_matrix`: distance matrix that will be used to evaluate the clusering with the CH score
-                If no matrix is given, the normal dist_matrix will be used
+-   `CH_matrix`: distance matrix that will be used to evaluate the clusering with the CH score,
+                if no matrix is given, the normal `dist_matrix` will be used.
         
 -   `min_size_clus`: minimum size of a cluster. 
-                If no value is given, it is calculated in init_min_size_clus according to the size of the tree
+                If no value is given, it is calculated in `init_min_size_clus` according to the size of the tree.
         
--   `multi_level_clus`: if True, make a second level of clusters.
-                The default is False, so only one level of clustering will be performed
+-   `multi_level_clus`: if True, a second level of clustering will be performed for the bigger clusters.
+                The default is False, so only one level of clustering will be performed.
         
 -   `dist_type`: distance calculation used to compute the new dendrogram distances.
-                The default and recommended distance is `half_max`. The others are `mean`, `median` and `max`
+                The default and recommended distance is `half_max`. The others are `mean`, `median` and `max`.
 
 ## Output plot
 
 PhyloTreeClustering creates the following output files:
--   summary_plot.png : dendrogram and medicc tree next to each other, with the clustering
--   sample_labels.txt : list of all the samples and the cluster they were assigned to 
--   sample_labels_2nd_layer.txt : list of all the samples and the cluster they were assigned to if the option multi_layer_clustering is chosen
+-   summary_plot.png : dendrogram and tree next to each other, with the clustering shown with colors (outliers in black), the red dotted lines are the min and max threshold     tested, the yellow line is the chosen threshold.
+-   sample_labels.txt : list of all the samples and the cluster they were assigned to.
+-   sample_labels_2nd_layer.txt : list of all the samples and the cluster they were assigned to if the option multi_layer_clustering is chosen.
 
 ## Usage example
 
-For first time users we recommend to have a look at the trees (Newick format) in /examples to get an idea of how input data should look like. Then run phylotreeclus examples/Gao_2016_12_final_tree.new path/to/output/folder as an example of a standard PhyloTreeClustering run. Finally, the notebook notebooks/simple_example.py shows how the individual functions in the workflow are used.
+For first time users we recommend to have a look at the trees (Newick format) in /examples on Bitbucket to get an idea of how input data should look like. Then run `phylotreeclus examples/Gao_2016_12_final_tree.new path/to/output/folder` as an example of a standard PhyloTreeClustering run. Finally, the notebook `notebooks/simple_example.py` shows how the individual functions in the workflow are used.
 
-![Clustering example](example_data/example_summary_plot_readme.png)
+![Clustering example](https://bitbucket.org/schwarzlab/phylotreeclustering/raw/master/example_data/example_summary_plot_readme.png)
 
 ## References
 

@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='phylotreeclus',
-    version='1.0.0',
+    version='1.0.1',
     author='Elisa Billard',
     author_email='elisabillard1905@gmail.com',
     description='Clustering algorithm for phylogenetic cancer evolution trees',
