@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # positional arguments  
     parser.add_argument(
         dest= "tree_file_path",
-        help="The input file : the copy number data"
+        help="The input file : Newick tree"
     )
     parser.add_argument(
         dest= "output_path",
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # optional arguments
     parser.add_argument(
         "--th", dest= "threshold",
-        help="The threshold where to cut the dendrogram"
+        help="Manually choose the threshlod where you want to cut the dendrogram (not recommended)"
     )
     parser.add_argument(
         "-c", "--calinski_h", action="store_false", dest = "calinski_harabasz_score",
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m", "--multi_level_clus", action= "store_true", # flag, meaning it is False by default
         dest = "multi_level_clus",
-        help="Whether to to a 2nd level of clustering on the big clusters"
+        help="Whether to do a 2nd level of clustering on the big clusters"
     )
     
     

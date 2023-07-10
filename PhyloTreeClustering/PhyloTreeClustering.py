@@ -6,7 +6,6 @@ from copy import deepcopy, copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-#from tqdm.auto import tqdm
 
 from PhyloTreeClustering.calculate_pdm import calculate_pdm_from_tree
 from PhyloTreeClustering.calinski_harabasz import calinski_harabasz_score
