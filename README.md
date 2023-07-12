@@ -82,3 +82,11 @@ Genome Biol 23, 241 (2022). https://doi.org/10.1186/s13059-022-02794-9
 **For the file calinski_harabasz, copied and modified function from :**
 Scikit-learn: Machine Learning in Python, Pedregosa et al., JMLR 12, pp. 2825-2830, 2011.
 
+
+## Please cite
+
+Please cite this repository if you use the algorithm in your work:
+
+> E. Billard, T.L. Kaufmann, R.F. Schwarz, PhyloTreeClus, (2023), Bitbucket repository, https://bitbucket.org/schwarzlab/phylotreeclustering
+
+
