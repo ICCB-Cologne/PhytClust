@@ -24,21 +24,13 @@ def check_number_of_labels(n_labels, n_samples):
 
 def calinski_harabasz_score(X, labels):
     """Compute the Calinski and Harabasz score.
-    Modified version of the sklearn one.
-    It is also known as the Variance Ratio Criterion.
-
-    The score is defined as ratio of the sum of between-cluster dispersion and
-    of within-cluster dispersion.
-
-    Read more in the :ref:`User Guide <calinski_harabasz_index>`.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
-        A list of ``n_features``-dimensional data points. Each row corresponds
-        to a single data point.
+    X : distance matrix of shape (n_samples, n_samples)
+        Each row/column represents a node of the phylogenetic tree
 
-    labels : array-like of shape (n_samples,)
+    labels : array-like of shape (n_samples, labels)
         Predicted labels for each sample.
 
     Returns
@@ -59,27 +51,25 @@ def calinski_harabasz_score(X, labels):
 
     n_samples, _ = X.shape
     n_labels = len(le.classes_)
-    matrix_mean = np.mean(np.mean(X))
-    outliers_penalty = matrix_mean**2 * 9
+    matrix_mean = np.mean(X)/2
+    outliers = X[:, labels <= 1]
+    outliers = outliers[labels <= 1]
+    outlier_penalty = (matrix_mean**2)*(len(outliers)/len(X)) #For all clusters with just one terminal node
 
     check_number_of_labels(n_labels, n_samples)
-    extra_disp, intra_disp = 0.0, 0.0
-    mean = np.mean(X, axis=0)
+    within_cluster, between_cluster = 0.0, 0.0
+    overall_ss = (np.sum(X**2))/(n_samples * 2)
+
     for k in range(n_labels):
         
-        cluster_k = X[labels == k]
-        mean_k = np.mean(cluster_k, axis=0)
-
-        extra_disp += len(cluster_k) * np.sum((mean_k - mean) ** 2)
-        if len(cluster_k) <= 1: # outliers
-            intra_disp += outliers_penalty # instead of 0
+        cluster_k = X[:, labels == k]
+        cluster_k = cluster_k[labels == k]
+        if len(cluster_k) <= 1:
+            within_cluster += outlier_penalty 
         else: 
-            intra_disp += np.sum((cluster_k - mean_k) ** 2)
+            within_cluster += (np.sum(cluster_k**2))/(len(cluster_k) * 2)
 
     return (
         1.0
-        if intra_disp == 0.0
-        else extra_disp * (n_samples - n_labels) / (intra_disp * (n_labels - 1.0))
+        between_cluster * (n_samples - n_labels) / (within_cluster * (n_labels - 1.0))
     )
-
-    
