@@ -1,11 +1,7 @@
-import Bio
-from Bio import Phylo # I added that 
-
 import logging
-
 import matplotlib as mpl
-import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors #remove
+import matplotlib.pyplot as plt #remove
 import numpy as np
 import pandas as pd
 
@@ -20,7 +16,7 @@ COL_WGD = mpl.colors.to_rgba('green')
 COL_LOSS = mpl.colors.to_rgba('blue')
 COL_CHR_LABEL = mpl.colors.to_rgba('grey')
 COL_VLINES = '#1f77b4'
-COL_MARKER_INTERNAL = COL_VLINES
+COL_MARKER_INTERNAL = 'grey'
 COL_MARKER_TERMINAL = 'black'
 COL_MARKER_NORMAL = 'green'
 COL_SUMMARY_LABEL = 'grey'
@@ -42,60 +38,12 @@ XLABEL_TICK_SIZE = 8
 CHR_LABEL_SIZE = 8
 SMALL_SEGMENTS_LIMIT = 1e7
 
-
-
-def _get_x_positions(tree):
-    """Create a mapping of each clade to its horizontal position.
-    Dict of {clade: x-coord}
-    """
-    depths = tree.depths()
-    # If there are no branch lengths, assume unit branch lengths
-    if not max(depths.values()):
-        depths = tree.depths(unit_branch_lengths=True)
-    return depths
-
-def _get_y_positions(tree, adjust=False, normal_name='diploid'):
-    """Create a mapping of each clade to its vertical position.
-    Dict of {clade: y-coord}.
-Coordinates are negative, and integers for tips.
-    """
-    maxheight = tree.count_terminals()
-    heights = {tip: maxheight -1 -i for i,
-            tip in enumerate(reversed([x for x in tree.get_terminals() if x.name != normal_name]))}
-    heights.update({list(tree.find_clades(normal_name))[0]: maxheight})
-
-    # Internal nodes: place at midpoint of children
-    def calc_row(clade):
-        for subclade in clade:
-            if subclade not in heights:
-                calc_row(subclade)
-        # Closure over heights
-        heights[clade] = (heights[clade.clades[0]] + heights[clade.clades[-1]]) / 2.0
-
-    if tree.root.clades:
-        calc_row(tree.root)
-        
-    if adjust:
-        pos = pd.DataFrame([(clade, val) for clade, val in heights.items()], columns=['clade','pos']).sort_values('pos')
-        pos['newpos'] = 0
-        count = 0
-        for i in pos.index:
-            if pos.loc[i,'clade'].name is not None and pos.loc[i,'clade'].name != 'root':
-                count = count+1
-            pos.loc[i, 'newpos'] = count
-
-        pos.set_index('clade', inplace=True)
-        heights = pos.to_dict()['newpos']
-
-    return heights
-
-
 def plot_tree(input_tree,
               label_func=None,
               title='',
               ax=None,
               output_name=None,
-              normal_name='diploid',
+              normal_name=None,
               width_scale=1,
               height_scale=1,
               show_branch_lengths=True,
@@ -161,11 +109,12 @@ def plot_tree(input_tree,
         try:
             import pylab as plt
         except ImportError:
-            raise MEDICCPlotError(
+            raise PlotError(
                 "Install matplotlib or pylab if you want to use draw."
             ) from None
 
     import matplotlib.collections as mpcollections
+
     if ax is None:
         nsamp = len(list(input_tree.find_clades()))
         plot_height = height_scale * nsamp * 0.25
@@ -200,7 +149,7 @@ def plot_tree(input_tree,
             clade_colors[sample] = COL_MARKER_TERMINAL
             if not is_terminal:
                 clade_colors[sample] = COL_MARKER_INTERNAL
-            if sample == normal_name:
+            if normal_name is not None and sample == normal_name:
                 clade_colors[sample] = COL_MARKER_NORMAL
         
         def get_label_color(label):
@@ -208,7 +157,7 @@ def plot_tree(input_tree,
 
     if marker_size is None:
         marker_size = TREE_MARKER_SIZE
-    marker_func=lambda x: (marker_size, get_label_color(x.name)) if x.name is not None else None
+    marker_func=lambda x: (marker_size, get_label_color(x.name)) if x.name is not None else (marker_size, COL_MARKER_INTERNAL)
 
     ax.axes.get_yaxis().set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -220,7 +169,8 @@ def plot_tree(input_tree,
     ax.set_title(title, x=0.01, y=1.0, ha='left', va='bottom',
                 fontweight='bold', fontsize=16, zorder=10)
     x_posns = _get_x_positions(input_tree)
-    y_posns = _get_y_positions(input_tree, adjust=not hide_internal_nodes, normal_name=normal_name)
+    #y_posns = _get_y_positions(input_tree, adjust=not hide_internal_nodes, normal_name=normal_name)
+    y_posns = _get_y_positions(input_tree, adjust=True, normal_name=normal_name)
 
     # Arrays that store lines for the plot of clades
     horizontal_linecollections = []
@@ -238,7 +188,7 @@ def plot_tree(input_tree,
     if not branch_labels:
         if show_branch_lengths:
             def format_branch_label(x): 
-                return value_to_str(np.round(x.branch_length, 1)) if x.name != 'root' and x.name is not None else None
+                return value_to_str(np.round(x.branch_length, 1)) if x != input_tree.root and x.branch_length is not None else None
         else:
             def format_branch_label(clade):
                 return None
@@ -326,21 +276,22 @@ def plot_tree(input_tree,
             marker = marker_func(clade)
             if marker is not None and clade is not None and not(hide_internal_nodes and not clade.is_terminal()):
                 marker_size, marker_col = marker_func(clade)
-                ax.scatter(x_here, y_here, s=marker_size, c=marker_col, zorder=3)
+                ax.scatter(x_here, y_here, s=marker_size, c=[marker_col,], zorder=3)
 
         # Add node/taxon labels
-        label = label_func(str(clade.name))
-        ax_scale = ax.get_xlim()[1] - ax.get_xlim()[0]
+        if not clade.name is None:
+            label = label_func(str(clade.name))
+            ax_scale = ax.get_xlim()[1] - ax.get_xlim()[0]
 
-        if label not in (None, clade.__class__.__name__) and \
-                not (hide_internal_nodes and not clade.is_terminal()):
-            ax.text(
-                x_here + min(0.02*ax_scale, 1),
-                y_here,
-                " %s" % label,
-                verticalalignment="center",
-                color=get_label_color(label),
-            )
+            if label not in (None, clade.__class__.__name__) and \
+                    not (hide_internal_nodes and not clade.is_terminal()):
+                ax.text(
+                    x_here + min(0.02*ax_scale, 1),
+                    y_here,
+                    " %s" % label,
+                    verticalalignment="center",
+                    color=get_label_color(label),
+                )
         # Add label above the branch
         conf_label = format_branch_label(clade)
         if conf_label:
@@ -436,136 +387,56 @@ def plot_tree(input_tree,
 
     return plt.gcf()
 
+def _get_x_positions(tree):
+    """Create a mapping of each clade to its horizontal position.
+    Dict of {clade: x-coord}
+    """
+    depths = tree.depths()
+    # If there are no branch lengths, assume unit branch lengths
+    if not max(depths.values()):
+        depths = tree.depths(unit_branch_lengths=True)
+    return depths
 
-def plot_cn_heatmap(input_df, final_tree=None, y_posns=None, cmax=8, total_copy_numbers=False,
-                    alleles=('cn_a', 'cn_b'), tree_width_ratio=1, cbar_width_ratio=0.05, figsize=(20, 10),
-                    tree_line_width=0.5, tree_marker_size=0, show_internal_nodes=False, title='',
-                    tree_label_colors=None, tree_label_func=None, cmap='coolwarm', normal_name='diploid',
-                    ignore_segment_lengths=False):
-
-    input_df = input_df[alleles].copy()
-    # if len(np.intersect1d(cur_sample_labels, input_df.index.get_level_values('sample_id').unique())) != len(cur_sample_labels):
-    #     raise MEDICCPlotError("tree nodes and labels in dataframe are not the same")
-
-    if not isinstance(alleles, list) and not isinstance(alleles, tuple):
-        alleles = [alleles]
-    nr_alleles = len(alleles)
-
-    cmax = min(cmax, np.max(input_df[alleles].values.astype(int)))
-
-    if final_tree is None:
-        fig, axs = plt.subplots(figsize=figsize, ncols=1+nr_alleles, sharey=False,
-                                gridspec_kw={'width_ratios': nr_alleles*[1] + [cbar_width_ratio]})
-
-        cur_sample_labels = (input_df.index.get_level_values('sample_id').unique())
-        if y_posns is None:
-            y_posns = {s: i for i, s in enumerate(cur_sample_labels)}
-
-        cn_axes = axs[:-1]
-    else:
-        fig, axs = plt.subplots(figsize=figsize, ncols=2+nr_alleles, sharey=False,
-                                gridspec_kw={'width_ratios': [tree_width_ratio] + nr_alleles*[1] + [cbar_width_ratio]})
-        tree_ax = axs[0]
-        cn_axes = axs[1:-1]
-
-        if show_internal_nodes:
-            cur_sample_labels = np.array([x.name for x in list(final_tree.find_clades()) if x.name is not None])
+def _get_y_positions(tree, adjust=False, normal_name='diploid'):
+    """Create a mapping of each clade to its vertical position.
+    Dict of {clade: y-coord}.
+Coordinates are negative, and integers for tips.
+    """
+    maxheight = tree.count_terminals()
+    heights = {tip: maxheight -1 -i for i,
+            tip in enumerate(reversed([x for x in tree.get_terminals() if normal_name is None or x.name != normal_name]))}
+    if normal_name is not None:
+        normal_clades = list(tree.find_clades(normal_name))
+        if len(normal_clades) == 0:
+            raise PlotError('Normal clade %s not found in tree' % normal_name)
         else:
-            cur_sample_labels = np.array([x.name for x in final_tree.get_terminals()])
+            heights.update({normal_clades[0]: maxheight})
 
-        y_posns = {k.name:v for k, v in _get_y_positions(final_tree, adjust=show_internal_nodes, normal_name=normal_name).items()}
+    # Internal nodes: place at midpoint of children
+    def calc_row(clade):
+        for subclade in clade:
+            if subclade not in heights:
+                calc_row(subclade)
+        # Closure over heights
+        heights[clade] = (heights[clade.clades[0]] + heights[clade.clades[-1]]) / 2.0
+
+    if tree.root.clades:
+        calc_row(tree.root)
         
-        _ = plot_tree(final_tree, ax=tree_ax, normal_name=normal_name,
-                      label_func=tree_label_func if tree_label_func is not None else lambda x: '',
-                      hide_internal_nodes=(not show_internal_nodes), show_branch_lengths=False, show_events=False,
-                      line_width=tree_line_width, marker_size=tree_marker_size,
-                      title=title, label_colors=tree_label_colors)
-        tree_ax.set_axis_off()
-        tree_ax.set_axis_off()
-        fig.set_constrained_layout_pads(w_pad=0, h_pad=0, hspace=0.0, wspace=100)
+    if adjust:
+        pos = pd.DataFrame([(clade, val) for clade, val in heights.items()], columns=['clade','pos']).sort_values('pos')
+        pos['newpos'] = 0
+        count = 0
+        for i in pos.index:
+            #if pos.loc[i,'clade'].name is not None and pos.loc[i,'clade'].name != 'root':
+            if pos.loc[i,'clade'] != tree.root:
+                count = count+1
+            pos.loc[i, 'newpos'] = count
 
-    cax = axs[-1]
+        pos.set_index('clade', inplace=True)
+        heights = pos.to_dict()['newpos']
 
-    ind = [y_posns.get(x, -1) for x in cur_sample_labels]
-    cur_sample_labels = cur_sample_labels[np.argsort(ind)]
-    color_norm = mcolors.TwoSlopeNorm(vmin=0, vcenter=(2 if total_copy_numbers else 1), vmax=cmax)
+    return heights
 
-    chr_ends = input_df.loc[cur_sample_labels[0]].copy()
-    chr_ends['end_pos'] = np.cumsum([1]*len(chr_ends))
-    chr_ends = chr_ends.reset_index().groupby('chrom').max()['end_pos']
-    chr_ends = chr_ends.dropna()
-    chr_ends = chr_ends.astype(int)
-
-
-    if ignore_segment_lengths:
-        x_pos = np.arange(len(input_df.loc[cur_sample_labels].astype(int).unstack('sample_id'))+1)
-    else:
-        x_pos = np.append([0], np.cumsum(input_df.loc[cur_sample_labels].astype(int).unstack(
-            'sample_id').loc[:, (alleles[0])].loc[:, cur_sample_labels].eval('end-start').values))
-    y_pos = np.arange(len(cur_sample_labels)+1)+0.5
-
-    for ax, allele in zip(cn_axes, alleles):
-        im = ax.pcolormesh(x_pos, y_pos,
-                        input_df.loc[cur_sample_labels].astype(int).unstack(
-                            'sample_id').loc[:, (allele)].loc[:, cur_sample_labels].values.T,
-                        cmap=cmap,
-                        norm=color_norm)
-
-        for _, line in chr_ends.items():
-            ax.axvline(x_pos[line], color='black', linewidth=0.75)
-        
-        xtick_pos = np.append([0], x_pos[chr_ends.values][:-1])
-        xtick_pos = (xtick_pos + np.roll(xtick_pos, -1))/2
-        xtick_pos[-1] += x_pos[-1]/2
-        ax.set_xticks(xtick_pos)
-        ax.set_xticklabels([x[3:] for x in chr_ends.index], ha='center', rotation=90, va='bottom')
-        ax.tick_params(width=0)
-        ax.xaxis.set_tick_params(labelbottom=False, labeltop=True, bottom=False)
-        ax.set_yticks([])
-
-    cax.pcolormesh([0, 1],
-                   np.arange(0, cmax+2),
-                   np.arange(0, cmax+1)[:, np.newaxis],
-                   cmap=cmap,
-                   norm=color_norm)
-
-    cax.set_xticks([])
-    cax.set_yticks(np.arange(0, cmax+1)+0.5)
-    if np.max(input_df.values.astype(int)) > cmax:
-        cax.set_yticklabels([str(x) + '+' if x == cmax else str(x)
-                             for x in np.arange(0, cmax+1)], ha='left')
-    else:
-        cax.set_yticklabels(np.arange(0, cmax+1), ha='left')
-    cax.yaxis.set_tick_params(left=False, labelleft=False, labelright=True)
-
-    for ax in axs[:-1]:
-        ax.set_ylim(len(cur_sample_labels)+0.5, 0.5)
-
-    return fig
-
-
-class MEDICCPlotError(Exception):
+class PlotError(Exception):
     pass
-
-
-
-def import_tree(tree_file, normal_name='diploid', file_format='newick'):
-    """Loads a phylogenetic tree in the given format and roots it at the normal sample. """
-    tree = Bio.Phylo.read(tree_file, file_format)
-    input_tree = Bio.Phylo.BaseTree.copy.deepcopy(tree)
-    tmpsearch = [c for c in input_tree.find_clades(name = normal_name)]
-    normal_name = tmpsearch[0]
-    root_path = input_tree.get_path(normal_name)[::-1]
-
-    if len(root_path) > 1:
-        new_root = root_path[1]
-        input_tree.root_with_outgroup(new_root)
-    else:
-        pass
-
-    # check that internal node names are unique
-    node_names = [c.name for c in input_tree.find_clades() if c.name is not None]
-    if len(node_names) != len(np.unique(node_names)):
-        logger.warning("Internal node names are not unique. This will cause problems in MEDICC2.")
-
-    return input_tree

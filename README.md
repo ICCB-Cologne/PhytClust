@@ -1,8 +1,8 @@
-# PhyloTreeClustering 
-Clustering algorithm for phylogenetic cancer evolution trees.
-
+# PhytClust 
+Monophyletic Clustering Algorithm for Phylogenetic Trees
+# TO BE UPDATED - IN PROGRESS
 ## Installation
-Install PhyloTreeClustering via pip or from source.
+Install PhytClust via pip or from source.
 
 ### Intallation via pip (recommended)
 It is best to use a dedicated conda environment for your PhyloTreeClustering installation with `conda create -n phylo_env`.
