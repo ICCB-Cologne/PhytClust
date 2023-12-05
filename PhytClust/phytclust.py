@@ -177,7 +177,7 @@ class phytclust:
         score = 0  # Default score value
 
         if score_type == "CH_score":
-            score = lhs / rhs if rhs != 0 else 0
+            score = lhs / rhs if rhs != 0 else float("nan")
 
         elif score_type == "Alt":
             tree_depth = (
@@ -244,7 +244,7 @@ class phytclust:
             plt.show()
 
         if len(top_peaks) < n:
-            print(f"Found only {len(top_peaks)} peaks")
+            print(f"Found only {len(top_peaks)} peak(s)")
 
         self.top_peaks = list(top_peaks)
 
