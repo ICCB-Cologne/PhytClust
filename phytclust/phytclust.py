@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from Bio import Phylo
 import io
+import os
+import string
+import random
 import matplotlib as mpl
 from PhytClust.plot_tree import plot_tree
 import matplotlib.colors as mcolors
@@ -13,7 +16,7 @@ plt.rcParams["axes.prop_cycle"] = plt.cycler(
 )  # matplotlib style
 
 
-class phytclust:
+class PhytClust:
     """
     This class uses a dynamic programming algorithm to cluster nodes on a phylogenetic tree to annotate monophyletic clades
 
@@ -26,7 +29,7 @@ class phytclust:
 
     def __init__(self, tree, k=None, max_k=None):
         self.tree = tree  # Phylo.read(io.StringIO(tree), "newick")
-        self.validate_tree  # to check if everything is in its place, no planted root, internal node names assigned
+        self.validate_tree()  # to check if everything is in its place, no planted root, internal node names assigned
         self.k = k
         if k is None:
             if max_k is None or max_k == "max":
@@ -37,17 +40,42 @@ class phytclust:
             self.max_k = None
         self.clusters = {}
         self.score_type = "CH_score"
-        self.dp = {}
-        self.bk = {}
+        self.dpTable = {}
+        self.backtrack = {}
         self.scores = []
-        self.tree_clust_dp()
+        self.tree_clust_dpTable()
 
     def validate_tree(self):
         assert all(
             [len(node.clades) == 2 for node in self.tree.get_nonterminals()]
         ), "All internal nodes should have 2 children"
+        node_names = set()
+        internal_node_counter = 0
+        for node in self.tree.get_nonterminals() + self.tree.get_terminals():
+            if not node.name:
+                while True:
+                    new_name = "internal_node_" + (
+                        string.ascii_uppercase[internal_node_counter % 26]
+                        + str(internal_node_counter // 26)
+                    )
+                    internal_node_counter += 1
+                    if new_name not in node_names:
+                        node.name = new_name
+                        break
+            elif node.name in node_names:
+                suffix = 1
+                new_name = f"{node.name}_{suffix}"
+                while new_name in node_names:
+                    suffix += 1
+                    new_name = f"{node.name}_{suffix}"
+                print(
+                    f"Node name '{node.name} is duplicated. Adding suffix to make it '{new_name}'"
+                )
+                node.name = new_name
 
-    def tree_clust_dp(self):  # dp algorithm
+            node_names.add(node.name)
+
+    def tree_clust_dpTable(self):  # dpTable algorithm
         n = self.k if self.k else self.max_k
 
         for clade in self.tree.find_clades(order="postorder"):
@@ -62,8 +90,8 @@ class phytclust:
                 right_size = right.count_terminals()
 
                 scores[0] = (
-                    self.dp[left][0]
-                    + self.dp[right][0]
+                    self.dpTable[left][0]
+                    + self.dpTable[right][0]
                     + left.branch_length * left_size
                     + right.branch_length * right_size
                 )
@@ -71,7 +99,8 @@ class phytclust:
 
                 for i in range(1, n):
                     sub_scores = [
-                        self.dp[left][j] + self.dp[right][i - j - 1] for j in range(i)
+                        self.dpTable[left][j] + self.dpTable[right][i - j - 1]
+                        for j in range(i)
                     ]
                     min_score = np.min(sub_scores)
                     scores[i] = min_score
@@ -80,11 +109,11 @@ class phytclust:
                         min_index = np.argmin(sub_scores)
                         back[:, i] = (min_index, i - min_index - 1)
 
-            self.dp[clade], self.bk[clade] = scores, back
+            self.dpTable[clade], self.backtrack[clade] = scores, back
 
-        # return self.dp, self.bk
+        # return self.dpTable, self.backtrack
 
-    def tree_clust_backtrace(self, k=None, verbose=False):
+    def tree_clust_backtrack(self, k=None, verbose=False):
         if k is None:
             raise ValueError("value of k is missing.")
 
@@ -106,7 +135,7 @@ class phytclust:
                 if len(node.clades) > counter:
                     stack.append((node, counter + 1, ptr))
 
-                    next_ptr = self.bk[node][counter, ptr]
+                    next_ptr = self.backtrack[node][counter, ptr]
                     if not 0 <= next_ptr < k:
                         raise ValueError(f"Pointer out of bounds: {next_ptr}")
 
@@ -120,17 +149,17 @@ class phytclust:
         # print(f"self.k = {self.k}, self.max_k = {self.max_k}")  # Debug print
 
         if self.max_k is None and self.k:
-            self.clusters = self.tree_clust_backtrace(self.k, verbose=verbose)
+            self.clusters = self.tree_clust_backtrack(self.k, verbose=verbose)
         elif self.k is None:
             if self.max_k is None or self.max_k == "max":
                 self.max_k = self.tree.get_terminals()
                 self.clusters = [
-                    self.tree_clust_backtrace(i, verbose=verbose)
+                    self.tree_clust_backtrack(i, verbose=verbose)
                     for i in range(1, self.max_k + 1)
                 ]
             elif isinstance(self.max_k, int) and self.max_k > 0:
                 self.clusters = [
-                    self.tree_clust_backtrace(i, verbose=verbose)
+                    self.tree_clust_backtrack(i, verbose=verbose)
                     for i in range(1, self.max_k + 1)
                 ]
             else:
@@ -211,8 +240,6 @@ class phytclust:
         self.scores = np.array(self.scores)
 
         if plot and self.k is None:
-            import matplotlib.pyplot as plt  # Make sure to import matplotlib
-
             plt.plot(range(1, len(self.scores) + 1), self.scores, "o-")
             plt.xlabel("No. of Clusters")
             plt.ylabel("Scores")
@@ -252,7 +279,9 @@ class phytclust:
 
     def plot(
         self,
+        results_dir=None,
         top_n=1,
+        n=None,
         outlier=True,
         save=False,
         filename=None,
@@ -267,24 +296,28 @@ class phytclust:
         if self.scores is None:
             print("Please calculate scores first")
             return
+        clusters_to_plot = []
 
-        if hasattr(self, "top_peaks") and self.top_peaks is not None:
+        if n is not None:
+            clusters_to_plot.append((n - 1, self.clusters[n - 1]))
+        elif hasattr(self, "top_peaks") and self.top_peaks is not None:
             top_peaks = self.top_peaks[:top_n]
+            clusters_to_plot.extend([(peak, self.clusrers[peak]) for peak in top_peaks])
         else:
             peaks, _ = find_peaks(self.scores, distance=1)
             if peaks.size < 1:
                 print("No peaks found")
                 return
             top_peaks = peaks[np.argsort(-self.scores[peaks])][:top_n]
+            clusters_to_plot.extend([(peak, self.clusters[peak]) for peak in top_peaks])
 
         cmap = plt.get_cmap("tab20")
 
         # Plot clusters corresponding to the top peaks
-        for i, peak in enumerate(top_peaks):
+        for i, (peak, cluster) in enumerate(clusters_to_plot):
             cluster = self.clusters[peak]
             cluster_sizes = {}
             cluster_number = peak + 1
-            k = len(cluster)
 
             for clade, cluster_id in cluster.items():
                 cluster_sizes[cluster_id] = cluster_sizes.get(cluster_id, 0) + 1
@@ -313,10 +346,13 @@ class phytclust:
 
             if save:
                 file_to_save = f"{filename}_{i}.png" if filename else f"tree_{peak}.png"
-                plt.savefig(file_to_save)
+                full_path = os.path.join(results_dir, file_to_save)
+                plt.savefig(full_path)
             plt.show()
 
-    def save(self, top_n=1, filename="phyclust_results.csv", outliers=True):
+    def save(
+        self, results_dir, top_n=1, filename="phyclust_results.csv", outliers=True
+    ):
         if self.scores is None or len(self.scores) == 0:
             print("Please calculate scores first.")
             return
@@ -364,7 +400,7 @@ class phytclust:
 
         # Create a DataFrame
         df = pd.DataFrame(data)
-
+        full_path = os.path.join(results_dir, filename)
         # Save the DataFrame as a CSV file
-        df.to_csv(filename, index=False)
+        df.to_csv(full_path, index=False)
         print(f"Cluster data saved to {filename}")

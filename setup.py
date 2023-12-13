@@ -17,7 +17,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    packages=["PhytClust"],
+    packages=["phytclust"],
     install_requires=[
         "numpy>=1.20.1",
         "pandas>=1.2.2",

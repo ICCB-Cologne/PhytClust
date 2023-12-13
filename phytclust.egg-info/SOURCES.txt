@@ -2,11 +2,10 @@ README.md
 phylotreeclus
 pyproject.toml
 setup.py
-PhytClust/__init__.py
-PhytClust/export.py
-PhytClust/pairwise_distances.py
-PhytClust/phytclust.py
-PhytClust/plot_tree.py
+phytclust/__init__.py
+phytclust/pairwise_distances.py
+phytclust/phytclust.py
+phytclust/plotting.py
 phytclust.egg-info/PKG-INFO
 phytclust.egg-info/SOURCES.txt
 phytclust.egg-info/dependency_links.txt
