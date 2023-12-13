@@ -8,7 +8,7 @@ import os
 import string
 import random
 import matplotlib as mpl
-from PhytClust.plot_tree import plot_tree
+from project.phytclust.phytclust.plotting import plot_tree
 import matplotlib.colors as mcolors
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
