@@ -8,7 +8,7 @@ import os
 import string
 import random
 import matplotlib as mpl
-from project.phytclust.phytclust.plotting import plot_tree
+from phytclust.plotting import plot_tree
 import matplotlib.colors as mcolors
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
@@ -302,7 +302,7 @@ class PhytClust:
             clusters_to_plot.append((n - 1, self.clusters[n - 1]))
         elif hasattr(self, "top_peaks") and self.top_peaks is not None:
             top_peaks = self.top_peaks[:top_n]
-            clusters_to_plot.extend([(peak, self.clusrers[peak]) for peak in top_peaks])
+            clusters_to_plot.extend([(peak, self.clusters[peak]) for peak in top_peaks])
         else:
             peaks, _ = find_peaks(self.scores, distance=1)
             if peaks.size < 1:
