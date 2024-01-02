@@ -183,6 +183,13 @@ class PhytClust:
         for k, v in clusters.items():
             clust_inv.setdefault(v, []).append(k)
 
+        num_clusters = len(clust_inv)
+        num_terminals = self.tree.count_terminals()
+
+        # Check if the number of clusters is 1 or equal to the number of terminals
+        if num_clusters == 1 or num_clusters == num_terminals:
+            return float("inf")
+
         # Calculating the left hand side (lhs) and right hand side (rhs) of the score equation
         lhs_list = [
             len(taxa)
@@ -198,7 +205,7 @@ class PhytClust:
 
         # Normalizing factors
         lhs_normal = max(1, len(clust_inv) - 1)
-        rhs_normal = max(1, self.tree.count_terminals() - len(clust_inv))
+        rhs_normal = max(1, num_terminals - len(clust_inv))
 
         # Computing the score
         lhs = np.sum(lhs_list) / lhs_normal
@@ -213,7 +220,7 @@ class PhytClust:
                 max(self.tree.depths().values()) if self.tree.depths().values() else 1
             )
             lambda_clusters = 1 / tree_depth
-            lambda_size = 1 / self.tree.count_terminals()
+            lambda_size = 1 / num_terminals
 
             variance_penalty = np.mean([len(clust) for clust in clust_inv.values()])
             regularization = (
