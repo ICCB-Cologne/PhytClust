@@ -175,7 +175,7 @@ class PhytClust:
 
         if not clusters:
             raise ValueError("Clusters not found")
-        if score_type not in ["CH_score", "Alt"]:
+        if score_type not in ["CH_score", "Alt", "New_Score"]:
             raise ValueError(f"Invalid score type: {score_type}")
 
         # Inverting the clusters dictionary
@@ -186,52 +186,28 @@ class PhytClust:
         num_clusters = len(clust_inv)
         num_terminals = self.tree.count_terminals()
 
-        # Check if the number of clusters is 1 or equal to the number of terminals
         if num_clusters == 1 or num_clusters == num_terminals:
             return float("inf")
 
-        # Calculating the left hand side (lhs) and right hand side (rhs) of the score equation
-        lhs_list = [
-            len(taxa)
-            * self.tree.distance(self.tree.common_ancestor(taxa), self.tree.root)
-            for taxa in clust_inv.values()
-        ]
-        rhs_list = [
-            np.sum(
-                [self.tree.distance(self.tree.common_ancestor(taxa), t) for t in taxa]
-            )
-            for taxa in clust_inv.values()
-        ]
+        root_clade = self.tree.root
 
-        # Normalizing factors
-        lhs_normal = max(1, len(clust_inv) - 1)
-        rhs_normal = max(1, num_terminals - len(clust_inv))
+        dp_row = self.dpTable.get(root_clade, None)
+        if dp_row is None:
+            raise ValueError("Root not found in dpTable")
 
-        # Computing the score
-        lhs = np.sum(lhs_list) / lhs_normal
-        rhs = np.sum(rhs_list) / rhs_normal
-        score = 0  # Default score value
+        beta_1 = dp_row[0]
+        beta = dp_row[num_clusters - 1]
 
+        num = (beta_1 - beta) / (num_clusters - 1)
+        den = beta / (num_terminals - num_clusters)
+        score = 0
         if score_type == "CH_score":
-            score = lhs / rhs if rhs != 0 else float("nan")
-
-        elif score_type == "Alt":
-            tree_depth = (
-                max(self.tree.depths().values()) if self.tree.depths().values() else 1
+            score = ((beta_1 - beta) / beta) * (
+                (num_terminals - num_clusters) / (num_clusters - 1)
             )
-            lambda_clusters = 1 / tree_depth
-            lambda_size = 1 / num_terminals
-
-            variance_penalty = np.mean([len(clust) for clust in clust_inv.values()])
-            regularization = (
-                lambda_clusters * len(clust_inv) + lambda_size * variance_penalty
-            )
-
-            # Calculating the final score
-            score = lhs / rhs - regularization if rhs != 0 else 0
 
         # Assuming self.scores is a list attribute where scores are stored
-        return (score, lhs, rhs) if output_all else score
+        return (score, num, den) if output_all else score
 
     def score_calc(self, plot=True):
         self.scores = []
@@ -255,18 +231,23 @@ class PhytClust:
 
         # return self.scores
 
-    def find_peaks(self, n=3, plot=False):
+    def find_peaks(self, n=3, plot=True):
         if self.scores is None or len(self.scores) == 0:
             print("Please calculate scores first")
             return []
-        if self.max_k is None:
-            print("max_k is not given")
-        peaks, _ = find_peaks(self.scores, distance=1)
+
+        # Find peaks with their properties
+        peaks, properties = find_peaks(self.scores, prominence=(None, None))
+
+        # Check if any peaks were found
         if peaks.size < 1:
             print("No peaks found")
             return []
 
+        # Sort peaks by their scores in descending order
         sorted_peaks = peaks[np.argsort(-self.scores[peaks])]
+
+        # Extract the top N peaks
         top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
 
         if plot:
@@ -282,6 +263,7 @@ class PhytClust:
 
         self.top_peaks = list(top_peaks)
 
+        # Return peaks with 1-based indexing
         return [peak + 1 for peak in top_peaks]
 
     def plot(
