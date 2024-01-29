@@ -201,7 +201,7 @@ class PhytClust:
         num = (beta_1 - beta) / (num_clusters - 1)
         den = beta / (num_terminals - num_clusters)
         score = 0
-        if score_type == "CH_scorfe":
+        if score_type == "CH_score":
             score = ((beta_1 - beta) / beta) * (
                 (num_terminals - num_clusters) / (num_clusters - 1)
             )
@@ -252,7 +252,7 @@ class PhytClust:
             plt.plot(self.scores)
             plt.plot(
                 [peak + 1 for peak in top_peaks],
-                self.scores[top_peaks] + 1,
+                (self.scores[top_peaks] + 1),
                 "x",
                 markersize=10,
                 label="Top Peaks",
