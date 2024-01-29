@@ -249,10 +249,12 @@ class PhytClust:
         top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
 
         if plot:
-            plt.plot(self.scores)
             plt.plot(
-                [peak + 1 for peak in top_peaks],
-                (self.scores[top_peaks] + 1),
+                np.arange(len(self.scores)) + 1, self.scores
+            )  # Shift the line plot by 1
+            plt.plot(
+                top_peaks + 1,  # Shift the peak crosses by 1
+                self.scores[top_peaks],
                 "x",
                 markersize=10,
                 label="Top Peaks",
