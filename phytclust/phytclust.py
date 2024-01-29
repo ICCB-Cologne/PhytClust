@@ -201,7 +201,7 @@ class PhytClust:
         num = (beta_1 - beta) / (num_clusters - 1)
         den = beta / (num_terminals - num_clusters)
         score = 0
-        if score_type == "CH_score":
+        if score_type == "CH_scorfe":
             score = ((beta_1 - beta) / beta) * (
                 (num_terminals - num_clusters) / (num_clusters - 1)
             )
@@ -244,16 +244,19 @@ class PhytClust:
             print("No peaks found")
             return []
 
-        # Sort peaks by their scores in descending order
         sorted_peaks = peaks[np.argsort(-self.scores[peaks])]
 
-        # Extract the top N peaks
         top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
 
         if plot:
             plt.plot(self.scores)
             plt.plot(
-                top_peaks, self.scores[top_peaks], "x", markersize=10, label="Top Peaks"
+                [peak + 1 for peak in top_peaks],
+                self.scores[top_peaks] + 1,
+                "x",
+                markersize=10,
+                label="Top Peaks",
+                color="red",
             )
             plt.legend()
             plt.show()
@@ -263,7 +266,6 @@ class PhytClust:
 
         self.top_peaks = list(top_peaks)
 
-        # Return peaks with 1-based indexing
         return [peak + 1 for peak in top_peaks]
 
     def plot(
