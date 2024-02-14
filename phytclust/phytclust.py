@@ -10,6 +10,7 @@ import random
 import matplotlib as mpl
 from phytclust.plotting import plot_tree
 import matplotlib.colors as mcolors
+import math
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
     "color", plt.cm.tab20.colors
@@ -28,7 +29,7 @@ class PhytClust:
     """
 
     def __init__(self, tree, k=None, max_k=None):
-        self.tree = tree  # Phylo.read(io.StringIO(tree), "newick")
+        self.tree = tree
         self.validate_tree()  # to check if everything is in its place, no planted root, internal node names assigned
         self.k = k
         if k is None:
@@ -43,6 +44,7 @@ class PhytClust:
         self.dpTable = {}
         self.backtrack = {}
         self.scores = []
+        self.top_peaks = []
         self.tree_clust_dpTable()
 
     def validate_tree(self):
@@ -95,7 +97,7 @@ class PhytClust:
                     + left.branch_length * left_size
                     + right.branch_length * right_size
                 )
-                back[:, 0] = (0, 0)  ## (left, right)
+                back[:, 0] = (0, 0)  # (left, right)
 
                 for i in range(1, n):
                     sub_scores = [
@@ -110,8 +112,6 @@ class PhytClust:
                         back[:, i] = (min_index, i - min_index - 1)
 
             self.dpTable[clade], self.backtrack[clade] = scores, back
-
-        # return self.dpTable, self.backtrack
 
     def tree_clust_backtrack(self, k=None, verbose=False):
         if k is None:
@@ -167,8 +167,6 @@ class PhytClust:
         else:
             raise ValueError("invalid cluster number. Please choose either k or max_k")
 
-        # return self.clusters
-
     def cluster_score(self, clusters=None, score_type=None, output_all=False):
         clusters = clusters if clusters is not None else self.clusters
         score_type = score_type if score_type is not None else self.score_type
@@ -186,9 +184,10 @@ class PhytClust:
         num_clusters = len(clust_inv)
         num_terminals = self.tree.count_terminals()
 
-        if num_clusters == 1 or num_clusters == num_terminals:
+        if num_clusters == num_terminals or num_clusters == 1:
             return float("inf")
-
+        # if num_clusters == 1:
+        #     return 0
         root_clade = self.tree.root
 
         dp_row = self.dpTable.get(root_clade, None)
@@ -203,10 +202,9 @@ class PhytClust:
         score = 0
         if score_type == "CH_score":
             score = ((beta_1 - beta) / beta) * (
-                (num_terminals - num_clusters) / (num_clusters - 1)
+                ((num_terminals - num_clusters)) / (num_clusters - 1)
             )
 
-        # Assuming self.scores is a list attribute where scores are stored
         return (score, num, den) if output_all else score
 
     def score_calc(self, plot=True):
@@ -217,7 +215,7 @@ class PhytClust:
                 self.scores.append(score)
         else:
             score = self.cluster_score(clusters=self.clusters)
-            print(f"Single Cluster: {self.clusters}, Score: {score}")  # For debugging
+            print(f"Single Cluster: {self.clusters}, Score: {score}")
             self.scores.append(score)
 
         self.scores = np.array(self.scores)
@@ -229,31 +227,40 @@ class PhytClust:
             plt.title("Scores for Different No. of Clusters")
             plt.show()
 
-        # return self.scores
+    def find_peaks(self, n=3, plot=True, method="default", prominence=None):
+        """
+        Finds and plots the top n peaks in the scores.
 
-    def find_peaks(self, n=3, plot=True):
+        Parameters:
+        - n: int, the number of top peaks to find.
+        - plot: bool, whether to plot the score graph with the peaks highlighted.
+        - method: str, 'default' for the original method, 'integrated' for the proposed method.
+        - prominence: tuple or None, the prominence parameter for peak finding, applicable in 'integrated' method.
+        """
         if self.scores is None or len(self.scores) == 0:
             print("Please calculate scores first")
             return []
 
-        # Find peaks with their properties
-        peaks, properties = find_peaks(self.scores, prominence=(None, None))
-
-        # Check if any peaks were found
+        if method == "default":
+            peaks, properties = find_peaks(self.scores, prominence=(None, None))
+        elif method == "alt":
+            #assert prominence is not None, "Set Prominence parameter"
+            peaks, properties = find_peaks(self.scores, prominence=prominence)
         if peaks.size < 1:
             print("No peaks found")
             return []
 
-        sorted_peaks = peaks[np.argsort(-self.scores[peaks])]
-
-        top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
+        if method == "alt":
+            sorted_peaks_by_score = peaks[np.argsort(-self.scores[peaks])]
+            top_peaks = sorted_peaks_by_score[: min(n, len(sorted_peaks_by_score))]
+        else:
+            sorted_peaks = peaks[np.argsort(-self.scores[peaks])]
+            top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
 
         if plot:
+            plt.plot(np.arange(len(self.scores)) + 1, self.scores)
             plt.plot(
-                np.arange(len(self.scores)) + 1, self.scores
-            )  # Shift the line plot by 1
-            plt.plot(
-                top_peaks + 1,  # Shift the peak crosses by 1
+                top_peaks + 1,
                 self.scores[top_peaks],
                 "x",
                 markersize=10,
@@ -275,6 +282,7 @@ class PhytClust:
         results_dir=None,
         top_n=1,
         n=None,
+        show_terminal_labels=False,
         outlier=True,
         save=False,
         filename=None,
@@ -291,18 +299,27 @@ class PhytClust:
             return
         clusters_to_plot = []
 
-        if n is not None:
+        if self.k is not None and n is not None and self.k == n:
+            clusters_to_plot.append((self.k - 1, self.clusters))
+        elif n is not None:
             clusters_to_plot.append((n - 1, self.clusters[n - 1]))
-        elif hasattr(self, "top_peaks") and self.top_peaks is not None:
-            top_peaks = self.top_peaks[:top_n]
-            clusters_to_plot.extend([(peak, self.clusters[peak]) for peak in top_peaks])
+        elif self.k is not None:
+            clusters_to_plot.append((self.k - 1, self.clusters))
         else:
-            peaks, _ = find_peaks(self.scores, distance=1)
-            if peaks.size < 1:
-                print("No peaks found")
-                return
-            top_peaks = peaks[np.argsort(-self.scores[peaks])][:top_n]
-            clusters_to_plot.extend([(peak, self.clusters[peak]) for peak in top_peaks])
+            if hasattr(self, "top_peaks") and self.top_peaks is not None:
+                top_peaks = self.top_peaks[:top_n]
+                clusters_to_plot.extend(
+                    [(peak, self.clusters[peak]) for peak in top_peaks]
+                )
+            else:
+                peaks, _ = find_peaks(self.scores, distance=1)
+                if peaks.size < 1:
+                    print("No peaks found")
+                    return
+                top_peaks = peaks[np.argsort(-self.scores[peaks])][:top_n]
+                clusters_to_plot.extend(
+                    [(peak, self.clusters[peak]) for peak in top_peaks]
+                )
 
         cmap = plt.get_cmap("tab20")
 
@@ -328,6 +345,7 @@ class PhytClust:
                 self.tree,
                 title=f"No. of clusters: {cluster_number}, Score: {self.scores[peak]:.4f}",
                 label_colors=clumap,
+                show_terminal_labels=show_terminal_labels,
                 hide_internal_nodes=hide_internal_nodes,
                 width_scale=width_scale,
                 height_scale=height_scale,
@@ -350,21 +368,17 @@ class PhytClust:
             print("Please calculate scores first.")
             return
 
-        # Find peaks in the scores
         peaks, _ = find_peaks(self.scores, distance=1)
         if peaks.size < 1:
             print("No peaks found.")
             return
 
-        # Sort peaks from highest score to lowest and select top_n peaks
         top_peaks = peaks[np.argsort(-self.scores[peaks])][:top_n]
 
-        # Get the cluster configurations corresponding to the top peaks
         selected_clusters = [self.clusters[i] for i in top_peaks]
 
-        # Prepare data for CSV
         data = []
-        all_cluster_ids = set()  # To keep track of all non-outlier cluster IDs
+        all_cluster_ids = set()
         for cluster in selected_clusters:
             cluster_ids = list(cluster.values())
             outlier_clusters = {
@@ -374,7 +388,6 @@ class PhytClust:
             }
             non_outlier_clusters = set(cluster_ids) - outlier_clusters
 
-            # Create a mapping from old cluster IDs to new consecutive cluster IDs starting from 0
             new_cluster_id_map = {
                 old_id: new_id
                 for new_id, old_id in enumerate(sorted(non_outlier_clusters))
@@ -385,15 +398,12 @@ class PhytClust:
                 if outliers and cluster_id in outlier_clusters:
                     cluster_id = -1
                 else:
-                    # Update cluster ID to new consecutive ID
                     cluster_id = new_cluster_id_map[cluster_id]
 
                 all_cluster_ids.add(cluster_id)
                 data.append({"Node Name": node, "Cluster Number": cluster_id})
 
-        # Create a DataFrame
         df = pd.DataFrame(data)
         full_path = os.path.join(results_dir, filename)
-        # Save the DataFrame as a CSV file
         df.to_csv(full_path, index=False)
         print(f"Cluster data saved to {filename}")
