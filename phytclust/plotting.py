@@ -4,6 +4,7 @@ import matplotlib.colors as mcolors  # remove
 import matplotlib.pyplot as plt  # remove
 import numpy as np
 import pandas as pd
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def plot_tree(
     hide_internal_nodes=False,
     marker_size=None,
     line_width=None,
-    **kwargs
+    **kwargs,
 ):
     """Plot the given tree using matplotlib (or pylab).
     The graphic is a rooted tree, drawn with roughly the same algorithm as
@@ -447,7 +448,7 @@ def plot_tree(
     if output_name is not None:
         plt.savefig(output_name + ".png", bbox_inches="tight")
 
-    return plt.gcf()
+    # return plt.gcf()
 
 
 def _get_x_positions(tree):
@@ -513,6 +514,82 @@ def _get_y_positions(tree, adjust=False, normal_name="diploid"):
         heights = pos.to_dict()["newpos"]
 
     return heights
+
+
+def plot_peaks(scores_subset, peaks, k_start, k_end=None):
+    plt.figure()
+    plt.plot(np.arange(len(scores_subset)) + 1 + k_start, scores_subset)
+    plt.plot(
+        peaks + k_start + 1,
+        scores_subset[peaks],
+        "x",
+        markersize=10,
+        label="Top Peaks",
+        color="red",
+    )
+    plt.legend()
+    plt.title(f"Top Peaks for the given Score Range")
+    plt.xlabel("k")
+    plt.ylabel("Score")
+
+    if k_end is not None:
+        plt.xlim(k_start, k_end)
+        plt.title(f"Top Peaks for k between {k_start} and {k_end}")
+    plt.show()
+
+
+def plot_cluster(
+    cluster,
+    cluster_number,
+    tree,
+    cmap,
+    save=False,
+    filename=None,
+    outlier=True,
+    hide_internal_nodes=True,
+    show_terminal_labels=False,
+    width_scale=2,
+    height_scale=0.2,
+    label_func=lambda x: None,
+    show_branch_lengths=False,
+    marker_size=50,
+    **kwargs,
+):
+    results_dir = kwargs.pop("results_dir", "")
+    cluster_sizes = {}
+    for clade, cluster_id in cluster.items():
+        cluster_sizes[cluster_id] = cluster_sizes.get(cluster_id, 0) + 1
+
+    clumap = {}
+    for clade, cluster_id in cluster.items():
+        if outlier and cluster_sizes[cluster_id] == 1:
+            clumap[clade.name] = "black"
+        else:
+            color_index = cluster_id % len(cmap.colors)
+            clumap[clade.name] = cmap.colors[color_index]
+
+    plot_tree(
+        tree,
+        title=(
+            f"No. of clusters: {cluster_number}, Score: {kwargs.get('scores')[cluster_number - 1]:.4f}"
+            if kwargs.get("scores")
+            else ""
+        ),
+        label_colors=clumap,
+        hide_internal_nodes=hide_internal_nodes,
+        show_terminal_labels=show_terminal_labels,
+        width_scale=width_scale,
+        height_scale=height_scale,
+        label_func=label_func,
+        show_branch_lengths=show_branch_lengths,
+        marker_size=marker_size,
+        **kwargs,
+    )
+    if save:
+        filename = filename or f"tree_{cluster_number}.png"
+        results_dir = kwargs.get("results_dir", "")
+        full_path = os.path.join(results_dir, filename)
+        plt.savefig(full_path)
 
 
 class PlotError(Exception):
