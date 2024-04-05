@@ -325,7 +325,6 @@ def plot_tree(
                     zorder=3,
                 )
 
-        # Add node/taxon labels
         if not clade.name is None:
             label = label_func(str(clade.name))
             ax_scale = ax.get_xlim()[1] - ax.get_xlim()[0]
@@ -545,28 +544,32 @@ def plot_cluster(
     cmap,
     save=False,
     filename=None,
-    outlier=True,
+    outlier=False,
     hide_internal_nodes=True,
     show_terminal_labels=False,
     width_scale=2,
-    height_scale=0.2,
+    height_scale=0.4,
     label_func=lambda x: None,
     show_branch_lengths=False,
     marker_size=50,
+    outgroup=None,
+    results_dir=None,
     **kwargs,
 ):
-    results_dir = kwargs.pop("results_dir", "")
     cluster_sizes = {}
     for clade, cluster_id in cluster.items():
         cluster_sizes[cluster_id] = cluster_sizes.get(cluster_id, 0) + 1
 
     clumap = {}
     for clade, cluster_id in cluster.items():
-        if outlier and cluster_sizes[cluster_id] == 1:
-            clumap[clade.name] = "black"
+        clade_name = clade.name if hasattr(clade, "name") else None
+        if clade_name == outgroup:
+            clumap[clade_name] = "grey"
+        elif outlier and cluster_sizes[cluster_id] == 1:
+            clumap[clade_name] = "black"
         else:
             color_index = cluster_id % len(cmap.colors)
-            clumap[clade.name] = cmap.colors[color_index]
+            clumap[clade_name] = cmap.colors[color_index]
 
     plot_tree(
         tree,
@@ -586,8 +589,7 @@ def plot_cluster(
         **kwargs,
     )
     if save:
-        filename = filename or f"tree_{cluster_number}.png"
-        results_dir = kwargs.get("results_dir", "")
+        filename = filename or f"num_clusters_{cluster_number}.png"
         full_path = os.path.join(results_dir, filename)
         plt.savefig(full_path)
 
