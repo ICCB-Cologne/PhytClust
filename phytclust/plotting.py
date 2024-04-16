@@ -532,7 +532,7 @@ def plot_peaks(scores_subset, peaks, k_start, k_end=None):
     plt.ylabel("Score")
 
     if k_end is not None:
-        plt.xlim(k_start, k_end)
+        plt.xlim(k_start, k_end + 1)
         plt.title(f"Top Peaks for k between {k_start} and {k_end}")
     plt.show()
 

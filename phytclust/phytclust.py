@@ -229,7 +229,7 @@ class PhytClust:
                 (num_terminals - num_clusters)
                 / (num_clusters - 1)
                 if (num_clusters - 1)
-                else float("inf")
+                else float("nan")
             )
             score = num * den if den not in [float("inf")] else float("inf")
 
@@ -267,7 +267,7 @@ class PhytClust:
             plt.ylabel("Scores")
             plt.title("Scores for Different No. of Clusters")
 
-            ax = plt.gca()  # Get the current Axes instance on the current figure
+            ax = plt.gca()  
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             plt.show()
@@ -307,13 +307,15 @@ class PhytClust:
             raise ValueError("Invalid k_end value.")
 
         scores_subset = self.scores[k_start:k_end]
+        scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
 
         if method == "default":
-            peaks, _ = find_peaks(scores_subset, prominence=(None, None))
+            peaks, _ = find_peaks(scores_subset, prominence=prominence)
         elif method == "alt":
             peaks, _ = find_peaks(scores_subset, prominence=prominence)
 
-        global_maxima_index = np.argmax(scores_subset)  # Find global maxima index
+        global_maxima_index = np.nanargmax(scores_subset)
+        global_maxima_index += k_start
         if global_maxima_index not in peaks:
             peaks = np.append(peaks, global_maxima_index)
 
