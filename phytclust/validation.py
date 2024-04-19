@@ -2,10 +2,7 @@ import string
 
 
 def is_outgroup_valid(tree, outgroup):
-    for clade in tree.root.clades:
-        if clade.name == outgroup:
-            return True
-    return False
+    return any([clade.name == outgroup for clade in tree.root.clades])
 
 
 def validate_tree(tree, outgroup=None):
@@ -14,20 +11,16 @@ def validate_tree(tree, outgroup=None):
         for node in tree.get_nonterminals()
         if len(node.clades) != 2 and node.name != outgroup
     ]
+    assert not invalid_nodes, f"Nodes must have 2 children. Violating nodes: {invalid_nodes}"
 
-    if invalid_nodes:
-        print("Nodes with > 2 children:(excluding specified outgroup)")
-        for node in invalid_nodes:
-            print(f"Node: {node.name}, Children: {len(node.clades)}")
 
-        raise AssertionError("All internal nodes should have 2 children")
-
+def rename_nodes(tree, outgroup=None):
     node_names = set([outgroup]) if outgroup else set()
     internal_node_counter = 0
     for node in tree.get_nonterminals() + tree.get_terminals():
         if not node.name or (
             node.name == outgroup
-            and len([n for n in tree.find_clades() if n.name == outgroup]) > 1
+            and len(list(tree.find_clades(outgroup))) > 1
         ):
             while True:
                 new_name = "internal_node_" + (

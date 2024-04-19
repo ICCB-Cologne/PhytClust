@@ -2,6 +2,7 @@ import time
 from collections import defaultdict
 from copy import deepcopy
 import string
+import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,10 +31,12 @@ class PhytClust:
     """
 
     def __init__(self, tree, k=None, max_k=None, score_type=None, outgroup=None):
+        self.logger = logging.getLogger('phytclust')
         self.tree = tree
         self.validate_and_set_outgroup(outgroup)
         self.num_terminals = self.calculate_num_terminals()
         validate_tree(self.tree, self.outgroup)
+        rename_nodes(self.tree, self.outgroup)
         self.k = k
         self.max_k = (
             self.num_terminals if max_k is None else max_k if k is None else None
@@ -49,9 +52,14 @@ class PhytClust:
         self._no_outgroup_tree = deepcopy(tree) if self.outgroup else None
         if self.outgroup:
             self.prune_outgroup()
+
+        self.node_terminals = {node: node.get_terminals() for node in self.tree.find_clades()}
+        self.terminal_count = {node: len(terminals) for node, terminals in self.node_terminals.items()}
+
         self.tree_clust_dp_table()
         self.num = []
         self.den = []
+
 
     def validate_and_set_outgroup(self, outgroup):
         if outgroup and not is_outgroup_valid(self.tree, outgroup):
@@ -60,13 +68,7 @@ class PhytClust:
 
     def prune_outgroup(self):
         outgroup_clade = next(
-            (
-                clade
-                for clade in self._no_outgroup_tree.find_clades()
-                if clade.name == self.outgroup
-            ),
-            None,
-        )
+            self._no_outgroup_tree.find_clades(self.outgroup), None)
         if len(self._no_outgroup_tree.root.clades) > 2:
 
             self._no_outgroup_tree.prune(outgroup_clade)
@@ -98,14 +100,11 @@ class PhytClust:
             scores = np.full(n, np.inf)
             back = np.full((2, n), np.inf)
             if clade.is_terminal():
-                # scores = np.zeros(1)
-                # back = np.full((2, 1), np.inf)
                 scores[0] = 0
-
             else:
                 left, right = clade.clades
-                left_size = left.count_terminals()
-                right_size = right.count_terminals()
+                left_size = self.terminal_count[left]
+                right_size = self.terminal_count[right]
                 total_terminals = left_size + right_size
 
                 limit = min(n, total_terminals)
@@ -119,17 +118,13 @@ class PhytClust:
                 back[:, 0] = (0, 0)  # (left, right)
 
                 for i in range(1, limit):
-                    sub_scores = [
-                        self.dp_table[left][j] + self.dp_table[right][i - j - 1]
-                        for j in range(i)
-                        if 0 <= j < len(self.dp_table[left])
-                        and 0 <= i - j - 1 < len(self.dp_table[right])
-                    ]
-                    min_score = np.min(sub_scores)
+                    sub_scores = self.dp_table[left][:i] + self.dp_table[right][:i][::-1]
+
+                    min_index = np.argmin(sub_scores)
+                    min_score = sub_scores[min_index]
                     scores[i] = min_score
 
                     if not np.isinf(min_score):
-                        min_index = np.argmin(sub_scores)
                         back[:, i] = (min_index, i - min_index - 1)
 
             self.dp_table[clade], self.backtrack[clade] = scores, back
@@ -154,7 +149,7 @@ class PhytClust:
                 print("Visiting node %s (count %d):" % (node.name, counter))
 
             if ptr == 0:
-                clusters.update({x: current_cluster for x in node.get_terminals()})
+                clusters.update({x: current_cluster for x in self.node_terminals[node]})
                 current_cluster += 1
             else:
                 if len(node.clades) > counter:
@@ -265,18 +260,22 @@ class PhytClust:
         self.den = np.array(den_list)
 
         if plot and self.k is None:
-            plt.plot(range(1, len(self.scores) + 1), self.scores, "o-")
-            plt.xlabel("No. of Clusters")
-            plt.ylabel("Scores")
-            plt.title("Scores for Different No. of Clusters")
-
-            ax = plt.gca()  
-            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-
-            plt.show()
+            self.plot_scores()
 
         end_time = time.time()
         self._track_runtime("score_calc", start_time, end_time)
+
+    def plot_scores(self):
+        fig = plt.figure()
+        ax = plt.gca()
+        plt.plot(range(1, len(self.scores) + 1), self.scores, "o-")
+        plt.xlabel("No. of Clusters")
+        plt.ylabel("Scores")
+        plt.title("Scores for Different No. of Clusters")
+
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        return fig
 
     def find_peaks(
         self,
@@ -307,7 +306,7 @@ class PhytClust:
         k_end = k_end or len(self.scores)
 
         if k_end > len(self.scores) or k_end < k_start:
-            raise ValueError("Invalid k_end value.")
+            raise ValueError(f"Invalid k_end value. Max allowed value is {len(self.scores)}")
 
         scores_subset = self.scores[k_start:k_end]
         scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
