@@ -1,10 +1,11 @@
+import os
 import logging
+
 import matplotlib as mpl
-import matplotlib.colors as mcolors  # remove
-import matplotlib.pyplot as plt  # remove
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import os
+
 
 logger = logging.getLogger(__name__)
 

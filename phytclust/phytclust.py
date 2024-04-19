@@ -1,14 +1,17 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import find_peaks
-import string
-from phytclust.plotting import plot_cluster, plot_peaks
-from phytclust.save import save_clusters
-from phytclust.validation import is_outgroup_valid, validate_tree
 import time
 from collections import defaultdict
 from copy import deepcopy
+import string
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 from matplotlib.ticker import MaxNLocator
+
+from phytclust.plotting import plot_cluster, plot_peaks
+from phytclust.save import save_clusters
+from phytclust.validation import is_outgroup_valid, validate_tree, rename_nodes
+
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
     "color", plt.cm.tab20.colors
