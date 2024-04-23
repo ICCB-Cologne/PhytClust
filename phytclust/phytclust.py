@@ -89,6 +89,67 @@ class PhytClust:
             return len(self.tree.get_terminals()) - 1
         return len(self.tree.get_terminals())
 
+    # def tree_clust_dp_table(self):
+    #     start_time = time.time()
+
+    #     n = self.k or self.max_k
+
+    #     active_tree = self._no_outgroup_tree if self.outgroup else self.tree
+
+    #     for clade in active_tree.find_clades(order="postorder"):
+    #         scores = np.full(n, np.inf)
+    #         back = np.full((2, n), np.inf)
+    #         if clade.is_terminal():
+    #             # scores = np.zeros(1)
+    #             # back = np.full((2, 1), np.inf)
+    #             scores[0] = clade.branch_length
+
+    #         else:
+    #             left, right = clade.clades
+    #             left_size = left.count_terminals()
+    #             right_size = right.count_terminals()
+    #             total_terminals = left_size + right_size
+
+    #             limit = min(n, total_terminals)
+    #             # scores = np.full(limit, np.inf)
+    #             clade_branch_length = (
+    #                 clade.branch_length if clade.branch_length is not None else 0
+    #             )
+    #             left_branch_length = (
+    #                 left.branch_length if left.branch_length is not None else 0
+    #             )
+    #             right_branch_length = (
+    #                 right.branch_length if right.branch_length is not None else 0
+    #             )
+
+    #             scores[0] = (
+    #                 self.dp_table[left][0]
+    #                 + self.dp_table[right][0]
+    #                 + clade_branch_length  # * (total_terminals - 1)
+    #                 + (left_branch_length) * (left_size - 1)
+    #                 + (right_branch_length) * (right_size - 1)
+    #             )
+    #             back[:, 0] = (0, 0)  # (left, right)
+
+    #             for i in range(1, limit):
+    #                 sub_scores = [
+    #                     self.dp_table[left][j] + self.dp_table[right][i - j - 1]
+    #                     for j in range(i)
+    #                     if 0 <= j < len(self.dp_table[left])
+    #                     and 0 <= i - j - 1 < len(self.dp_table[right])
+    #                 ]
+    #                 min_score = np.min(sub_scores)
+    #                 scores[i] = min_score
+
+    #                 if not np.isinf(min_score):
+    #                     min_index = np.argmin(sub_scores)
+    #                     back[:, i] = (min_index, i - min_index - 1)
+
+    #         self.dp_table[clade], self.backtrack[clade] = scores, back
+    #     end_time = time.time()
+    #     self._track_runtime("dp_table", start_time, end_time)
+
+
     def tree_clust_dp_table(self):
         start_time = time.time()
 
@@ -193,6 +254,30 @@ class PhytClust:
         end_time = time.time()
         self._track_runtime("run", start_time, end_time)
 
+    # def calculate_coefficient_of_variation(self):
+    #     # Extract branch lengths
+    #     branch_lengths = [
+    #         branch.branch_length
+    #         for branch in self.tree.get_terminals()
+    #         if branch.branch_length is not None
+    #     ]
+
+    #     # Calculate mean and standard deviation
+    #     mean_length = np.mean(branch_lengths)
+    #     std_deviation = np.std(branch_lengths)
+
+    #     # Calculate coefficient of variation
+    #     cv = std_deviation / mean_length
+
+    #     return cv
+    def calculate_coefficient_of_variation(self, branch_lengths):
+        if len(branch_lengths) < 2:
+            return None  # Not enough data to calculate CV
+        mean_length = np.mean(branch_lengths)
+        std_deviation = np.std(branch_lengths)
+        cv = (std_deviation / mean_length) if mean_length > 0 else float('inf')
+        return cv
+
     def cluster_score(self, clusters=None, score_type=None, output_all=False):
         clusters = clusters or self.clusters
         score_type = self.score_type if self.score_type is not None else "CH_score"
@@ -211,6 +296,9 @@ class PhytClust:
         num_terminals = self.num_terminals
 
         score = 0
+        cv = 0
+        # total_cv
+        cv_scores = {}
         if score_type == "PDI":
             score = self.pdi_index(clusters)
         elif score_type == "CH_score":
@@ -219,19 +307,33 @@ class PhytClust:
             if dp_row is None:
                 raise ValueError("Root not found in dp_table")
 
+            for cluster_id, terminal_ids in clust_inv.items():
+                if len(terminal_ids) > 1:  # Check if the cluster has more than one node
+                    branch_lengths = [t_id.branch_length for t_id in terminal_ids if t_id.branch_length is not None]
+                    cv = self.calculate_coefficient_of_variation(branch_lengths)
+                    if cv is not None:
+                        cv_scores[cluster_id] = cv
             beta_1 = dp_row[0]
-            beta = dp_row[num_clusters - 1]
+            beta = dp_row[num_clusters - 1] 
+            if num_clusters == 1:
+                beta_k_minus_1 = 0
+            else:
+                beta_k_minus_1 = dp_row[num_clusters - 2]
+            # num = ((num_terminals - num_clusters)/ (
+            #     num_terminals - (1/2)))
+            # den = (beta_1)/beta
+            # score = 1/(num*den)
+            # cv = self.calculate_coefficient_of_variation()
+            num = (beta_1)/(beta) if beta else float("nan")
+            den = (num_terminals - num_clusters)#/(num_clusters - 1) if (num_clusters - 1) else float("nan")
+            # add = (beta_k_minus_1 - beta)/beta
+            score = (num*den) if den not in [float("inf")] else float("inf")
 
-            num = (beta_1 - beta) / (beta + (beta_1 * 0.01))
-            den = (
-                (num_terminals - num_clusters)
-                / (num_clusters - 1)
-                if (num_clusters - 1)
-                else float("nan")
-            )
-            score = num * den if den not in [float("inf")] else float("inf")
+        return beta, (beta + (beta_1*0.001)), score
 
-        return num, den, score
+    def get_terminal(self, node_id):
+        # Implement based on your tree structure
+        return self.tree.find_clades(lambda n: n.name == node_id)
 
     def score_calc(self, plot=True, output_all=False):
         start_time = time.time()
@@ -403,11 +505,16 @@ class PhytClust:
                 marker_size=marker_size,
                 outgroup=self.outgroup,
                 results_dir=results_dir,
-                **kwargs
+                **kwargs,
             )
 
     def save(
-        self, results_dir, top_n=1, filename="phyclust_results.csv", outlier=True, n=None
+        self,
+        results_dir,
+        top_n=1,
+        filename="phyclust_results.csv",
+        outlier=True,
+        n=None,
     ):
         save_clusters(
             scores=self.scores,
@@ -417,7 +524,7 @@ class PhytClust:
             filename=filename,
             outlier=outlier,
             selected_peaks=self.top_peaks,
-            n=n
+            n=n,
         )
 
     def _track_runtime(self, function_name, start, end):

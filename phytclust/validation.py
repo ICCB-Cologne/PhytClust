@@ -9,7 +9,7 @@ def validate_tree(tree, outgroup=None):
     invalid_nodes = [
         node
         for node in tree.get_nonterminals()
-        if len(node.clades) != 2 and node.name != outgroup
+        if len(node.clades) != 2 and all(clade.name != outgroup for clade in node.clades)
     ]
     assert not invalid_nodes, f"Nodes must have 2 children. Violating nodes: {invalid_nodes}"
 
