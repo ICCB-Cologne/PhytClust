@@ -448,7 +448,7 @@ def plot_tree(
     if output_name is not None:
         plt.savefig(output_name + ".png", bbox_inches="tight")
 
-    # return plt.gcf()
+    return plt.gcf()
 
 
 def _get_x_positions(tree):
@@ -572,7 +572,7 @@ def plot_cluster(
             color_index = cluster_id % len(cmap.colors)
             clumap[clade_name] = cmap.colors[color_index]
 
-    plot_tree(
+    fig = plot_tree(
         tree,
         title=(
             f"No. of clusters: {cluster_number}, Score: {kwargs.get('scores')[cluster_number - 1]:.4f}"
@@ -593,6 +593,8 @@ def plot_cluster(
         filename = filename or f"num_clusters_{cluster_number}.png"
         full_path = os.path.join(results_dir, filename)
         plt.savefig(full_path)
+        
+    return fig
 
 
 class PlotError(Exception):

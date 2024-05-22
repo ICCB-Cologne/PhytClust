@@ -8,11 +8,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from matplotlib.ticker import MaxNLocator
-
+from phytclust.find_peaks import find_plateau_edges, select_representative_edges
 from phytclust.plotting import plot_cluster, plot_peaks
 from phytclust.save import save_clusters
 from phytclust.validation import is_outgroup_valid, validate_tree, rename_nodes
-
+from phytclust.helper import find_all_min_indices
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
     "color", plt.cm.tab20.colors
@@ -30,17 +30,30 @@ class PhytClust:
         -   max_k: if you'd like to find optimal clusters for a range of 1 to max_k clusters, if k is not given, Default = number of total terminal nodes in a tree
     """
 
-    def __init__(self, tree, k=None, max_k=None, score_type=None, outgroup=None):
-        self.logger = logging.getLogger('phytclust')
+    def __init__(self, tree, num_peaks=3, plot_scores=False, k=None, max_k=None, outgroup=None):
+        self.logger = logging.getLogger("phytclust") #logging
         self.tree = tree
         self.validate_and_set_outgroup(outgroup)
-        self.num_terminals = self.calculate_num_terminals()
         validate_tree(self.tree, self.outgroup)
         rename_nodes(self.tree, self.outgroup)
-        self.k = k
-        self.max_k = (
-            self.num_terminals if max_k is None else max_k if k is None else None
+        self.node_terminals = {
+            node: node.get_terminals() for node in self.tree.find_clades()
+        }
+        self.terminal_count = {
+            node: len(terminals) for node, terminals in self.node_terminals.items()
+        }
+        self.num_terminals = (
+            (self.terminal_count[self.tree.root] - 1)
+            if self.outgroup
+            else self.terminal_count[self.tree.root]
         )
+
+        self.k = k
+        if k is None:
+            self.max_k = self.num_terminals if max_k is None else max_k
+        else:
+            self.max_k = None
+
         self.clusters = {}
         self.score_type = score_type
         self.dp_table = {}
@@ -60,6 +73,10 @@ class PhytClust:
         self.num = []
         self.den = []
 
+        self.tree_clust_dp_table()
+        self.run()
+        self.score_calc(plot=False)
+        self.find_peaks(n=num_peaks, plot=plot_scores)
 
     def validate_and_set_outgroup(self, outgroup):
         if outgroup and not is_outgroup_valid(self.tree, outgroup):
@@ -84,71 +101,78 @@ class PhytClust:
 
             self._no_outgroup_tree.root = sibling_clade
 
-    def calculate_num_terminals(self):
-        if self.outgroup:
-            return len(self.tree.get_terminals()) - 1
-        return len(self.tree.get_terminals())
-
     # def tree_clust_dp_table(self):
     #     start_time = time.time()
 
     #     n = self.k or self.max_k
-
     #     active_tree = self._no_outgroup_tree if self.outgroup else self.tree
 
+    #     # Prepare dictionaries to store the terminal counts and branch scores
+    #     terminal_count = {}
+    #     branch_score = {}
+    #     dp_table = {}
+    #     backtrack = {}
+
+    #     # Postorder traversal to compute terminal counts and initial DP values
     #     for clade in active_tree.find_clades(order="postorder"):
     #         scores = np.full(n, np.inf)
     #         back = np.full((2, n), np.inf)
     #         if clade.is_terminal():
-    #             # scores = np.zeros(1)
-    #             # back = np.full((2, 1), np.inf)
-    #             scores[0] = clade.branch_length
-
+    #             terminal_count[clade] = 1
+    #             scores[0] = 0
     #         else:
     #             left, right = clade.clades
-    #             left_size = left.count_terminals()
-    #             right_size = right.count_terminals()
+    #             left_size = terminal_count[left]
+    #             right_size = terminal_count[right]
     #             total_terminals = left_size + right_size
+    #             terminal_count[clade] = total_terminals
+
+    #             left_branch_score = left.branch_length * left_size
+    #             right_branch_score = right.branch_length * right_size
+    #             branch_score[clade] = left_branch_score + right_branch_score
 
     #             limit = min(n, total_terminals)
-    #             # scores = np.full(limit, np.inf)
-    #             clade_branch_length = (
-    #                 clade.branch_length if clade.branch_length is not None else 0
-    #             )
-    #             left_branch_length = (
-    #                 left.branch_length if left.branch_length is not None else 0
-    #             )
-    #             right_branch_length = (
-    #                 right.branch_length if right.branch_length is not None else 0
-    #             )
 
     #             scores[0] = (
-    #                 self.dp_table[left][0]
-    #                 + self.dp_table[right][0]
-    #                 + clade_branch_length  # * (total_terminals - 1)
-    #                 + (left_branch_length) * (left_size - 1)
-    #                 + (right_branch_length) * (right_size - 1)
+    #                 dp_table[left][0]
+    #                 + dp_table[right][0]
+    #                 + left_branch_score
+    #                 + right_branch_score
     #             )
-    #             back[:, 0] = (0, 0)  # (left, right)
+    #             back[:, 0] = (0, 0)
+
+    #             left_scores = dp_table[left][:limit]
+    #             right_scores_reversed = dp_table[right][:limit][::-1]
 
     #             for i in range(1, limit):
-    #                 sub_scores = [
-    #                     self.dp_table[left][j] + self.dp_table[right][i - j - 1]
-    #                     for j in range(i)
-    #                     if 0 <= j < len(self.dp_table[left])
-    #                     and 0 <= i - j - 1 < len(self.dp_table[right])
-    #                 ]
-    #                 min_score = np.min(sub_scores)
+    #                 left_sub_scores = left_scores[:i]
+    #                 right_sub_scores = right_scores_reversed[:i]
+
+    #                 # Broadcasting to compute sub_scores
+    #                 sub_scores = (
+    #                     left_sub_scores[:, np.newaxis] + right_sub_scores[np.newaxis, :]
+    #                 )
+
+    #                 # Get the index of the minimum value in the flattened sub_scores array
+    #                 flat_min_index = np.argmin(sub_scores)
+    #                 # Convert the flat index to 2D indices
+    #                 left_index, right_index = np.unravel_index(
+    #                     flat_min_index, sub_scores.shape
+    #                 )
+    #                 min_score = sub_scores[left_index, right_index]
+
     #                 scores[i] = min_score
 
     #                 if not np.isinf(min_score):
-    #                     min_index = np.argmin(sub_scores)
-    #                     back[:, i] = (min_index, i - min_index - 1)
+    #                     back[:, i] = (left_index, right_index)
 
-    #         self.dp_table[clade], self.backtrack[clade] = scores, back
+    #         dp_table[clade], backtrack[clade] = scores, back
+
+    #     self.dp_table = dp_table
+    #     self.backtrack = backtrack
+
     #     end_time = time.time()
     #     self._track_runtime("dp_table", start_time, end_time)
-
 
     def tree_clust_dp_table(self):
         start_time = time.time()
@@ -169,14 +193,14 @@ class PhytClust:
                 total_terminals = left_size + right_size
 
                 limit = min(n, total_terminals)
-                # scores = np.full(limit, np.inf)
+
                 scores[0] = (
                     self.dp_table[left][0]
                     + self.dp_table[right][0]
                     + (left.branch_length * (left_size))
                     + (right.branch_length * (right_size))
                 )
-                back[:, 0] = (0, 0)  # (left, right)
+                back[:, 0] = (0, 0)
 
                 for i in range(1, limit):
                     sub_scores = self.dp_table[left][:i] + self.dp_table[right][:i][::-1]
@@ -187,6 +211,14 @@ class PhytClust:
 
                     if not np.isinf(min_score):
                         back[:, i] = (min_index, i - min_index - 1)
+                    # min_indices, min_score = find_all_min_indices(sub_scores)
+                    # scores[i] = min_score
+
+                    # if not np.isinf(min_score):
+                    #     if len(min_indices) > 1:
+                    #         print(f"Multiple equal solutions detected at {clade.name}")
+                    #     min_index = min_indices[0]
+                    #     back[:, i] = (min_index, i - min_index - 1)
 
             self.dp_table[clade], self.backtrack[clade] = scores, back
         end_time = time.time()
@@ -197,7 +229,6 @@ class PhytClust:
             raise ValueError("value of k is missing.")
 
         active_tree = self._no_outgroup_tree if self.outgroup else self.tree
-
         ptr = k - 1
         stack = [(active_tree.clade, 0, ptr)]
         clusters = {}
@@ -236,10 +267,10 @@ class PhytClust:
         # print(f"self.k = {self.k}, self.max_k = {self.max_k}")  # Debug
         start_time = time.time()
         if self.max_k is None and self.k:
-            self.clusters = self.tree_clust_backtrack(self.k, verbose=verbose)
+            self.clusters = self.tree_clust_backtrack(k=self.k, verbose=verbose)
 
         elif self.k is None:
-            if self.max_k is None or self.max_k == "max":
+            if self.max_k is None:
                 self.max_k = self.num_terminals
                 self.def_clusters(verbose)
 
@@ -307,55 +338,31 @@ class PhytClust:
             if dp_row is None:
                 raise ValueError("Root not found in dp_table")
 
-            for cluster_id, terminal_ids in clust_inv.items():
-                if len(terminal_ids) > 1:  # Check if the cluster has more than one node
-                    branch_lengths = [t_id.branch_length for t_id in terminal_ids if t_id.branch_length is not None]
-                    cv = self.calculate_coefficient_of_variation(branch_lengths)
-                    if cv is not None:
-                        cv_scores[cluster_id] = cv
-            beta_1 = dp_row[0]
-            beta = dp_row[num_clusters - 1] 
-            if num_clusters == 1:
-                beta_k_minus_1 = 0
-            else:
-                beta_k_minus_1 = dp_row[num_clusters - 2]
-            # num = ((num_terminals - num_clusters)/ (
-            #     num_terminals - (1/2)))
-            # den = (beta_1)/beta
-            # score = 1/(num*den)
-            # cv = self.calculate_coefficient_of_variation()
-            num = (beta_1)/(beta) if beta else float("nan")
-            den = (num_terminals - num_clusters)#/(num_clusters - 1) if (num_clusters - 1) else float("nan")
-            # add = (beta_k_minus_1 - beta)/beta
-            score = (num*den) if den not in [float("inf")] else float("inf")
+        beta_1 = dp_row[0]
+        beta = dp_row[num_clusters - 1]
 
-        return beta, (beta + (beta_1*0.001)), score
+        num = (beta_1 - beta) / (beta) if beta else float("inf")
+        den = (
+            # ((num_terminals - num_clusters)) / (num_clusters - 1)
+            ((num_terminals - num_clusters)) / ((num_clusters - 1))
+            if (num_clusters - 1)
+            else float("nan")
+        )
+        score = (num * den) if den not in [float("inf")] else float("inf")
 
-    def get_terminal(self, node_id):
-        # Implement based on your tree structure
-        return self.tree.find_clades(lambda n: n.name == node_id)
+        return num, (beta / beta_1), score
 
-    def score_calc(self, plot=True, output_all=False):
+    def score_calc(self, plot=False, output_all=False):
         start_time = time.time()
-        scores = []
-        num_list = []
-        den_list = []
         if self.k is None:
-            for cluster in self.clusters:
-                num, den, score = self.cluster_score(
-                    clusters=cluster, output_all=output_all
-                )
-                scores.append(score)
-                num_list.append(num)
-                den_list.append(den)
+            results = [self.cluster_score(clusters=cluster, output_all=output_all) for cluster in self.clusters]
+            num_list, den_list, scores = zip(*results)
         else:
             num, den, score = self.cluster_score(
                 clusters=self.clusters, output_all=output_all
             )
             print(f"Single Cluster: {self.clusters}, Score: {score}")
-            scores.append(score)
-            num_list.append(num)
-            den_list.append(den)
+            scores, num_list, den_list = [score], [num], [den]
 
         self.scores = np.array(scores)
         self.num = np.array(num_list)
@@ -367,25 +374,34 @@ class PhytClust:
         end_time = time.time()
         self._track_runtime("score_calc", start_time, end_time)
 
-    def plot_scores(self):
-        fig = plt.figure()
-        ax = plt.gca()
-        plt.plot(range(1, len(self.scores) + 1), self.scores, "o-")
+    def plot_scores(self, scores_subset, peaks, k_start):
+        fig, ax = plt.subplots()
+        # Adjust x_indices to reflect the original full list indexing
+        x_indices = np.arange(
+            k_start + 1, k_start + len(scores_subset) + 1
+        )  # k_start + 1 for 1-based label
+        ax.plot(x_indices, scores_subset, "o-", label="Scores", markersize=2)
+
+        # Highlight peaks if provided
+        if peaks is not None:
+            # Adjust peak x-indices to match the 1-based plot index
+            peak_x_indices = [k_start + 1 + p for p in peaks]
+            peak_scores = [scores_subset[p] for p in peaks]
+            ax.plot(peak_x_indices, peak_scores, "rx", label="Peaks")
+
         plt.xlabel("No. of Clusters")
         plt.ylabel("Scores")
+        plt.yscale("log")
         plt.title("Scores for Different No. of Clusters")
-
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-
+        plt.show()
         return fig
 
     def find_peaks(
         self,
         n=3,
         plot=True,
-        method="default",
-        prominence=None,
-        k_start=None,
+        k_start=0,
         k_end=None,
     ):
         """
@@ -404,7 +420,8 @@ class PhytClust:
             print("Please calculate scores first")
             return []
 
-        k_start = k_start or 0
+        # Adjust k_start for 0-based indexing within Python
+        k_start = max(k_start - 1, 0)
         k_end = k_end or len(self.scores)
 
         if k_end > len(self.scores) or k_end < k_start:
@@ -413,34 +430,56 @@ class PhytClust:
         scores_subset = self.scores[k_start:k_end]
         scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
 
-        if method == "default":
-            peaks, _ = find_peaks(scores_subset, prominence=prominence)
-        elif method == "alt":
-            peaks, _ = find_peaks(scores_subset, prominence=prominence)
+        #####
+        smoothing = max(1, int(self.num_terminals * 0.1))
+        edges, plateau_sizes, dF, d2F = find_plateau_edges(
+            scores_subset, smoothing)
 
-        global_maxima_index = np.nanargmax(scores_subset)
-        global_maxima_index += k_start
-        if global_maxima_index not in peaks:
-            peaks = np.append(peaks, global_maxima_index)
+        # Add edge cases to the edges list
+        if scores_subset[0] > scores_subset[1]:
+            edges.append(k_start)
 
-        if peaks.size < 1:
-            print("No peaks found")
-            return []
+        # Find the last non-NaN index
+        last_valid_index = len(scores_subset) - np.isnan(scores_subset[::-1]).argmax() - 1
 
-        sorted_peaks = peaks[np.argsort(-scores_subset[peaks])]
-        top_peaks = sorted_peaks[: min(n, len(sorted_peaks))]
+        # Check if the last non-NaN value is greater than the one before it
+        if scores_subset[last_valid_index] > scores_subset[last_valid_index - 1]:
+            edges.append(k_start + last_valid_index)
+
+        # If there's only one edge, it's the only peak
+        if len(edges) == 1:
+            self.top_peaks = list(peak + k_start + 1 for peak in edges)
+            if plot:
+                self.plot_scores(scores_subset, list(edges), k_start)
+    
+            return self.top_peaks
+
+        edges = list(set(edges))
+
+        representatives, representative_plateau_sizes = select_representative_edges(
+            edges, plateau_sizes
+        )
+
+        # Sort representatives and their plateau sizes by plateau size
+        sorted_indices = np.argsort(representative_plateau_sizes)[::-1]
+        representatives = np.array(representatives)[sorted_indices]
+        representative_plateau_sizes = np.array(representative_plateau_sizes)[sorted_indices]
+
+        top_peaks = [representatives[: min(n, len(representatives))]]
 
         if plot:
-            plot_peaks(scores_subset, top_peaks, k_start, k_end=k_end)
+            self.plot_scores(scores_subset, top_peaks, k_start)
 
         if len(top_peaks) < n:
             print(f"Found only {len(top_peaks)} peak(s)")
 
-        self.top_peaks = list(top_peaks + k_start)
+        # Adjust top_peaks to the original indexing context
+        self.top_peaks = list(peak + k_start + 1 for peak in top_peaks)
         end_time = time.time()
         self._track_runtime("find_peaks", start_time, end_time)
 
-        return [peak + 1 + k_start for peak in top_peaks]
+        # Return the peaks adjusted to 1-based indexing
+        return [peak + 1 for peak in top_peaks]
 
     def plot(
         self,
