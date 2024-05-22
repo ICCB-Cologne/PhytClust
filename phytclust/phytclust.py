@@ -3,7 +3,6 @@ from collections import defaultdict
 from copy import deepcopy
 import string
 import logging
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
@@ -55,7 +54,6 @@ class PhytClust:
             self.max_k = None
 
         self.clusters = {}
-        self.score_type = score_type
         self.dp_table = {}
         self.backtrack = {}
         self.scores = []
@@ -309,14 +307,11 @@ class PhytClust:
         cv = (std_deviation / mean_length) if mean_length > 0 else float('inf')
         return cv
 
-    def cluster_score(self, clusters=None, score_type=None, output_all=False):
+    def cluster_score(self, clusters=None, output_all=False):
         clusters = clusters or self.clusters
-        score_type = self.score_type if self.score_type is not None else "CH_score"
 
         if not clusters:
             raise ValueError("Clusters not found")
-        if score_type not in ["CH_score", "PDI", "New_Score"]:
-            raise ValueError(f"Invalid score type: {score_type}")
 
         active_tree = self._no_outgroup_tree if self.outgroup else self.tree
         clust_inv = {}
@@ -326,17 +321,10 @@ class PhytClust:
         num_clusters = len(clust_inv)
         num_terminals = self.num_terminals
 
-        score = 0
-        cv = 0
-        # total_cv
-        cv_scores = {}
-        if score_type == "PDI":
-            score = self.pdi_index(clusters)
-        elif score_type == "CH_score":
-            root_clade = active_tree.root
-            dp_row = self.dp_table.get(root_clade, None)
-            if dp_row is None:
-                raise ValueError("Root not found in dp_table")
+        root_clade = active_tree.root
+        dp_row = self.dp_table.get(root_clade, None)
+        if dp_row is None:
+            raise ValueError("Root not found in dp_table")
 
         beta_1 = dp_row[0]
         beta = dp_row[num_clusters - 1]
