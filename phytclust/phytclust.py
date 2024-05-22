@@ -283,30 +283,6 @@ class PhytClust:
         end_time = time.time()
         self._track_runtime("run", start_time, end_time)
 
-    # def calculate_coefficient_of_variation(self):
-    #     # Extract branch lengths
-    #     branch_lengths = [
-    #         branch.branch_length
-    #         for branch in self.tree.get_terminals()
-    #         if branch.branch_length is not None
-    #     ]
-
-    #     # Calculate mean and standard deviation
-    #     mean_length = np.mean(branch_lengths)
-    #     std_deviation = np.std(branch_lengths)
-
-    #     # Calculate coefficient of variation
-    #     cv = std_deviation / mean_length
-
-    #     return cv
-    def calculate_coefficient_of_variation(self, branch_lengths):
-        if len(branch_lengths) < 2:
-            return None  # Not enough data to calculate CV
-        mean_length = np.mean(branch_lengths)
-        std_deviation = np.std(branch_lengths)
-        cv = (std_deviation / mean_length) if mean_length > 0 else float('inf')
-        return cv
-
     def cluster_score(self, clusters=None, output_all=False):
         clusters = clusters or self.clusters
 
