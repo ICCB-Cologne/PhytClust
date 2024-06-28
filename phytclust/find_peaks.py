@@ -1,8 +1,26 @@
 import numpy as np
 from scipy.ndimage import uniform_filter1d
+import numpy.matlib
+
+def calculate_prominence(scores):
+    prominences = []
+    for i in range(len(scores)):
+        if i == 0:
+            left_min = scores[i]
+        else:
+            left_min = min(scores[:i])
+
+        if i == len(scores) - 1:
+            right_min = scores[i]
+        else:
+            right_min = min(scores[i + 1 :])
+
+        prominence = scores[i] - max(left_min, right_min)
+        prominences.append(prominence)
+    return prominences
 
 
-def find_plateau_edges(F, smoothing=4):
+def find_plateau_edges(scores_subset, k_start, smoothing=4):
     """
     Finds points where score increases and then remains constant or decreases.
 
@@ -18,16 +36,20 @@ def find_plateau_edges(F, smoothing=4):
     dF: (smoothed) derivative of F
     d2F: (smoothed) Second Derivative of F
     """
-    F = np.nan_to_num(F)
+    F = scores_subset
+    F = np.nan_to_num(F, nan=0, posinf=0, neginf=0)  # replace nan and inf values with 0
 
     # calculate smooth gradients
     smoothF = uniform_filter1d(F, size=smoothing)
     dF = uniform_filter1d(np.gradient(smoothF), size=smoothing)
     d2F = uniform_filter1d(np.gradient(dF), size=smoothing)
+    last_valid_index = len(scores_subset) - np.isnan(scores_subset[::-1]).argmax() - 2
 
+    prominences = calculate_prominence(F)
     # Find points where score increases and then remains constant or decreases
     edges = []
-    plateau_sizes = []
+    prominence_edges = []
+
     for k in range(1, len(F) - 1):
         if (
             np.isfinite(dF[k])
@@ -35,16 +57,20 @@ def find_plateau_edges(F, smoothing=4):
             and F[k - 1] < F[k]
             and F[k] >= F[k + 1]
         ):
-            plateau_size = (abs(F[k] - F[k - 1]) + abs(F[k] - F[k + 1])) / F[k]
+            if k == 1 or k == last_valid_index:
+                prominence_edge = 0
+            else:
+                prominence_edge = prominences[k]
             edges.append(k)
-            plateau_sizes.append(plateau_size)
+            prominence_edges.append(prominence_edge)
 
     # Sort edges and plateau_sizes by relative plateau size
-    sorted_indices = np.argsort(plateau_sizes)[::-1]
+    sorted_indices = np.argsort(prominence_edges)[::-1]
     edges = np.array(edges)[sorted_indices]
-    plateau_sizes = np.array(plateau_sizes)[sorted_indices]
+    plateau_sizes = np.array(prominence_edges)[sorted_indices]
+    # print(edges, plateau_sizes)
 
-    return edges, plateau_sizes, dF, d2F
+    return edges, prominence_edges, prominences
 
 
 def select_representative_edges(edges, plateau_sizes):
@@ -74,7 +100,7 @@ def select_representative_edges(edges, plateau_sizes):
 
     # Group close edges
     for edge, plateau_size in zip(edges[1:], plateau_sizes[1:]):
-        threshold = max(1, edge * 0.01)  # Threshold is 1% of the edge index
+        threshold = max(1, edge * 0.1)  # Threshold is 1% of the edge index
         if edge - groups[-1][-1] <= threshold:
             groups[-1].append(edge)
             group_plateau_sizes[-1].append(plateau_size)
@@ -99,3 +125,29 @@ def select_representative_edges(edges, plateau_sizes):
     representatives, representative_plateau_sizes = zip(*pairs)
 
     return list(representatives), list(representative_plateau_sizes)
+
+
+def normalize(data):
+    min_val = min(data)
+    max_val = max(data)
+    return [(x - min_val) / (max_val - min_val) for x in data]
+
+
+def elbow_point(data):
+    curve = data
+    nPoints = len(curve)
+    allCoord = np.vstack((range(nPoints), curve)).T
+    np.array([range(nPoints), curve])
+
+    firstPoint = allCoord[0]
+    lineVec = allCoord[-1] - allCoord[0]
+    lineVecNorm = lineVec / np.sqrt(np.sum(lineVec**2))
+    vecFromFirst = allCoord - firstPoint
+    scalarProduct = np.sum(
+        vecFromFirst * np.matlib.repmat(lineVecNorm, nPoints, 1), axis=1
+    )
+    vecFromFirstParallel = np.outer(scalarProduct, lineVecNorm)
+    vecToLine = vecFromFirst - vecFromFirstParallel
+    distToLine = np.sqrt(np.sum(vecToLine**2, axis=1))
+    idxOfBestPoint = np.argmax(distToLine)
+    return idxOfBestPoint

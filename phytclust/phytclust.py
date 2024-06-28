@@ -12,6 +12,9 @@ from phytclust.plotting import plot_cluster, plot_peaks
 from phytclust.save import save_clusters
 from phytclust.validation import is_outgroup_valid, validate_tree, rename_nodes
 from phytclust.helper import find_all_min_indices
+from phytclust.find_peaks import normalize, elbow_point
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
     "color", plt.cm.tab20.colors
@@ -75,6 +78,7 @@ class PhytClust:
         self.run()
         self.score_calc(plot=False)
         self.find_peaks(n=num_peaks, plot=plot_scores)
+        self.rank_peaks()
 
     def validate_and_set_outgroup(self, outgroup):
         if outgroup and not is_outgroup_valid(self.tree, outgroup):
@@ -396,49 +400,43 @@ class PhytClust:
 
         #####
         smoothing = max(1, int(self.num_terminals * 0.1))
-        edges, plateau_sizes, dF, d2F = find_plateau_edges(
-            scores_subset, smoothing)
+        edges, prominence_edges, prominences = find_plateau_edges(
+            scores_subset, k_start, smoothing)
 
-        # Add edge cases to the edges list
-        if scores_subset[0] > scores_subset[1]:
-            edges.append(k_start)
+        self.peak_prominence = prominences
 
-        # Find the last non-NaN index
-        last_valid_index = len(scores_subset) - np.isnan(scores_subset[::-1]).argmax() - 1
-
-        # Check if the last non-NaN value is greater than the one before it
-        if scores_subset[last_valid_index] > scores_subset[last_valid_index - 1]:
-            edges.append(k_start + last_valid_index)
-
-        # If there's only one edge, it's the only peak
         if len(edges) == 1:
             self.top_peaks = list(peak + k_start + 1 for peak in edges)
+            print(f"Found only {len(self.top_peaks)} peak(s)")
             if plot:
                 self.plot_scores(scores_subset, list(edges), k_start)
-    
+
             return self.top_peaks
 
-        edges = list(set(edges))
+        # edges = list(set(edges))
 
         representatives, representative_plateau_sizes = select_representative_edges(
-            edges, plateau_sizes
+            edges, prominence_edges
         )
 
         # Sort representatives and their plateau sizes by plateau size
-        sorted_indices = np.argsort(representative_plateau_sizes)[::-1]
-        representatives = np.array(representatives)[sorted_indices]
-        representative_plateau_sizes = np.array(representative_plateau_sizes)[sorted_indices]
+        # sorted_indices = np.argsort(representative_plateau_sizes)[::-1]
+        representatives = np.array(representatives)#[sorted_indices]
+        representative_plateau_sizes = np.array(representative_plateau_sizes)#[sorted_indices]
 
-        top_peaks = [representatives[: min(n, len(representatives))]]
+        top_peaks = list(representatives[: min(n, len(representatives))])
+        top_peak_plateau_sizes = list(representative_plateau_sizes[: min(n, len(representative_plateau_sizes))])
+        self.top_peak_plateau_sizes = top_peak_plateau_sizes
 
         if plot:
             self.plot_scores(scores_subset, top_peaks, k_start)
 
-        if len(top_peaks) < n:
-            print(f"Found only {len(top_peaks)} peak(s)")
-
         # Adjust top_peaks to the original indexing context
         self.top_peaks = list(peak + k_start + 1 for peak in top_peaks)
+
+        if len(self.top_peaks) < n:
+            print(f"Found only {len(self.top_peaks)} peak(s)")
+
         end_time = time.time()
         self._track_runtime("find_peaks", start_time, end_time)
 
@@ -475,10 +473,11 @@ class PhytClust:
             clusters_to_plot.append((n, self.clusters[n - 1]))
         else:
             # Existing logic for when k is not specified
-            if hasattr(self, "top_peaks") and self.top_peaks:
-                top_peaks = self.top_peaks[:top_n]
+            if hasattr(self, "ranked_peaks") and self.ranked_peaks:
+                num_peaks = len(self.ranked_peaks)
+                top_peaks = [self.ranked_peaks[i][1] for i in range(min(top_n, num_peaks))]  
                 clusters_to_plot.extend(
-                    [(peak, self.clusters[peak]) for peak in top_peaks]
+                    [(peak, self.clusters[peak - 1]) for peak in top_peaks]  
                 )
             else:
                 peaks, _ = find_peaks(self.scores, distance=1)
@@ -537,3 +536,38 @@ class PhytClust:
             self.runtimes[function_name].append(runtime)
         else:
             self.runtimes[function_name] = [runtime]
+
+    def rank_peaks(self):
+        normalized_prominences = normalize(self.peak_prominence)
+        normalized_prominences = np.array(normalized_prominences)
+        x = np.arange(len(self.den)).reshape(-1, 1)
+        y = self.den
+        model = LinearRegression()
+        model.fit(x, y)
+        predictions = model.predict(x)
+        r_squared = r2_score(y, predictions)
+
+        indices = [peak - 1 for peak in self.top_peaks]
+        max_product_index = elbow_point(y)
+        distances = [abs(i - max_product_index) for i in indices]
+
+        normalized_distances = distances / np.max(distances)
+        reciprocal_distances = 1 / (1 + normalized_distances)
+
+        scores = ((1-r_squared) * (reciprocal_distances)) + ((r_squared) * normalized_prominences[indices])
+
+        sorted_indices = np.argsort(scores)[::-1]
+        indices = np.array(indices)
+        # Use the sorted indices to sort the scores and indices
+        scores = scores[sorted_indices]
+        indices = indices[sorted_indices]
+
+        # Calculate the rankings
+        rankings = np.arange(1, len(scores) + 1)
+
+        # Create a list of tuples (ranking, index, score)
+        ranked_data = [
+            (rank, (idx + 1), score) for rank, idx, score in zip(rankings, indices, scores)
+        ]
+
+        self.ranked_peaks = ranked_data

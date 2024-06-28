@@ -15,12 +15,15 @@ def validate_tree(tree, outgroup=None):
         if len(node.clades) != 2
         and all(clade.name != outgroup for clade in node.clades)
     ]
-    assert not invalid_nodes, f"Nodes must have 2 children. Violating nodes: {invalid_nodes}"
+
+    if invalid_nodes:
+        print("Nodes with > 2 children:(excluding specified outgroup)")
+        for node in invalid_nodes:
+            print(f"Node: {node.name}, Children: {len(node.clades)}")
 
         print("Resolving polytomies and merging single child clades...")
         merge_single_child_clades(tree)
         resolve_polytomies(tree)
-
 
 
 def rename_nodes(tree, outgroup=None):
