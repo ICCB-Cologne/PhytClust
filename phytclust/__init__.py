@@ -5,4 +5,6 @@ from phytclust.save import save_clusters
 from phytclust.validation import is_outgroup_valid, validate_tree
 from phytclust.helper import find_all_min_indices
 from phytclust.maximize_pd import maximize_pd
+from phytclust.maximize_pd import maximize_pd
+from phytclust.find_peaks import find_peaks_ext
 import phytclust.indices

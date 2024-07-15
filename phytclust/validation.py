@@ -1,6 +1,6 @@
 import string
 from Bio import Phylo
-
+from collections import deque
 from Bio.Phylo.BaseTree import Clade
 
 
@@ -15,6 +15,9 @@ def validate_tree(tree, outgroup=None):
         if len(node.clades) != 2
         and all(clade.name != outgroup for clade in node.clades)
     ]
+    for clade in tree.root.clades:
+        if len(clade.clades) != 2 and all(child.name != outgroup for child in clade.clades):
+            invalid_nodes.append(clade)
 
     if invalid_nodes:
         print("Nodes with > 2 children:(excluding specified outgroup)")
@@ -80,10 +83,10 @@ def merge_single_child_clades(tree):
 
 
 def resolve_polytomies(tree):
-    stack = [tree.root]
+    queue = deque([tree.root])
 
-    while stack:
-        clade = stack.pop()
+    while queue:
+        clade = queue.popleft()
 
         # While there are more than 2 children, we need to resolve it
         while len(clade.clades) > 2:
@@ -98,6 +101,6 @@ def resolve_polytomies(tree):
             clade.clades.append(new_internal_node)
 
         # Add children to stack to resolve their polytomies
-        stack.extend(clade.clades)
+        queue.extend(clade.clades)
 
     return tree

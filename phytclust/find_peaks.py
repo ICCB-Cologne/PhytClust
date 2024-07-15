@@ -2,6 +2,117 @@ import numpy as np
 from scipy.ndimage import uniform_filter1d
 import numpy.matlib
 
+
+def find_peaks_ext(
+    scores=None,
+    num_terminals=None,
+    n=3,
+    k_start=0,
+    k_end=None,
+):
+    """
+    Finds and plots the top n maxima in the scores within a specified range of k.
+
+    Parameters:
+    - n: int, the number of top peaks to find.
+    - plot: bool, whether to plot the score graph with the peaks highlighted.
+    - method: str, 'default' or 'alt' for different peak finding methods.
+    - prominence: tuple or None, the prominence parameter for peak finding, applicable in 'alt' method.
+    - k_start: int or None, the starting index for the range of k values to consider.
+    - k_end: int or None, the ending index for the range of k values to consider.
+    """
+    if len(scores) == 0:
+        print("Please calculate scores first")
+        return []
+
+    # Adjust k_start for 0-based indexing within Python
+    k_start = max(k_start - 1, 0)
+    k_end = k_end or len(scores)
+
+    if k_end > len(scores) or k_end < k_start:
+        raise ValueError(f"Invalid k_end value. Max allowed value is {len(scores)}")
+
+    scores_subset = scores[k_start:k_end]
+    scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
+
+    #####
+    smoothing = max(1, int(num_terminals * 0.1))
+    edges, prominence_edges, prominences = find_plateau_edges(
+        scores_subset, k_start, smoothing)
+
+    if len(edges) == 1:
+        top_peaks = list(peak + k_start + 1 for peak in edges)
+        print(f"Found only {len(top_peaks)} peak(s)")
+        # if plot:
+        #     plot_scores(scores_subset, list(edges), k_start)
+
+        return prominences, top_peaks
+
+    representatives, representative_plateau_sizes = select_representative_edges(
+        edges, prominence_edges
+    )
+
+    # Sort representatives and their plateau sizes by plateau size
+    # sorted_indices = np.argsort(representative_plateau_sizes)[::-1]
+    representatives = np.array(representatives)  # [sorted_indices]
+    representative_plateau_sizes = np.array(
+        representative_plateau_sizes
+    )  # [sorted_indices]
+
+    top_peaks = list(representatives[: min(n, len(representatives))])
+    top_peak_plateau_sizes = list(
+        representative_plateau_sizes[: min(n, len(representative_plateau_sizes))]
+    )
+    top_peak_plateau_sizes = top_peak_plateau_sizes
+
+    # Adjust top_peaks to the original indexing context
+    top_peaks = list(peak + k_start + 1 for peak in top_peaks)
+
+    if len(top_peaks) < n:
+        print(f"Found only {len(top_peaks)} peak(s)")
+
+    return [peak for peak in top_peaks]
+
+#tbc
+def rank_peaks_ext():
+    normalized_prominences = normalize(peak_prominence)
+    normalized_prominences = np.array(normalized_prominences)
+    x = np.arange(len(self.den)).reshape(-1, 1)
+    y = self.den
+    model = LinearRegression()
+    model.fit(x, y)
+    predictions = model.predict(x)
+    r_squared = r2_score(y, predictions)
+
+    indices = [peak - 1 for peak in self.top_peaks]
+    max_product_index = elbow_point(y)
+    distances = [abs(i - max_product_index) for i in indices]
+
+    normalized_distances = distances / np.max(distances)
+    reciprocal_distances = 1 / (1 + normalized_distances)
+
+    scores = ((1 - r_squared) * (reciprocal_distances)) + (
+        (r_squared) * normalized_prominences[indices]
+    )
+
+    sorted_indices = np.argsort(scores)[::-1]
+    indices = np.array(indices)
+    # Use the sorted indices to sort the scores and indices
+    scores = scores[sorted_indices]
+    indices = indices[sorted_indices]
+
+    # Calculate the rankings
+    rankings = np.arange(1, len(scores) + 1)
+
+    # Create a list of tuples (ranking, index, score)
+    ranked_data = [
+        (rank, (idx + 1), score)
+        for rank, idx, score in zip(rankings, indices, scores)
+    ]
+
+    self.ranked_peaks = ranked_data
+
+
 def calculate_prominence(scores):
     prominences = []
     for i in range(len(scores)):

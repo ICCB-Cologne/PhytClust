@@ -129,34 +129,27 @@ def map_terminal_to_internal(tree):
 
     return terminal_to_internal
 
+import heapq
+
 
 def rank_terminal_nodes(tree, num_species=None):
     terminal_to_internal = map_terminal_to_internal(tree)
 
     terminal_distances = {
-        terminal: tree.distance(terminal) for terminal in terminal_to_internal
+        terminal: -tree.distance(terminal) for terminal in terminal_to_internal
     }
 
     subtracted_nodes = {terminal: set() for terminal in terminal_to_internal}
     choice_ranking = []
     output_lists = []
 
-    while terminal_distances:
-        sorted_terminals = sorted(
-            terminal_distances.items(), key=lambda x: x[1], reverse=True
-        )
+    # Use a priority queue for terminal_distances
+    terminal_queue = [(distance, terminal) for terminal, distance in terminal_distances.items()]
+    heapq.heapify(terminal_queue)
 
-        chosen_terminal, chosen_distance = sorted_terminals[0]
-
-        same_distance_terminals = [
-            terminal
-            for terminal, distance in sorted_terminals
-            if distance == chosen_distance
-        ]
-        if len(same_distance_terminals) > 1:
-            print(
-                f"Terminals with the same largest distance: {same_distance_terminals}"
-            )
+    while terminal_queue:
+        chosen_distance, chosen_terminal = heapq.heappop(terminal_queue)
+        chosen_distance = -chosen_distance  # Convert back to positive distance
 
         print(f"Chosen terminal: {chosen_terminal}, Distance: {chosen_distance}")
 
@@ -171,12 +164,10 @@ def rank_terminal_nodes(tree, num_species=None):
                         and node not in subtracted_nodes[terminal]
                     ):
                         print(f"Subtracting {node.branch_length} from {terminal}")
-                        terminal_distances[terminal] -= node.branch_length
+                        terminal_distances[terminal] += node.branch_length
                         subtracted_nodes[terminal].add(node)
 
-        choice_ranking.append(
-            (chosen_terminal, terminal_distances.pop(chosen_terminal))
-        )
+        choice_ranking.append((chosen_terminal, chosen_distance))
         output_lists.append(choice_ranking.copy())
 
         if num_species is not None and len(choice_ranking) >= num_species:
@@ -192,6 +183,70 @@ def rank_terminal_nodes(tree, num_species=None):
         previous_distance = distance
 
     return output_lists
+
+
+# def rank_terminal_nodes(tree, num_species=None):
+#     terminal_to_internal = map_terminal_to_internal(tree)
+
+#     terminal_distances = {
+#         terminal: tree.distance(terminal) for terminal in terminal_to_internal
+#     }
+
+#     subtracted_nodes = {terminal: set() for terminal in terminal_to_internal}
+#     choice_ranking = []
+#     output_lists = []
+
+#     while terminal_distances:
+#         sorted_terminals = sorted(
+#             terminal_distances.items(), key=lambda x: x[1], reverse=True
+#         )
+
+#         chosen_terminal, chosen_distance = sorted_terminals[0]
+
+#         same_distance_terminals = [
+#             terminal
+#             for terminal, distance in sorted_terminals
+#             if distance == chosen_distance
+#         ]
+#         if len(same_distance_terminals) > 1:
+#             print(
+#                 f"Terminals with the same largest distance: {same_distance_terminals}"
+#             )
+
+#         print(f"Chosen terminal: {chosen_terminal}, Distance: {chosen_distance}")
+
+#         shared_nodes = set(terminal_to_internal[chosen_terminal])
+#         for terminal in terminal_distances:
+#             if terminal != chosen_terminal:
+#                 terminal_nodes = set(terminal_to_internal[terminal])
+#                 for node in shared_nodes:
+#                     if (
+#                         node in terminal_nodes
+#                         and node.branch_length is not None
+#                         and node not in subtracted_nodes[terminal]
+#                     ):
+#                         print(f"Subtracting {node.branch_length} from {terminal}")
+#                         terminal_distances[terminal] -= node.branch_length
+#                         subtracted_nodes[terminal].add(node)
+
+#         choice_ranking.append(
+#             (chosen_terminal, terminal_distances.pop(chosen_terminal))
+#         )
+#         output_lists.append(choice_ranking.copy())
+
+#         if num_species is not None and len(choice_ranking) >= num_species:
+#             break
+
+#     # Check for ties and mark them
+#     previous_distance = None
+#     for i, (terminal, distance) in enumerate(choice_ranking):
+#         if distance == previous_distance:
+#             choice_ranking[i] = (terminal, distance, "tie")
+#         else:
+#             choice_ranking[i] = (terminal, distance)
+#         previous_distance = distance
+
+#     return output_lists
 
 
 # def rank_terminal_nodes(tree, num_species=None, outgroup=None, clusters=None):
@@ -290,19 +345,48 @@ def maximize_pd(tree, num_species=None, outgroup=None, clusters=None):
     return outputs
 
 
+# def select_representative_species(tree, clusters):
+#     # Map each terminal node to its path from the root
+
+#     # Initialize the list of representative species
+#     representatives = []
+
+#     # For each cluster...
+#     for cluster in set(clusters.values()):
+#         # Get the species in the cluster
+#         species_in_cluster = [
+#             species for species, clust in clusters.items() if clust == cluster
+#         ]
+
+#         # If the cluster has only one species, that species is the representative
+#         if len(species_in_cluster) == 1:
+#             representatives.append(species_in_cluster[0])
+#         else:
+#             # Otherwise, find the MRCA of the species in the cluster
+#             mrca = tree.common_ancestor(species_in_cluster)
+
+#             # Create a new tree with the MRCA as the root
+#             sub_tree = Phylo.BaseTree.Tree(root=mrca, rooted=True)
+
+#             # Select the representative species from the sub-tree
+#             ranked_species = rank_terminal_nodes(sub_tree, num_species=1)
+#             representatives.append(ranked_species[0][0][0])
+
+
+#     return representatives
 def select_representative_species(tree, clusters):
-    # Map each terminal node to its path from the root
+    # Map each cluster to its species
+    cluster_to_species = {}
+    for species, cluster in clusters.items():
+        if cluster not in cluster_to_species:
+            cluster_to_species[cluster] = []
+        cluster_to_species[cluster].append(species)
 
     # Initialize the list of representative species
     representatives = []
 
     # For each cluster...
-    for cluster in set(clusters.values()):
-        # Get the species in the cluster
-        species_in_cluster = [
-            species for species, clust in clusters.items() if clust == cluster
-        ]
-
+    for cluster, species_in_cluster in cluster_to_species.items():
         # If the cluster has only one species, that species is the representative
         if len(species_in_cluster) == 1:
             representatives.append(species_in_cluster[0])
