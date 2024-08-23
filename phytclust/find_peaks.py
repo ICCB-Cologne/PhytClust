@@ -73,6 +73,7 @@ def find_peaks_ext(
 
     return [peak for peak in top_peaks]
 
+
 #tbc
 def rank_peaks_ext():
     normalized_prominences = normalize(peak_prominence)
@@ -152,8 +153,10 @@ def find_plateau_edges(scores_subset, k_start, smoothing=4):
 
     # calculate smooth gradients
     smoothF = uniform_filter1d(F, size=smoothing)
-    dF = uniform_filter1d(np.gradient(smoothF), size=smoothing)
+    dF = uniform_filter1d(np.gradient(smoothF), size=smoothing)#changed smoothF to F
     d2F = uniform_filter1d(np.gradient(dF), size=smoothing)
+    # dF = np.gradient(F)
+    # d2F = np.gradient(dF)
     last_valid_index = len(scores_subset) - np.isnan(scores_subset[::-1]).argmax() - 2
 
     prominences = calculate_prominence(F)

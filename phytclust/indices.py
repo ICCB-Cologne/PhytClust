@@ -16,7 +16,11 @@ def colless_index_calc(tree):
 def normalized_colless(tree):
     colless_sum = colless_index_calc(tree)
     n = tree.count_terminals()
-    normalized_colless = colless_sum * (2 / (n * (n - 1)))
+    if n <= 2:
+        return (
+            0  
+        )
+    normalized_colless = (2 * colless_sum) / ((n - 1) * (n - 2))
     return normalized_colless
 
 
@@ -203,4 +207,3 @@ def gini_coefficient(proportions):
     total = sum(sorted_proportions)
     gini = numerator / (n * total)
     return gini
-
