@@ -2,14 +2,21 @@ import numpy as np
 import pandas as pd
 import os
 import logging
-
+from typing import Any, Dict, List, Optional, Tuple, Union
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def save_clusters(
-    scores, clusters, results_dir, top_n=1, filename="phyclust_results.csv", outlier=True, selected_peaks=None, n=None
-):
+    scores: Union[List[float], np.ndarray],
+    clusters: Dict[int, Dict[Any, int]],
+    results_dir: str,
+    top_n: int = 1,
+    filename: str = "phyclust_results.csv",
+    outlier: bool = True,
+    selected_peaks: Optional[List[int]] = None,
+    n: Optional[int] = None,
+) -> None:
     """
     Save clustering results to a CSV file.
 
@@ -30,20 +37,26 @@ def save_clusters(
         logger.error("Please calculate scores first.")
         return
 
-    top_peaks = selected_peaks 
+    top_peaks = selected_peaks
     if top_peaks is None:
         logger.error("No peaks found.")
         return
 
-    selected_clusters = {n: clusters[n]} if n is not None and n in clusters else [clusters[i] for i in top_peaks]
+    selected_clusters = (
+        {n: clusters[n]}
+        if n is not None and n in clusters
+        else [clusters[i] for i in top_peaks]
+    )
 
     data = []
-    all_cluster_ids = set()
     for cluster in selected_clusters:
         cluster_ids = list(cluster.values())
         outlier_clusters, non_outlier_clusters = identify_clusters(cluster_ids, outlier)
 
-        new_cluster_id_map = {old_id: new_id for new_id, old_id in enumerate(sorted(non_outlier_clusters), start=1)}
+        new_cluster_id_map = {
+            old_id: new_id
+            for new_id, old_id in enumerate(sorted(non_outlier_clusters), start=1)
+        }
         data.extend(
             {
                 "Node Name": node.name,
@@ -55,91 +68,50 @@ def save_clusters(
             }
             for node, cluster_id in cluster.items()
         )
-        # for node, cluster_id in cluster.items():
-        #     mapped_cluster_id = -1 if outlier and cluster_id in outlier_clusters else new_cluster_id_map.get(cluster_id, -1)
-        #     all_cluster_ids.add(mapped_cluster_id)
-        #     data.append({"Node Name": node.name, "Cluster Number": mapped_cluster_id})
+
     save_to_csv(data, results_dir, filename)
 
 
-def identify_clusters(cluster_ids, outlier):
-    """Identify outlier and non-outlier clusters."""
+def identify_clusters(cluster_ids: List[int], outlier: bool) -> Tuple[set, set]:
+    """
+    Identify outlier and non-outlier clusters.
+
+    Parameters:
+    cluster_ids (List[int]): List of cluster IDs.
+    outlier (bool): Whether to identify outliers.
+
+    Returns:
+    Tuple[set, set]: A tuple containing sets of outlier and non-outlier clusters.
+    """
     if outlier:
-        outlier_clusters = {cluster_id for cluster_id in cluster_ids if cluster_ids.count(cluster_id) == 1}
+        outlier_clusters = {
+            cluster_id
+            for cluster_id in cluster_ids
+            if cluster_ids.count(cluster_id) == 1
+        }
     else:
         outlier_clusters = set()
-    non_outlier_clusters = set(cluster_ids) - outlier_clusters if outlier else set(cluster_ids)
+    non_outlier_clusters = (
+        set(cluster_ids) - outlier_clusters if outlier else set(cluster_ids)
+    )
     return outlier_clusters, non_outlier_clusters
 
 
-def save_to_csv(data, results_dir, filename):
-    """Save data to a CSV file."""
+def save_to_csv(
+    data: List[Dict[str, Union[str, int]]], results_dir: str, filename: str
+) -> None:
+    """
+    Save data to a CSV file.
+
+    Parameters:
+    data (List[Dict[str, Union[str, int]]]): The data to be saved.
+    results_dir (str): The directory where the results file will be saved.
+    filename (str): The name of the output CSV file.
+
+    Returns:
+    None
+    """
     df = pd.DataFrame(data)
     full_path = os.path.join(results_dir, filename)
     df.to_csv(full_path, index=False)
     logger.info(f"Cluster data saved to {filename}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # if selected_peaks is not None:
-    #     top_peaks = selected_peaks
-    # else:
-    #     peaks, _ = find_peaks(scores, distance=1)
-    #     if peaks.size < 1:
-    #         print("No peaks found.")
-    #         return
-    #     top_peaks = peaks[np.argsort(-scores[peaks])][:top_n]
-
-    # if n is not None:
-    #     selected_clusters = {n: clusters[n]} if n in clusters else {}
-    # else:
-    #     selected_clusters = [clusters[i] for i in top_peaks]
-
-    # data = []
-    # all_cluster_ids = set()
-    # for cluster in selected_clusters:
-    #     cluster_ids = list(cluster.values())
-
-    #     if outlier:
-    #         outlier_clusters = {
-    #             cluster_id
-    #             for cluster_id in cluster_ids
-    #             if cluster_ids.count(cluster_id) == 1
-    #         }
-    #     else:
-    #         outlier_clusters = set()
-
-    #     non_outlier_clusters = (
-    #         set(cluster_ids) - outlier_clusters if outlier else set(cluster_ids)
-    #     )
-
-    #     new_cluster_id_map = {
-    #         old_id: new_id
-    #         for new_id, old_id in enumerate(sorted(non_outlier_clusters), start=1)
-    #     }
-
-    #     for node, cluster_id in cluster.items():
-    #         if outlier and cluster_id in outlier_clusters:
-    #             mapped_cluster_id = -1
-    #         else:
-    #             mapped_cluster_id = new_cluster_id_map.get(
-    #                 cluster_id, -1
-    #             )
-    #         all_cluster_ids.add(mapped_cluster_id)
-    #         data.append({"Node Name": node.name, "Cluster Number": mapped_cluster_id})
-
-    # df = pd.DataFrame(data)
-    # full_path = os.path.join(results_dir, filename)
-    # df.to_csv(full_path, index=False)
-    # print(f"Cluster data saved to {filename}")

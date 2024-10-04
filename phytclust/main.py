@@ -12,7 +12,9 @@ from scipy.signal import find_peaks
 from matplotlib.ticker import MaxNLocator
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
-
+import numpy as np
+import matplotlib.colors as mcolors
+import random
 from phytclust.find_peaks import find_plateau_edges, select_representative_edges, normalize, elbow_point
 from phytclust.plotting import plot_cluster
 from phytclust.save import save_clusters
@@ -38,6 +40,8 @@ class PhytClust:
     tree: Any
     num_peaks: int = 3
     should_plot_scores: bool = False
+    resolution_on: bool = True
+    num_bins: int = 3
     k: Optional[int] = None
     max_k: Optional[int] = None
     outgroup: Optional[Any] = None
@@ -82,21 +86,17 @@ class PhytClust:
         self._no_outgroup_tree = copy.deepcopy(self.tree) if self.outgroup else None
         if self.outgroup:
             self.node_terminals, self.terminal_count = prune_outgroup(
-                self.tree, self.outgroup
+                self._no_outgroup_tree, self.outgroup
             )
         self.method = self.method if self.method is not None else "default"
         if self.method == "default":
-            self.run_dp_method(num_peaks=self.num_peaks, should_plot_scores=self.should_plot_scores)
+            self.run_dp_method(num_peaks=self.num_peaks, should_plot_scores=self.should_plot_scores, resolution_on=self.resolution_on, num_bins=self.num_bins)
         elif self.method == "greedy":
             self.run_greedy_alg()  # tbc
-        elif self.method == "shannon":
-            self.run_shannon_method()
-        elif self.method == "stairs2":
-            self.run_stairs2_method()
 
-    def run_dp_method(self, num_peaks: int = 3, should_plot_scores: bool = False) -> None:
+    def run_dp_method(self, num_peaks: int = 3, should_plot_scores: bool = False, resolution_on: bool = True, num_bins: int = 3) -> None:
         self.tree_clust_dp_table()
-        self.run(num_peaks=num_peaks, should_plot_scores=should_plot_scores)
+        self.run(num_peaks=num_peaks, should_plot_scores=should_plot_scores, resolution_on=resolution_on, num_bins=num_bins)
 
     def tree_clust_dp_table(self) -> None:
         n = self.k or self.max_k
@@ -129,14 +129,21 @@ class PhytClust:
                 back[:, 0] = (0, 0)
 
                 for i in range(1, limit):
-                    sub_scores = left_dp[:i] + right_dp[:i][::-1]
+                    left_indices = np.arange(i)
+                    right_indices = i - left_indices - 1
+
+                    left_dp_values = left_dp[left_indices]
+                    right_dp_values = right_dp[right_indices]
+
+                    sub_scores = left_dp_values + right_dp_values
 
                     min_index = np.argmin(sub_scores)
                     min_score = sub_scores[min_index]
+
                     scores[i] = min_score
 
                     if not np.isinf(min_score):
-                        back[:, i] = (min_index, i - min_index - 1)
+                        back[:, i] = (left_indices[min_index], right_indices[min_index])
 
             self.dp_table[clade], self.backtrack[clade] = scores, back
 
@@ -183,26 +190,46 @@ class PhytClust:
             for i in range(1, self.max_k + 1)
         ]
 
-    def run(self, verbose: bool = False, num_peaks: int = 3, should_plot_scores: bool = False) -> None:
+    def run(
+        self,
+        verbose: bool = False,
+        num_peaks: int = 3,
+        should_plot_scores: bool = False,
+        resolution_on: bool = False,
+        num_bins: int = 3,
+    ) -> None:
         """Run the clustering algorithm."""
         if self.max_k is None and self.k:
             self.clusters = self.tree_clust_backtrack(k=self.k, verbose=verbose)
         elif self.k is None:
-            self._run_with_max_k(verbose, num_peaks, should_plot_scores)
+            self._run_with_max_k(
+                verbose, num_peaks, should_plot_scores, resolution_on, num_bins
+            )
         else:
             raise ValueError("Invalid cluster number. Please choose either k or max_k")
 
-    def _run_with_max_k(self, verbose: bool, num_peaks: int, should_plot_scores: bool) -> None:
+    def _run_with_max_k(
+        self,
+        verbose: bool,
+        num_peaks: int,
+        should_plot_scores: bool,
+        resolution_on: bool = False,
+        num_bins: int = 3,
+    ) -> None:
         """Helper method to handle the case when k is None."""
         if self.max_k is None:
             self.max_k = self.num_terminals
         if isinstance(self.max_k, int) and self.max_k > 0:
             self.extract_clusters(verbose)
             self.score_calc(plot=False)
-            self.find_peaks(n=num_peaks, plot=should_plot_scores)
-            self.rank_peaks()
+            self.find_peaks(
+                n=num_peaks,
+                plot=should_plot_scores,
+                resolution_on=resolution_on,
+                num_bins=num_bins,
+            )
         else:
-            raise ValueError("Invalid cluster number")
+            raise ValueError("Invalid max_k value. It should be a positive integer.")
 
     def cluster_score(self, clusters: Optional[Dict[Any, Any]] = None, output_all: bool = False) -> Tuple[float, float, float]:
         """Calculate the cluster score."""
@@ -229,14 +256,14 @@ class PhytClust:
 
         num = (beta_1 - beta) / (beta) if beta else float("inf")
         den = (
-            (num_terminals - num_clusters) / (num_clusters)
+            (num_terminals-num_clusters) / (num_clusters)
             if (num_clusters)
             else float("nan")
         )
 
         score = (num*den) if den not in [float("inf")] else float("inf")
         # score = np.log((beta_1/(num_terminals**2))**1/2) + np.log(num_clusters)
-        return beta/num_clusters, (beta / beta_1), score/beta_1
+        return beta, beta/num_clusters, score
 
     def score_calc(self, plot: bool = False, output_all: bool = False) -> None:
         """Calculate scores for all clusters."""
@@ -248,163 +275,247 @@ class PhytClust:
                 self.cluster_score(clusters=cluster, output_all=output_all)
                 for cluster in self.clusters
             ]
-            num_list, den_list, scores = zip(*results)
+            beta_values, den_list, scores = zip(*results)
         else:
-            num, den, score = self.cluster_score(clusters=self.clusters, output_all=output_all)
-            print(f"Single Cluster: {self.clusters}, Score: {score}")
-            scores, num_list, den_list = [score], [num], [den]
+            beta_values, den, scores = self.cluster_score(clusters=self.clusters, output_all=output_all)
+            scores, beta_values, den_list = [scores], [beta_values], [den]
 
-        self.scores = np.array(scores)
-        self.num = np.array(num_list)
+        # adding elbow index
+        scores = np.array(scores)
+        scores[scores < 0] = 0
+
+        beta_values = np.array(beta_values)
+        beta_values[beta_values < 0] = 0
+        beta_values = np.nan_to_num(beta_values, nan=0.0, posinf=0.0, neginf=0.0)
+        elbow_scores = []
+        for k in range(self.num_terminals - 1):
+            if scores[k] - scores[k+1] != 0:
+                elbow_score = ((scores[k-1]-scores[k])/(scores[k]-scores[k+1]) if k > 0 else 0
+                )
+            else:
+                elbow_score = 0
+            elbow_scores.append(elbow_score)
+        elbow_scores.append(0)
+
+        min_invalid_index = None
+
+        invalid_new_scores = np.where(np.isnan(elbow_scores) | np.isinf(elbow_scores))[
+            0
+        ]
+        invalid_clust_scores = np.where(np.isnan(scores) | np.isinf(scores))[0]
+
+        if len(invalid_new_scores) > 0:
+            min_invalid_index = invalid_new_scores[0]
+        if len(invalid_clust_scores) > 0:
+            if min_invalid_index is not None:
+                min_invalid_index = min(min_invalid_index, invalid_clust_scores[0])
+            else:
+                min_invalid_index = invalid_clust_scores[
+                    0
+                ]
+        if min_invalid_index is None:
+            min_invalid_index = len(elbow_scores)
+
+        elbow_scores = elbow_scores[:min_invalid_index]
+        scores = scores[:min_invalid_index]
+
+        def min_max_normalize(arr):
+            min_val = np.min(arr)
+            max_val = np.max(arr)
+            if max_val - min_val != 0:
+                return (arr - min_val) / (max_val - min_val)
+            else:
+                return arr
+        normalized_elbow_scores = min_max_normalize(elbow_scores)
+        normalized_initial_scores = min_max_normalize(scores)
+        combined_scores = normalized_elbow_scores * normalized_initial_scores
+
+        combined_scores = np.nan_to_num(combined_scores, nan=0.0, posinf=0.0, neginf=0.0)
+        self.scores = np.array(combined_scores)
+        self.beta_values = np.array(beta_values)
         self.den = np.array(den_list)
 
-        if plot and self.k is None:
-            self.plot_scores(scores_subset=self.scores, peaks=self.peaks, k_start=0)
-
-    def plot_scores(self, scores_subset: np.ndarray, k_start: int, k_end: Optional[int] = None, peaks: Optional[List[int]] = None) -> plt.Figure:
+    def plot_scores(self, scores_subset: np.ndarray, k_start: int, k_end: Optional[int] = None, peaks: Optional[List[int]] = None, resolution_on=True, num_bins=3, fig_width=14, fig_height=6, log_base=None) -> plt.Figure:
         """Plot scores and highlight peaks if provided."""
-        fig, ax = plt.subplots()
+        if scores_subset is None:
+            scores_subset = self.scores
+
+        # Normalize scores to a scale of 0 to 1
+        scores_subset = (scores_subset - np.min(scores_subset)) / (np.max(scores_subset) - np.min(scores_subset))
+
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
         if k_end is None:
             k_end = k_start + len(scores_subset)
 
         scores_subset_slice = scores_subset[k_start:k_end]
-        x_indices = np.arange(k_start + 1, k_end + 1)
+        x_indices = np.arange(k_start + 2, k_end + 2)
         ax.plot(x_indices, scores_subset_slice, "o-", label="Scores", markersize=2)
-        if peaks is None:
-            peaks, _ = find_peaks(scores_subset_slice)
-        if peaks is not None:
-            peak_x_indices = [k_start + 1 + p for p in peaks]
-            peak_scores = [scores_subset_slice[p] for p in peaks]
-            ax.plot(peak_x_indices, peak_scores, "rx", label="Peaks")
 
-        plt.xlabel("No. of Clusters")
-        plt.ylabel("Scores")
-        plt.title("Scores for Different No. of Clusters")
+        if peaks is not None:
+            peak_x_indices = [peak for peak in peaks]
+            peak_scores = [scores_subset_slice[peak - k_start - 2] for peak in peaks]
+            ax.plot(peak_x_indices, peak_scores, "rx", label="Peaks", markersize=8)
+            for peak in peaks:
+                ax.text(
+                    peak,
+                    scores_subset_slice[peak - k_start - 2] + 0.02,  # Offset to avoid overlap
+                    str(peak),
+                    fontsize=12,
+                    color="red",
+                    ha="center",
+                )
+
+        if resolution_on:
+            xmin = 2
+            xmax = len(scores_subset_slice)
+
+            # Calculate the base for the logarithm of bins
+            if log_base is None:
+                log_base = (xmax / xmin) ** (1 / num_bins)
+
+            # Define bins using the specified logarithmic base
+            bins = xmin * (log_base ** np.arange(num_bins + 1))
+            bins = np.ceil(bins).astype(int) + 1
+
+            if num_bins == 3:
+                colors = ["#5DADE2", "#58D68D", "#EC7063"]
+                darker_colors = ["#2874A6", "#239B56", "#C0392B"]
+                labels = ["Low", "Intermediate", "High"]
+            elif num_bins == 2:
+                colors = ["#5DADE2", "#EC7063"]
+                darker_colors = ["#2874A6", "#C0392B"]
+                labels = ["Low", "High"]
+            else:
+                # Generate random light colors excluding white
+                light_colors = [
+                    color
+                    for color in mcolors.CSS4_COLORS.values()
+                    if not color.lower() in ["white", "#ffffff"]
+                ]
+                colors = random.sample(light_colors, num_bins)
+                labels = [f"Bin {i + 1}" for i in range(num_bins)]
+
+            # Add the shaded areas for each bin
+            for i in range(len(bins) - 1):
+                plt.axvspan(
+                    bins[i],
+                    bins[i + 1],
+                    color=colors[i],
+                    alpha=0.2,
+                    label=(
+                        f"Bin {i + 1}: {bins[i]} - {bins[i + 1]}"
+                        if num_bins in [2, 3]
+                        else None
+                    ),
+                )
+
+            # Add vertical lines for each bin edge
+            for bin_edge in bins:
+                plt.axvline(x=bin_edge, color="grey", linestyle="--", linewidth=1)
+
+            # Add vertical labels within the plot if num_bins is 2 or 3
+            if num_bins in [2, 3]:
+                for i, label in enumerate(labels):
+                    plt.text(
+                        bins[i] + (bins[i + 1] - bins[i]) / 2,
+                        0.5,  # Position within the plot
+                        label,
+                        verticalalignment="center",
+                        horizontalalignment="center",
+                        fontsize=12,
+                        color=darker_colors[i],
+                        bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+                        rotation="horizontal",
+                        clip_on=True,  #
+                    )
+
+        plt.xlabel("No. of Clusters", fontsize=14, labelpad=10)
+        plt.ylabel("Scores (log)", fontsize=14, labelpad=10)
+        plt.yscale("log")
+        plt.title("Scores", fontsize=16, pad=20)
+        plt.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.7)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        plt.tick_params(axis="both", which="major", labelsize=12)
+        plt.tick_params(axis="both", which="minor", labelsize=10)
+        plt.tight_layout()
         plt.show()
         return fig
 
     def find_peaks(
-        self,
-        scores: Optional[np.ndarray] = None,
-        n: int = 3,
-        plot: bool = True,
-        k_start: Optional[int] = None,
-        k_end: Optional[int] = None,
-    ) -> List[int]:
-        """
-        Finds and plots the top n maxima in the scores within a specified range of k.
+            self,
+            scores: Optional[np.ndarray] = None,
+            n: int = 3,
+            plot: bool = True,
+            k_start: Optional[int] = None,
+            k_end: Optional[int] = None,
+            resolution_on: bool = True,
+            num_bins: int = 3,
+        ) -> List[int]:
+            """
+            Finds and plots the top n prominent peaks in the scores within a specified range of k.
 
-        Parameters:
-        - n: int, the number of top peaks to find.
-        - plot: bool, whether to plot the score graph with the peaks highlighted.
-        - method: str, 'default' or 'alt' for different peak finding methods.
-        - prominence: tuple or None, the prominence parameter for peak finding, applicable in 'alt' method.
-        - k_start: int or None, the starting index for the range of k values to consider.
-        - k_end: int or None, the ending index for the range of k values to consider.
-        """
-        if scores is None:
-            scores = self.scores  # Use the instance attribute if no argument was passed
+            Parameters:
+            - n: int, the number of top peaks to find.
+            - plot: bool, whether to plot the score graph with the peaks highlighted.
+            - k_start: int or None, the starting index for the range of k values to consider.
+            - k_end: int or None, the ending index for the range of k values to consider.
+            - resolution_on: bool, whether to use resolution levels.
+            - num_bins: int, the number of bins for resolution levels.
+            """
+            if scores is None:
+                scores = self.scores  # Use the instance attribute if no argument was passed
 
-        if len(scores) == 0:
-            print("Please calculate scores first")
-            return []
+            if len(scores) == 0:
+                print("Please calculate scores first")
+                return []
 
-        # Adjust k_start for 0-based indexing within Python
-        k_start = k_start if k_start is not None else 0
-        k_end = k_end or len(scores)
+            # Adjust k_start for 0-based indexing within Python
+            k_start = k_start if k_start is not None else 0
+            k_end = k_end or len(scores)
 
-        if k_end > len(scores) or k_end < k_start:
-            raise ValueError(
-                f"Invalid k_end value. Max allowed value is {len(self.scores)}"
-            )
+            if k_end > len(scores) or k_end < k_start:
+                raise ValueError(
+                    f"Invalid k_end value. Max allowed value is {len(self.scores)}"
+                )
 
-        scores_subset = scores[k_start:k_end]
-        scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
+            scores_subset = scores[k_start:k_end]
+            scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
 
-        #####
-        smoothing = max(1, int(self.num_terminals * 0.1))
-        edges, prominence_edges, prominences = find_plateau_edges(
-            scores_subset, k_start, smoothing
-        )
+            # Transform scores to log scale
+            log_scores_subset = np.log(scores_subset + 1e-10)  # Adding a small value to avoid log(0)
 
-        self.peak_prominence = prominences
+            if resolution_on:
+                xmin = 2
+                xmax = len(log_scores_subset)
+                log_base = (xmax / xmin) ** (1 / num_bins)
+                bins = xmin * (log_base ** np.arange(num_bins + 1))
+                bins = np.ceil(bins).astype(int) + 1
 
-        if len(edges) == 1:
-            self.best_peaks = list(peak + k_start + 1 for peak in edges)
-            print(f"Found only {len(self.best_peaks)} peak(s)")
+                peaks = []
+                for i in range(len(bins) - 1):
+                    bin_start = bins[i] - 2
+                    bin_end = bins[i + 1] - 2
+                    bin_scores = log_scores_subset[bin_start:bin_end]
+                    if len(bin_scores) > 0:
+                        peak_idx = np.nanargmax(bin_scores)
+                        peaks.append(bin_start + peak_idx)
+
+                self.best_peaks = [peak + k_start + 2 for peak in peaks]
+            else:
+                peaks, properties = find_peaks(log_scores_subset, prominence=0.1)
+                top_peaks = np.argsort(properties['prominences'])[-n:]
+                self.best_peaks = [peaks[i] + k_start + 2 for i in top_peaks]
+
             if plot:
-                self.plot_scores(scores_subset=scores_subset, peaks=list(edges), k_start=k_start)
+                self.plot_scores(
+                    scores_subset=scores_subset,
+                    peaks=self.best_peaks,
+                    k_start=k_start,
+                    resolution_on=resolution_on,
+                    num_bins=num_bins,
+                )
 
             return self.best_peaks
-
-        # edges = list(set(edges))
-
-        representatives, representative_plateau_sizes = select_representative_edges(
-            edges, prominence_edges
-        )
-
-        # Sort representatives and their plateau sizes by plateau size
-        # sorted_indices = np.argsort(representative_plateau_sizes)[::-1]
-        representatives = np.array(representatives)  # [sorted_indices]
-        representative_plateau_sizes = np.array(
-            representative_plateau_sizes
-        )  # [sorted_indices]
-
-        top_peaks = list(representatives[: min(n, len(representatives))])
-        top_peak_plateau_sizes = list(
-            representative_plateau_sizes[: min(n, len(representative_plateau_sizes))]
-        )
-        self.top_peak_plateau_sizes = top_peak_plateau_sizes
-
-        if plot:
-            self.plot_scores(scores_subset=scores_subset, peaks=top_peaks, k_start=k_start)
-
-        # Adjust top_peaks to the original indexing context
-        self.best_peaks = list(peak + k_start + 1 for peak in top_peaks)
-
-        if len(self.best_peaks) < n:
-            print(f"Found only {len(self.best_peaks)} peak(s)")
-        # Return the peaks adjusted to 1-based indexing
-        return [peak + 1 for peak in top_peaks]
-
-    def rank_peaks_alt(peak_prominence, best_peaks, den):
-        normalized_prominences = normalize(peak_prominence)
-        normalized_prominences = np.array(normalized_prominences)
-        x = np.arange(len(den)).reshape(-1, 1)
-        y = den
-        model = LinearRegression()
-        model.fit(x, y)
-        predictions = model.predict(x)
-        r_squared = r2_score(y, predictions)
-
-        indices = [peak - 1 for peak in best_peaks]
-        max_product_index = elbow_point(y)
-        distances = [abs(i - max_product_index) for i in indices]
-
-        normalized_distances = distances / np.max(distances)
-        reciprocal_distances = 1 / (1 + normalized_distances)
-
-        prominence_ranks = np.argsort(np.argsort(-normalized_prominences[indices])) + 1
-        distance_ranks = np.argsort(np.argsort(-reciprocal_distances)) + 1
-
-        combined_ranks = prominence_ranks + distance_ranks
-
-        sorted_indices = np.argsort(combined_ranks)
-        indices = np.array(indices)
-        sorted_indices = sorted_indices
-
-        final_indices = indices[sorted_indices]
-        final_ranks = combined_ranks[sorted_indices]
-
-        rankings = np.arange(1, len(final_ranks) + 1)
-
-        ranked_data = [
-            (rank, idx + 1, score)
-            for rank, idx, score in zip(rankings, final_indices, final_ranks)
-        ]
-
-        return ranked_data, [tup[1] for tup in ranked_data]
 
     def plot(
             self,
@@ -505,7 +616,7 @@ class PhytClust:
         normalized_distances = distances / np.max(distances)
         reciprocal_distances = 1 / (1 + normalized_distances)  # Smoothing to avoid division by zero
 
-        self.adjusted_scores = normalized_scores * reciprocal_distances
+        self.adjusted_scores = normalized_scores * reciprocal_distance
 
     def rank_peaks(self) -> None:
         normalized_prominences = normalize(self.peak_prominence)
@@ -523,25 +634,6 @@ class PhytClust:
 
         normalized_distances = distances / np.max(distances)
         reciprocal_distances = 1 / (1 + normalized_distances)
-
-        # scores = ((1-r_squared) * (reciprocal_distances)) + ((r_squared) * normalized_prominences[indices])
-
-        # sorted_indices = np.argsort(scores)[::-1]
-        # indices = np.array(indices)
-        # # Use the sorted indices to sort the scores and indices
-        # scores = scores[sorted_indices]
-        # indices = indices[sorted_indices]
-
-        # # Calculate the rankings
-        # rankings = np.arange(1, len(scores) + 1)
-
-        # # Create a list of tuples (ranking, index, score)
-        # ranked_data = [
-        #     (rank, (idx + 1), score) for rank, idx, score in zip(rankings, indices, scores)
-        # ]
-
-        # self.ranked_peaks = ranked_data
-        # Rank normalized prominences and reciprocal distances
         prominence_ranks = np.argsort(np.argsort(-normalized_prominences[indices])) + 1
         distance_ranks = np.argsort(np.argsort(-reciprocal_distances)) + 1
 
@@ -572,160 +664,6 @@ class PhytClust:
         self.ranked_peaks = ranked_data
         self.best_peaks = [tup[1] for tup in ranked_data]
 
-    def run_shannon_method(self, num_peaks=3, should_plot_scores=False):
-        self.tree_clust_dp_table()
-        self.run(num_peaks=num_peaks, should_plot_scores=should_plot_scores)
-        self.extract_clusters_shannon(verbose=False)
-        entropy_sums = []
-
-        for clade_dict in self.mrcas:
-            total_entropy = 0
-            for clade in clade_dict.keys():  # Iterate over the keys, which are Clade objects
-                # Calculate the Shannon entropy for the clade
-                total_entropy += self.shannon_entropy(clade)
-            entropy_sums.append(total_entropy)
-        self.shannon_score = entropy_sums
-        scores_array = np.array(self.scores)
-        factors_array = np.array(entropy_sums)
-        new_scores = scores_array * (1+factors_array)
-        positions = np.arange(1, len(new_scores) + 1)
-        self.adjusted_scores = new_scores / (positions)
-        # Find peaks and their properties
-        peaks, properties = find_peaks(self.adjusted_scores, prominence=0.0001)
-
-        # Filter out peaks with negative values in adjusted_scores
-        positive_peaks = [
-            peak for peak in peaks
-            if (peak > 0 and self.adjusted_scores[peak - 1] > 0) and 
-            (peak < len(self.adjusted_scores) - 1 and self.adjusted_scores[peak + 1] > 0)
-        ]
-        positive_peaks = np.array(positive_peaks)
-        positive_prominences = properties['prominences'][np.isin(peaks, positive_peaks)]
-
-        # Sort peaks by prominence
-        sorted_indices = np.argsort(positive_prominences)[::-1]
-        sorted_peaks = positive_peaks[sorted_indices]
-        # Ensure sorted_peaks is an integer array
-        if len(sorted_peaks) == 1:
-            sorted_peaks = np.array([sorted_peaks[0]], dtype=int)
-        else:
-            sorted_peaks = sorted_peaks.astype(int)
-
-        # Save the sorted peaks and their values
-        self.best_peaks = sorted_peaks + 1
-        self.best_peak_values = self.adjusted_scores[sorted_peaks] 
-        self.scores = self.adjusted_scores
-        self.rank_peaks()
-        if should_plot_scores:
-            plt.figure(figsize=(10, 6))
-            x_values = np.arange(1, len(self.adjusted_scores) + 1)
-            plt.plot(x_values, self.adjusted_scores, label="Scores", color="blue")
-
-            # Highlight the peaks
-            plt.scatter(self.best_peaks, self.best_peak_values, color='red', marker='o', label='Peaks')
-
-            # Add labels and title
-            plt.xlabel('Position')
-            plt.ylabel('Score')
-            plt.title('Scores with Identified Peaks')
-            plt.legend()
-
-            # Show the plot
-            plt.show()
-
-    def run_stairs2_method(self, num_peaks=3, should_plot_scores=False):
-        self.tree_clust_dp_table()
-        self.run(num_peaks=num_peaks, should_plot_scores=should_plot_scores)
-        self.extract_clusters_shannon(verbose=False)
-        self.stairs2()
-        scores_array = np.array(self.scores)
-        factors_array = np.array(self.ratio_sums)
-        new_scores = scores_array * (1 + factors_array)
-        positions = np.arange(1, len(new_scores) + 1)
-        self.adjusted_scores = new_scores / (positions)
-        # Find peaks and their properties
-        peaks, properties = find_peaks(self.adjusted_scores, prominence=0.0001)
-
-        # Filter out peaks with negative values in adjusted_scores
-        positive_peaks = [
-            peak for peak in peaks
-            if (peak > 0 and self.adjusted_scores[peak - 1] > 0) and 
-            (peak < len(self.adjusted_scores) - 1 and self.adjusted_scores[peak + 1] > 0)
-        ]
-        positive_peaks = np.array(positive_peaks)
-        positive_prominences = properties['prominences'][np.isin(peaks, positive_peaks)]
-
-        # Sort peaks by prominence
-        sorted_indices = np.argsort(positive_prominences)[::-1]
-        sorted_peaks = positive_peaks[sorted_indices]
-        self.scores = self.adjusted_scores
-        # Ensure sorted_peaks is an integer array
-        if len(sorted_peaks) == 1:
-            sorted_peaks = np.array([sorted_peaks[0]], dtype=int)
-        else:
-            sorted_peaks = sorted_peaks.astype(int)
-        # Save the sorted peaks and their values
-        self.best_peaks = sorted_peaks + 1
-        self.best_peak_values = self.adjusted_scores[sorted_peaks] 
-        self.rank_peaks()
-
-        if should_plot_scores:
-            plt.figure(figsize=(10, 6))
-            x_values = np.arange(1, len(self.adjusted_scores) + 1)
-            plt.plot(x_values, self.adjusted_scores, label="Scores", color="blue")
-
-            # Highlight the peaks
-            plt.scatter(self.best_peaks, self.best_peak_values, color='red', marker='o', label='Peaks')
-
-            # Add labels and title
-            plt.xlabel('Position')
-            plt.ylabel('Score')
-            plt.title('Scores with Identified Peaks')
-            plt.legend()
-
-            # Show the plot
-            plt.show()
-
-    def tree_clust_backtrack_shannon(self, k=None, verbose=False):
-        if k is None:
-            raise ValueError("value of k is missing.")
-
-        active_tree = self._no_outgroup_tree if self.outgroup else self.tree
-        ptr = k - 1
-        stack = [(active_tree.clade, 0, ptr)]
-        clusters = {}
-        current_cluster = 0
-
-        while stack:
-            node, counter, ptr = stack.pop()
-
-            if verbose:
-                print("Visiting node %s (count %d):" % (node.name, counter))
-
-            if ptr == 0:
-                # node_terminals = self.node_terminals[node]
-                clusters[node] = current_cluster
-                current_cluster += 1
-            else:
-                if len(node.clades) > counter:
-                    stack.append((node, counter + 1, ptr))
-                    next_ptr = self.backtrack[node][counter, ptr]
-                    if not 0 <= next_ptr < k:
-                        raise ValueError(f"Pointer out of bounds: {next_ptr}")
-
-                    stack.append((node.clades[counter], 0, int(next_ptr)))
-
-        if current_cluster != k:
-            raise ValueError(f"Expected {k} clusters, but found {current_cluster}.")
-
-        return clusters
-
-    def extract_clusters_shannon(self, verbose):
-        self.mrcas = [
-            self.tree_clust_backtrack_shannon(i, verbose=verbose)
-            for i in range(1, self.max_k + 1)
-        ]
-
     def run_greedy_alg(self, num_peaks=3, should_plot_scores=False):
         for clade in self.tree.find_clades(order="postorder"):
             clade.children = list(clade.clades)  # Ensuring children are a list, not a generator
@@ -744,37 +682,69 @@ class PhytClust:
                     child.total_recursive_cost for child in clade.children
                 )
 
-        scores, states, total = greedy_alg.split_tree(
-            self.tree.root, max_splits=self.num_terminals
-        )
-        beta_scores, self.num, self.den = greedy_alg.calculate_beta_scores(
-            scores, self.num_terminals
-        )
-        self.states = states
-        clades = self.node_terminals   
-        # Create a dictionary for clades by name
-        clades_by_name = {clade.name: clade for clade in clades}
+        if self.k is not None:
+            # Use the provided k value to get the terminal clusters for the last split
+            _, states, _ = greedy_alg.split_tree(self.tree.root, max_splits=self.k - 1)
+            self.states = states
+            clades = self.node_terminals
+            # Create a dictionary for clades by name
+            clades_by_name = {clade.name: clade for clade in clades}
 
-        all_terminal_clusters = []
+            # all_terminal_clusters = []
 
-        for node_list in states:
-            terminal_clusters = {}
-            cluster_number = 0  # Reset cluster number for each node_list
-            for internal_node in node_list:
-                # Find the clade with the matching name using the dictionary
-                if internal_node in clades_by_name:
-                    clade = clades_by_name[internal_node]
-                    terminal_nodes = clades[clade]
-                    # Assign the current cluster number to these terminal nodes
-                    terminal_clusters.update({terminal_node: cluster_number for terminal_node in terminal_nodes})
-                # Increment the cluster number counter for the next internal node
-                cluster_number += 1
-            # Append the dictionary to the list of mappings
-            all_terminal_clusters.append(terminal_clusters)
-        self.clusters = all_terminal_clusters
-        self.scores = np.array(beta_scores)
-        self.find_peaks(n=1000, plot=should_plot_scores)
-        self.rank_peaks()
+            for node_list in states:
+                terminal_clusters = {}
+                cluster_number = 0  # Reset cluster number for each node_list
+                for internal_node in node_list:
+                    # Find the clade with the matching name using the dictionary
+                    clade = clades_by_name.get(internal_node)
+                    if clade:
+                        terminal_nodes = clades[clade]
+                        # Assign the current cluster number to these terminal nodes
+                        terminal_clusters.update(
+                            {terminal_node: cluster_number for terminal_node in terminal_nodes}
+                        )
+                    # Increment the cluster number counter for the next internal node
+                    cluster_number += 1
+                # Append the dictionary to the list of mappings
+                self.clusters = terminal_clusters
+
+        else:
+            # Use the default num_terminals value
+            scores, states, total = greedy_alg.split_tree(self.tree.root, max_splits=self.max_k)
+
+            beta_scores, self.num, self.den = greedy_alg.calculate_beta_scores(
+                scores, self.num_terminals
+            )
+            self.states = states
+            # self.beta_list = self.num
+            clades = self.node_terminals
+            # Create a dictionary for clades by name
+            clades_by_name = {clade.name: clade for clade in clades}
+
+            all_terminal_clusters = []
+
+            for node_list in states:
+                terminal_clusters = {}
+                cluster_number = 0  # Reset cluster number for each node_list
+                for internal_node in node_list:
+                    # Find the clade with the matching name using the dictionary
+                    clade = clades_by_name.get(internal_node)
+                    if clade:
+                        terminal_nodes = clades[clade]
+                        # Assign the current cluster number to these terminal nodes
+                        terminal_clusters.update(
+                            {terminal_node: cluster_number for terminal_node in terminal_nodes}
+                        )
+                    # Increment the cluster number counter for the next internal node
+                    cluster_number += 1
+                # Append the dictionary to the list of mappings
+                all_terminal_clusters.append(terminal_clusters)
+
+            self.clusters = all_terminal_clusters
+            self.scores = np.array(beta_scores)
+            self.find_peaks(n=1000, plot=should_plot_scores)
+            self.rank_peaks()
 
     # @staticmethod
     def calculate_terminal_child_count(self, clade):
@@ -795,55 +765,3 @@ class PhytClust:
         if node.is_terminal():
             return 1
         return sum(self.count_leaves(tree, child) for child in node.clades)
-
-    def shannon_entropy(self, node):
-        # Find all child nodes of the given node
-        children = [child for child in node.clades]
-
-        # Calculate the size of each subtree rooted at each child node by counting leaves
-        sizes = [self.count_leaves(self.tree, child) for child in children]
-        total_size = sum(sizes)
-        if total_size == 0:
-            return 0  # To handle cases where total size is 0 to avoid division by zero
-
-        # Calculate probabilities
-        probabilities = [size / total_size for size in sizes]
-
-        # Calculate Shannon's entropy
-        entropy = -sum(
-            p * log(p, 2) for p in probabilities if p > 0
-        )  # Ensure p > 0 to avoid log(0)
-
-        # Multiplying entropy by total size of the node (optional, depends on the interpretation)
-        return entropy * 1/total_size
-
-    def stairs2(self):
-        ratio_sums = []
-        terminal_count = self.terminal_count
-        for mrcas_dict in self.mrcas:
-            sum_ratios = 0
-
-            for clade in mrcas_dict.keys():
-                clade_name = clade.name
-            corresponding_clade = next(
-                (c for c in terminal_count.keys() if c.name == clade_name), None
-            )
-            # print(f"Corresponding clade: {corresponding_clade}")
-
-            if corresponding_clade and terminal_count[corresponding_clade] > 1:
-                children = corresponding_clade.clades
-                if len(children) == 2:
-                    child1, child2 = children
-                    count1 = terminal_count.get(child1, 0)
-                    count2 = terminal_count.get(child2, 0)
-
-                    # print(f"Child1: {child1}, Count1: {count1}")
-                    # print(f"Child2: {child2}, Count2: {count2}")
-
-                    if count1 > 0 and count2 > 0:
-                        lower_count = min(count1, count2)
-                        higher_count = max(count1, count2)
-                        ratio = lower_count / higher_count
-                        sum_ratios += ratio
-            ratio_sums.append(sum_ratios)
-        self.ratio_sums = ratio_sums

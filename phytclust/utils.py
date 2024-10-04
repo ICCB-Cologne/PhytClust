@@ -1,8 +1,15 @@
 import numpy as np
 import pandas as pd
+from typing import List, Optional, Tuple, Union
+from Bio.Phylo.BaseTree import Tree, Clade
 
 
-def pairwise_distances(tree, mode="terminals", as_dataframe=False, mrca=None):
+def pairwise_distances(
+    tree: Tree,
+    mode: str = "terminals",
+    as_dataframe: bool = False,
+    mrca: Optional[str] = None
+) -> Union[np.ndarray, pd.DataFrame]:
     """
     Calculate pairwise distances between nodes in a phylogenetic tree.
 
@@ -33,7 +40,6 @@ def pairwise_distances(tree, mode="terminals", as_dataframe=False, mrca=None):
         print("Invalid mode")
         return None
 
-    terms = list(terms)
     n = len(terms)
     dist = np.zeros((n, n))
 
@@ -54,8 +60,17 @@ def pairwise_distances(tree, mode="terminals", as_dataframe=False, mrca=None):
         return dist
 
 
-def get_parent(tree, child):
-    # tree = self._no_outgroup_tree if self._no_outgroup_tree else self.tree
+def get_parent(tree: Tree, child: Clade) -> Optional[Clade]:
+    """
+    Get the parent of a given child node in the tree.
+
+    Args:
+        tree (Tree): The phylogenetic tree.
+        child (Clade): The child node.
+
+    Returns:
+        Optional[Clade]: The parent node if found, otherwise None.
+    """
     node_path = tree.get_path(child)
     if len(node_path) > 1:
         return node_path[-2]
@@ -63,18 +78,36 @@ def get_parent(tree, child):
         return None
 
 
-def count_branches_in_clusters(clusters):
+def count_branches_in_clusters(clusters: dict) -> int:
+    """
+    Count the number of branches in clusters.
+
+    Args:
+        clusters (dict): A dictionary where keys are cluster identifiers and values are lists of clades.
+
+    Returns:
+        int: The total number of branches in the clusters.
+    """
     branch_count = 0
-    for _, clades in clusters.items():
+    for clades in clusters.values():
         N = len(clades)
         if N > 1:
             branch_count += 2 * N - 2
     return branch_count
 
 
-def find_all_min_indices(arr):
-    if len(arr) == 0:
-        return []
+def find_all_min_indices(arr: List[float]) -> Tuple[List[int], float]:
+    """
+    Find all indices of the minimum value in an array.
+
+    Args:
+        arr (List[float]): The input array.
+
+    Returns:
+        Tuple[List[int], float]: A tuple containing a list of indices of the minimum value and the minimum value itself.
+    """
+    if not arr:
+        return [], float("inf")
 
     min_value = float("inf")
     min_indices = []
@@ -89,12 +122,13 @@ def find_all_min_indices(arr):
     return min_indices, min_value
 
 
-def rename_internal_nodes(tree):
+def rename_internal_nodes(tree: Tree) -> None:
     """
     Renames all internal nodes of a given Phylo tree object.
     Each internal node will be named as 'internal_X' where X is an incrementing integer.
 
-    :param tree: Bio.Phylo tree object
+    Args:
+        tree (Tree): The phylogenetic tree.
     """
     internal_node_count = 1
     for clade in tree.find_clades():

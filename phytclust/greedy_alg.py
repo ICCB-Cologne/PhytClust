@@ -6,25 +6,6 @@ import numpy as np
 import pandas as pd
 
 
-# class Node:
-#     def __init__(self, clade):
-#         self.clade = clade
-#         self.children = [Node(child) for child in clade.clades]
-#         self.branch_cost = clade.branch_length if clade.branch_length is not None else 0
-#         self.terminal_child_count = self.calculate_terminal_child_count()
-#         self.self_cost = sum(child.terminal_child_count * child.branch_cost for child in self.children)
-#         self.total_recursive_cost = self.self_cost + sum(
-#             child.total_recursive_cost for child in self.children
-#         )
-#         # print(
-#         #     f"Node: {self.clade.name}, Self Cost: {self.self_cost}, Total Recursive Cost: {self.total_recursive_cost}"
-
-#     def calculate_terminal_child_count(self):
-#         if not self.children:
-#             return 1  # Leaf node
-#         return sum(child.calculate_terminal_child_count() for child in self.children)
-
-
 def calculate_total_potential_score(node, memo={}):
     if node in memo:
         return memo[node]
@@ -112,28 +93,31 @@ def map_nodes(root, remaining_nodes_lists):
 
 def calculate_beta_scores(scores, total_terminal_nodes):
     beta_scores = []
-    num_list = []
+    beta_list = []
     den_list = []
     N = total_terminal_nodes
     beta_1 = scores[0]
+    beta_list.append(beta_1)
 
     for k, beta_k in enumerate(scores):
-        if beta_k < 0.005 or beta_k == 0:
+        if beta_k < 0.00005 or beta_k == 0:
             beta_scores.append(float("nan"))
+            beta_list.append(beta_k)
         else:
             K = k + 1
             if K == 1:
                 beta_scores.append(float("nan"))
+                # beta_list.append(0)
             else:
                 num = (beta_1 - beta_k) / beta_k
                 den = (N - K) / (K - 1)
                 ranking = beta_k / beta_1
                 beta_score = num * den
                 beta_scores.append(beta_score)
-                num_list.append(num)
+                beta_list.append(beta_k)
                 den_list.append(ranking)
 
-    return beta_scores, num_list, den_list
+    return beta_scores, beta_list, den_list
 
 
 def traverse_and_map(node, name_to_number_mapping):

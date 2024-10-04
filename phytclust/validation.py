@@ -3,13 +3,10 @@ import logging
 from Bio import Phylo
 from collections import deque
 from Bio.Phylo.BaseTree import Clade
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-from typing import Any, Optional
 
 
 def validate_and_set_outgroup(tree: Any, outgroup: Optional[Any]) -> Optional[Any]:
@@ -58,7 +55,9 @@ def prune_outgroup(tree: Any, outgroup: Optional[Any]) -> None:
         node: node.get_terminals() for node in tree.find_clades()
     }
     terminal_count = {
-        node: len(terminals) for node, terminals in node_terminals.items()
+        node: len(terminals)
+        for node, terminals in node_terminals.items()
+        if node != outgroup_clade
     }
     return node_terminals, terminal_count
 
@@ -77,7 +76,7 @@ def is_outgroup_valid(tree: Any, outgroup: Any) -> bool:
     return any([clade.name == outgroup for clade in tree.root.clades])
 
 
-def validate_tree(tree, outgroup=None):
+def validate_tree(tree: Any, outgroup: Optional[Any] = None) -> None:
     """
     Validate the tree structure and resolve polytomies.
 
@@ -85,13 +84,12 @@ def validate_tree(tree, outgroup=None):
     and resolves polytomies by merging single child clades and creating new internal nodes with branch length 0.
 
     Parameters:
-    tree (Phylo.BaseTree.Tree): The phylogenetic tree.
-    outgroup (str, optional): The name of the outgroup. Defaults to None.
+    tree (Any): The phylogenetic tree.
+    outgroup (Optional[Any]): The name of the outgroup. Defaults to None.
 
     Returns:
     None
     """
-    # Find invalid nodes with more than two children, excluding the outgroup
     invalid_nodes = [
         node
         for node in tree.get_nonterminals()
@@ -99,38 +97,45 @@ def validate_tree(tree, outgroup=None):
         and all(clade.name != outgroup for clade in node.clades)
     ]
     for clade in tree.root.clades:
-        if len(clade.clades) != 2 and all(child.name != outgroup for child in clade.clades):
+        if len(clade.clades) != 2 and all(
+            child.name != outgroup for child in clade.clades
+        ):
             invalid_nodes.append(clade)
 
     if invalid_nodes:
-        logger.info("Nodes with > 2 children (excluding specified outgroup): " +
-                    ", ".join([f"Node: {node.name}, Children: {len(node.clades)}" for node in invalid_nodes]))
+        logger.info(
+            "Nodes with > 2 children (excluding specified outgroup): "
+            + ", ".join(
+                [
+                    f"Node: {node.name}, Children: {len(node.clades)}"
+                    for node in invalid_nodes
+                ]
+            )
+        )
 
         logger.info("Resolving polytomies and merging single child clades...")
         merge_single_child_clades(tree)
-        resolve_polytomies(tree)
 
 
-def rename_nodes(tree, outgroup=None):
+def rename_nodes(tree: Any, outgroup: Optional[Any] = None) -> None:
     """
     Rename nodes in the tree to ensure unique names.
 
     This function renames internal nodes and resolves name conflicts by adding suffixes.
 
     Parameters:
-    tree (Phylo.BaseTree.Tree): The phylogenetic tree.
-    outgroup (str, optional): The name of the outgroup. Defaults to None.
+    tree (Any): The phylogenetic tree.
+    outgroup (Optional[Any]): The name of the outgroup. Defaults to None.
 
     Returns:
     None
     """
     node_names = set([outgroup]) if outgroup else set()
     internal_node_counter = 0
-    
+
     for node in tree.get_nonterminals() + tree.get_terminals():
         if not node.name or (
-            node.name == outgroup
-            and len(list(tree.find_clades(outgroup))) > 1
+            node.name == outgroup and len(list(tree.find_clades(outgroup))) > 1
         ):
             while True:
                 new_name = "internal_node_" + (
@@ -147,18 +152,20 @@ def rename_nodes(tree, outgroup=None):
             while new_name in node_names:
                 suffix += 1
                 new_name = f"{node.name}_{suffix}"
-            logger.info(f"Node name '{node.name}' is duplicated. Adding suffix to make it '{new_name}'")
+            logger.info(
+                f"Node name '{node.name}' is duplicated. Adding suffix to make it '{new_name}'"
+            )
             node.name = new_name
 
         node_names.add(node.name)
 
 
-def merge_single_child_clades(tree):
+def merge_single_child_clades(tree: Any) -> None:
     """
     Merge clades that have only one child recursively, combining their branch lengths.
 
     Parameters:
-    tree (Phylo.BaseTree.Tree): The phylogenetic tree.
+    tree (Any): The phylogenetic tree.
 
     Returns:
     None
@@ -169,25 +176,30 @@ def merge_single_child_clades(tree):
         while len(clade.clades) == 1:
             single_child = clade.clades[0]
             clade.name = single_child.name
-            clade.branch_length = (clade.branch_length or 0) + (single_child.branch_length or 0)
+            clade.branch_length = (clade.branch_length or 0) + (
+                single_child.branch_length or 0
+            )
             clade.clades = single_child.clades
         queue.extend(clade.clades)
 
-def resolve_polytomies(tree):
+
+def resolve_polytomies(tree: Any) -> Any:
     """
-    Resolve polytomies in the tree by creating new internal nodes until each node has at most two children
+    Resolve polytomies in the tree by creating new internal nodes until each node has at most two children.
 
     Parameters:
-    tree (Phylo.BaseTree.Tree): The phylogenetic tree.
+    tree (Any): The phylogenetic tree.
 
     Returns:
-    Phylo.BaseTree.Tree: The modified tree with resolved polytomies.
+    Any: The modified tree with resolved polytomies.
     """
     to_visit = deque([tree.root])
     while to_visit:
         node = to_visit.popleft()
         while len(node.clades) > 2:
-            new_clade = Clade(branch_length=0.0, clades=[node.clades.pop(0), node.clades.pop(0)])
+            new_clade = Clade(
+                branch_length=0.0, clades=[node.clades.pop(0), node.clades.pop(0)]
+            )
             node.clades.append(new_clade)
             to_visit.append(new_clade)
         to_visit.extend(node.clades)
