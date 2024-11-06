@@ -1,0 +1,10 @@
+{
+    "ntips": 20,
+    "total_terminals": 100,
+    "wss_bss_ratio": [0.1,0.3,0.5,0.7,0.9,1.1],
+    "noise_level": 0,
+    "percentage_outliers": 0,
+    "sample_fraction": 1,
+    "seed": 42,
+    "output_dir": "/home/ganesank/project/phytclust/simulations_2/data"
+}
