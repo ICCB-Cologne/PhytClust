@@ -9,7 +9,8 @@ from scipy.interpolate import UnivariateSpline
 import json
 from sklearn.metrics import adjusted_rand_score, v_measure_score
 
-num_clusters = 20
+num_clusters = 5
+
 
 def load_ground_truth_labels(tree_folder):
     ground_truth = {}
@@ -107,7 +108,7 @@ def process_trees(case_folder, output_dir):
 
 
 if __name__ == "__main__":
-    case_folder = f"/home/ganesank/project/phytclust/simulations_2/data_new/N_100_K_{num_clusters}"
-    output_dir = f"/home/ganesank/project/phytclust/simulations_2/results_fmi/phytclust_single_k/N_100_K_{num_clusters}"
+    case_folder = f"/home/ganesank/project/phytclust/simulations_2/data/N_100_K_{num_clusters}_short"
+    output_dir = f"/home/ganesank/project/phytclust/simulations_2/results/phytclust_single_k/N_100_K_{num_clusters}_short"
     process_trees(case_folder, output_dir)
     print("Processing completed.")

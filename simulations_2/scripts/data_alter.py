@@ -5,7 +5,7 @@ base_dir = "/home/ganesank/project/phytclust/simulations_2/data/N_100_K_80"
 target_dir = "/home/ganesank/project/phytclust/simulations_2/data/N_100_K_80_short"
 
 # Define the increase values you want to copy
-increase_values = list(range(0, 101, 5)) + [1]  # 0, 20, 40, ..., 200, and 1
+increase_values = list(range(0, 101, 5)) + [2]  # 0, 20, 40, ..., 200, and 1
 
 # Loop through each tree folder in the specified directory
 for root, dirs, files in os.walk(base_dir):

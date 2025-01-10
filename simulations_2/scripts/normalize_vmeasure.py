@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, Dict, List, Tuple
 from functools import lru_cache
 
-from matplotlib.ticker import MaxNLocator, LogLocator, LogFormatter
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
@@ -15,20 +15,30 @@ from sklearn.metrics import r2_score
 import numpy as np
 import matplotlib.colors as mcolors
 import random
-from phytclust.find_peaks import find_plateau_edges, select_representative_edges, normalize, elbow_point
+from phytclust.find_peaks import (
+    find_plateau_edges,
+    select_representative_edges,
+    normalize,
+    elbow_point,
+)
 from phytclust.plotting import plot_cluster
 from phytclust.save import save_clusters
 import phytclust.greedy_alg as greedy_alg
 from phytclust.validation import (
-    validate_and_set_outgroup, prune_outgroup, resolve_polytomies
+    validate_and_set_outgroup,
+    prune_outgroup,
+    resolve_polytomies,
 )
+
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
     "color", plt.cm.tab20.colors
 )  # matplotlib style
 
+num_clusters = 80
+
 
 @dataclass
-class PhytClust:
+class PhytClust_worst:
     """
     This class uses a dynamic programming algorithm to cluster nodes on a phylogenetic tree to annotate monophyletic clades
 
@@ -37,6 +47,7 @@ class PhytClust:
     -   k: number of clusters you would like
     -   max_k: if you'd like to find optimal clusters for a range of 1 to max_k clusters, if k is not given, Default = number of total terminal nodes in a tree
     """
+
     tree: Any
     num_peaks: int = 3
     should_plot_scores: bool = False
@@ -82,7 +93,11 @@ class PhytClust:
             else self.terminal_count[self.tree.root]
         )
 
-        self.max_k = self.num_terminals if self.k is None and self.max_k is None else self.max_k if self.k is None else None
+        self.max_k = (
+            self.num_terminals
+            if self.k is None and self.max_k is None
+            else self.max_k if self.k is None else None
+        )
         self._no_outgroup_tree = copy.deepcopy(self.tree) if self.outgroup else None
         if self.outgroup:
             self.node_terminals, self.terminal_count = prune_outgroup(
@@ -90,21 +105,37 @@ class PhytClust:
             )
         self.method = self.method if self.method is not None else "default"
         if self.method == "default":
-            self.run_dp_method(num_peaks=self.num_peaks, should_plot_scores=self.should_plot_scores, resolution_on=self.resolution_on, num_bins=self.num_bins)
+            self.run_dp_method(
+                num_peaks=self.num_peaks,
+                should_plot_scores=self.should_plot_scores,
+                resolution_on=self.resolution_on,
+                num_bins=self.num_bins,
+            )
         elif self.method == "greedy":
             self.run_greedy_alg()  # tbc
 
-    def run_dp_method(self, num_peaks: int = 3, should_plot_scores: bool = False, resolution_on: bool = True, num_bins: int = 3) -> None:
+    def run_dp_method(
+        self,
+        num_peaks: int = 3,
+        should_plot_scores: bool = False,
+        resolution_on: bool = True,
+        num_bins: int = 3,
+    ) -> None:
         self.tree_clust_dp_table()
-        self.run(num_peaks=num_peaks, should_plot_scores=should_plot_scores, resolution_on=resolution_on, num_bins=num_bins)
+        self.run(
+            num_peaks=num_peaks,
+            should_plot_scores=should_plot_scores,
+            resolution_on=resolution_on,
+            num_bins=num_bins,
+        )
 
     def tree_clust_dp_table(self) -> None:
         n = self.k or self.max_k
         active_tree = self._no_outgroup_tree if self.outgroup else self.tree
 
         for clade in active_tree.find_clades(order="postorder"):
-            scores = np.full(n, np.inf)
-            back = np.full((2, n), np.inf)
+            scores = np.full(n, -np.inf)
+            back = np.full((2, n), -np.inf)
             if clade.is_terminal():
                 scores[0] = 0
             else:
@@ -137,17 +168,27 @@ class PhytClust:
 
                     sub_scores = left_dp_values + right_dp_values
 
-                    min_index = np.argmin(sub_scores)
-                    min_score = sub_scores[min_index]
+                    valid_indices = ~np.isinf(sub_scores)
 
-                    scores[i] = min_score
+                    if np.any(valid_indices):
+                        valid_sub_scores = sub_scores[valid_indices]
+                        max_indices = np.where(valid_sub_scores == np.max(valid_sub_scores))[0]
+                        chosen_index = np.random.choice(max_indices)
+                        max_score = valid_sub_scores[chosen_index]
 
-                    if not np.isinf(min_score):
-                        back[:, i] = (left_indices[min_index], right_indices[min_index])
+                        scores[i] = max_score
+
+                        if not np.isinf(max_score):
+                            back[:, i] = (
+                                left_indices[valid_indices][chosen_index],
+                                right_indices[valid_indices][chosen_index],
+                            )
 
             self.dp_table[clade], self.backtrack[clade] = scores, back
 
-    def tree_clust_backtrack(self, k: Optional[int] = None, verbose: bool = False) -> Dict[Any, int]:
+    def tree_clust_backtrack(
+        self, k: Optional[int] = None, verbose: bool = False
+    ) -> Dict[Any, int]:
         if k is None:
             raise ValueError("value of k is missing.")
 
@@ -231,7 +272,9 @@ class PhytClust:
         else:
             raise ValueError("Invalid max_k value. It should be a positive integer.")
 
-    def cluster_score(self, clusters: Optional[Dict[Any, Any]] = None, output_all: bool = False) -> Tuple[float, float, float]:
+    def cluster_score(
+        self, clusters: Optional[Dict[Any, Any]] = None, output_all: bool = False
+    ) -> Tuple[float, float, float]:
         """Calculate the cluster score."""
         clusters = clusters or self.clusters
 
@@ -253,17 +296,17 @@ class PhytClust:
 
         beta_1 = dp_row[0]
         beta = dp_row[num_clusters - 1]
-        sigma = beta*num_clusters
 
         num = (beta_1 - beta) / (beta) if beta else float("inf")
         den = (
-            (num_terminals-num_clusters) / (num_clusters)
+            (num_terminals - num_clusters) / (num_clusters)
             if (num_clusters)
             else float("nan")
         )
-        score = (num*den) if den not in [float("inf")] else float("inf")
+
+        score = (num * den) if den not in [float("inf")] else float("inf")
         # score = np.log((beta_1/(num_terminals**2))**1/2) + np.log(num_clusters)
-        return beta, num, score
+        return beta, score, score
 
     def score_calc(self, plot: bool = False, output_all: bool = False) -> None:
         """Calculate scores for all clusters."""
@@ -277,7 +320,9 @@ class PhytClust:
             ]
             beta_values, den_list, scores = zip(*results)
         else:
-            beta_values, den, scores = self.cluster_score(clusters=self.clusters, output_all=output_all)
+            beta_values, den, scores = self.cluster_score(
+                clusters=self.clusters, output_all=output_all
+            )
             scores, beta_values, den_list = [scores], [beta_values], [den]
 
         # adding elbow index
@@ -316,9 +361,7 @@ class PhytClust:
             if min_invalid_index is not None:
                 min_invalid_index = min(min_invalid_index, invalid_clust_scores[0])
             else:
-                min_invalid_index = invalid_clust_scores[
-                    0
-                ]
+                min_invalid_index = invalid_clust_scores[0]
         if min_invalid_index is None:
             min_invalid_index = len(elbow_scores)
 
@@ -332,22 +375,38 @@ class PhytClust:
                 return (arr - min_val) / (max_val - min_val)
             else:
                 return arr
+
         normalized_elbow_scores = min_max_normalize(elbow_scores)
         normalized_initial_scores = min_max_normalize(scores)
         combined_scores = normalized_elbow_scores * normalized_initial_scores
 
-        combined_scores = np.nan_to_num(combined_scores, nan=0.0, posinf=0.0, neginf=0.0)
+        combined_scores = np.nan_to_num(
+            combined_scores, nan=0.0, posinf=0.0, neginf=0.0
+        )
         self.scores = np.array(combined_scores)
         self.beta_values = np.array(beta_values)
         self.den = np.array(den_list)
 
-    def plot_scores(self, scores_subset: np.ndarray, k_start: int, k_end: Optional[int] = None, peaks: Optional[List[int]] = None, resolution_on=True, num_bins=3, fig_width=18, fig_height=6, log_base=None) -> plt.Figure:
+    def plot_scores(
+        self,
+        scores_subset: np.ndarray,
+        k_start: int,
+        k_end: Optional[int] = None,
+        peaks: Optional[List[int]] = None,
+        resolution_on=True,
+        num_bins=3,
+        fig_width=14,
+        fig_height=6,
+        log_base=None,
+    ) -> plt.Figure:
         """Plot scores and highlight peaks if provided."""
         if scores_subset is None:
             scores_subset = self.scores
 
         # Normalize scores to a scale of 0 to 1
-        scores_subset = (scores_subset - np.min(scores_subset)) / (np.max(scores_subset) - np.min(scores_subset))
+        scores_subset = (scores_subset - np.min(scores_subset)) / (
+            np.max(scores_subset) - np.min(scores_subset)
+        )
 
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
         if k_end is None:
@@ -364,9 +423,10 @@ class PhytClust:
             for peak in peaks:
                 ax.text(
                     peak,
-                    scores_subset_slice[peak - k_start - 1] + 0.02,  # Offset to avoid overlap
+                    scores_subset_slice[peak - k_start - 1]
+                    + 0.02,  # Offset to avoid overlap
                     str(peak),
-                    fontsize=20,
+                    fontsize=12,
                     color="red",
                     ha="center",
                 )
@@ -435,18 +495,14 @@ class PhytClust:
                         clip_on=True,  #
                     )
 
-        plt.xlabel("No. of Clusters (log)", fontsize=20, labelpad=10)
-        plt.ylabel("Scores (log)", fontsize=20, labelpad=10)
+        plt.xlabel("No. of Clusters", fontsize=14, labelpad=10)
+        plt.ylabel("Scores (log)", fontsize=14, labelpad=10)
         plt.yscale("log")
-        plt.xscale("log")
-        ax.xaxis.set_major_locator(LogLocator(base=10.0, numticks=10))
-        ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs='auto', numticks=10))
-        ax.xaxis.set_major_formatter(LogFormatter(base=10.0, labelOnlyBase=False))
         plt.title("Scores", fontsize=16, pad=20)
         plt.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.7)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        plt.tick_params(axis="both", which="major", labelsize=17, rotation =45)
-        plt.tick_params(axis="both", which="minor", labelsize=17)
+        plt.tick_params(axis="both", which="major", labelsize=12)
+        plt.tick_params(axis="both", which="minor", labelsize=10)
         plt.tight_layout()
         plt.show()
         return fig
@@ -492,12 +548,14 @@ class PhytClust:
         scores_subset = np.where(np.isinf(scores_subset), np.nan, scores_subset)
 
         # Transform scores to log scale to make the method independent of scale
-        log_scores_subset = np.log(scores_subset + 1e-10)  # Adding a small value to avoid log(0)
+        log_scores_subset = np.log(
+            scores_subset + 1e-10
+        )  # Adding a small value to avoid log(0)
 
         peaks, properties = find_peaks(log_scores_subset, prominence=1e-10)
 
         # Extract prominences and sort by them in descending order
-        prominences = properties['prominences']
+        prominences = properties["prominences"]
         sorted_indices = np.argsort(prominences)[::-1]
         # Retrieve the top n peaks (sorted by prominence)
         top_peaks_indices = sorted_indices[:n]
@@ -516,23 +574,23 @@ class PhytClust:
         return self.best_peaks
 
     def plot(
-            self,
-            results_dir: Optional[str] = None,
-            top_n: int = 1,
-            n: Optional[int] = None,
-            cmap: plt.cm = plt.get_cmap("tab20"),
-            show_terminal_labels: bool = False,
-            outlier: bool = False,
-            save: bool = False,
-            filename: Optional[str] = None,
-            hide_internal_nodes: bool = True,
-            width_scale: float = 2,
-            height_scale: float = 0.1,
-            label_func: Optional[callable] = None,
-            show_branch_lengths: bool = False,
-            marker_size: int = 40,
-            **kwargs,
-        ) -> None:
+        self,
+        results_dir: Optional[str] = None,
+        top_n: int = 1,
+        n: Optional[int] = None,
+        cmap: plt.cm = plt.get_cmap("tab20"),
+        show_terminal_labels: bool = False,
+        outlier: bool = False,
+        save: bool = False,
+        filename: Optional[str] = None,
+        hide_internal_nodes: bool = True,
+        width_scale: float = 2,
+        height_scale: float = 0.1,
+        label_func: Optional[callable] = None,
+        show_branch_lengths: bool = False,
+        marker_size: int = 40,
+        **kwargs,
+    ) -> None:
         if not hasattr(self, "scores") or self.scores is None:
             print("Please calculate scores first")
             return
@@ -548,11 +606,11 @@ class PhytClust:
             if hasattr(self, "ranked_peaks") and self.ranked_peaks:
                 num_peaks = len(self.ranked_peaks)
                 top_peaks = [
-                        self.ranked_peaks[i][1] for i in range(min(top_n, num_peaks))
-                    ]
+                    self.ranked_peaks[i][1] for i in range(min(top_n, num_peaks))
+                ]
                 clusters_to_plot.extend(
-                        [(peak, self.clusters[peak - 1]) for peak in top_peaks]
-                    )
+                    [(peak, self.clusters[peak - 1]) for peak in top_peaks]
+                )
             else:
                 peaks, _ = find_peaks(self.scores, distance=1)
                 if peaks.size < 1:
@@ -560,28 +618,28 @@ class PhytClust:
                     return
                 top_peaks = peaks[np.argsort(-self.scores[peaks])][:top_n]
                 clusters_to_plot.extend(
-                        [(peak, self.clusters[peak]) for peak in top_peaks]
-                    )
+                    [(peak, self.clusters[peak]) for peak in top_peaks]
+                )
             # Plotting for specified cluster or top peaks/scores-based clusters
         for _, cluster in clusters_to_plot:
             plot_cluster(
-                    cluster=cluster,
-                    tree=self.tree,
-                    cmap=cmap,
-                    outlier=outlier,
-                    save=save,
-                    filename=filename,
-                    hide_internal_nodes=hide_internal_nodes,
-                    show_terminal_labels=show_terminal_labels,
-                    width_scale=width_scale,
-                    height_scale=height_scale,
-                    label_func=label_func,
-                    show_branch_lengths=show_branch_lengths,
-                    marker_size=marker_size,
-                    outgroup=self.outgroup,
-                    results_dir=results_dir,
-                    **kwargs,
-                )
+                cluster=cluster,
+                tree=self.tree,
+                cmap=cmap,
+                outlier=outlier,
+                save=save,
+                filename=filename,
+                hide_internal_nodes=hide_internal_nodes,
+                show_terminal_labels=show_terminal_labels,
+                width_scale=width_scale,
+                height_scale=height_scale,
+                label_func=label_func,
+                show_branch_lengths=show_branch_lengths,
+                marker_size=marker_size,
+                outgroup=self.outgroup,
+                results_dir=results_dir,
+                **kwargs,
+            )
 
     def save(
         self,
@@ -612,7 +670,9 @@ class PhytClust:
         distances = np.abs(np.arange(len(normalized_scores)) - max_product_index)
 
         normalized_distances = distances / np.max(distances)
-        reciprocal_distances = 1 / (1 + normalized_distances)  # Smoothing to avoid division by zero
+        reciprocal_distances = 1 / (
+            1 + normalized_distances
+        )  # Smoothing to avoid division by zero
 
         self.adjusted_scores = normalized_scores * reciprocal_distance
 
@@ -664,16 +724,21 @@ class PhytClust:
 
     def run_greedy_alg(self, num_peaks=3, should_plot_scores=False):
         for clade in self.tree.find_clades(order="postorder"):
-            clade.children = list(clade.clades)  # Ensuring children are a list, not a generator
+            clade.children = list(
+                clade.clades
+            )  # Ensuring children are a list, not a generator
             clade.terminal_child_count = self.calculate_terminal_child_count(clade)
 
             # Calculate self_cost efficiently
             clade.self_cost = sum(
-                child.terminal_child_count * (child.branch_length or 0) for child in clade.children
+                child.terminal_child_count * (child.branch_length or 0)
+                for child in clade.children
             )
 
             # Calculate total_recursive_cost efficiently
-            if not clade.children:  # If leaf node, total_recursive_cost is just self_cost
+            if (
+                not clade.children
+            ):  # If leaf node, total_recursive_cost is just self_cost
                 clade.total_recursive_cost = clade.self_cost
             else:
                 clade.total_recursive_cost = clade.self_cost + sum(
@@ -700,7 +765,10 @@ class PhytClust:
                         terminal_nodes = clades[clade]
                         # Assign the current cluster number to these terminal nodes
                         terminal_clusters.update(
-                            {terminal_node: cluster_number for terminal_node in terminal_nodes}
+                            {
+                                terminal_node: cluster_number
+                                for terminal_node in terminal_nodes
+                            }
                         )
                     # Increment the cluster number counter for the next internal node
                     cluster_number += 1
@@ -709,7 +777,9 @@ class PhytClust:
 
         else:
             # Use the default num_terminals value
-            scores, states, total = greedy_alg.split_tree(self.tree.root, max_splits=self.max_k)
+            scores, states, total = greedy_alg.split_tree(
+                self.tree.root, max_splits=self.max_k
+            )
 
             beta_scores, self.num, self.den = greedy_alg.calculate_beta_scores(
                 scores, self.num_terminals
@@ -732,7 +802,10 @@ class PhytClust:
                         terminal_nodes = clades[clade]
                         # Assign the current cluster number to these terminal nodes
                         terminal_clusters.update(
-                            {terminal_node: cluster_number for terminal_node in terminal_nodes}
+                            {
+                                terminal_node: cluster_number
+                                for terminal_node in terminal_nodes
+                            }
                         )
                     # Increment the cluster number counter for the next internal node
                     cluster_number += 1
@@ -763,3 +836,116 @@ class PhytClust:
         if node.is_terminal():
             return 1
         return sum(self.count_leaves(tree, child) for child in node.clades)
+
+import os
+import csv
+from Bio import Phylo
+from phytclust import PhytClust
+from scipy.ndimage import gaussian_filter1d
+import numpy as np
+from scipy.signal import find_peaks, peak_prominences
+from scipy.interpolate import UnivariateSpline
+import json
+from sklearn.metrics import adjusted_rand_score, v_measure_score
+
+
+def load_ground_truth_labels(tree_folder):
+    ground_truth = {}
+    ground_truth_file = os.path.join(tree_folder, "ground_truth_labels.txt")
+    if os.path.isfile(ground_truth_file):
+        with open(ground_truth_file, "r") as f:
+            reader = csv.reader(f, delimiter="\t")
+            for row in reader:
+                ground_truth[row[0]] = row[1]
+    return ground_truth
+
+
+def process_trees(case_folder, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Iterate over each tree subdirectory
+    for tree_dir in os.listdir(case_folder):
+        tree_subdir_path = os.path.join(case_folder, tree_dir)
+        if os.path.isdir(tree_subdir_path):
+            tree_output_dir = os.path.join(output_dir, tree_dir)
+            os.makedirs(tree_output_dir, exist_ok=True)
+
+            ground_truth = load_ground_truth_labels(tree_subdir_path)
+
+            comparison_results = []
+            # Iterate over each tree file in the subdirectory
+            for tree_file in os.listdir(tree_subdir_path):
+                if tree_file.endswith(".nw"):
+                    tree_path = os.path.join(tree_subdir_path, tree_file)
+                    params = tree_file.replace("tree_", "").replace(".nw", "")
+                    tree = Phylo.read(tree_path, "newick")
+
+                    # Determine the number of clusters in the ground truth
+                    ground_truth_labels = list(ground_truth.values())
+                    k = num_clusters
+                    # k = len(set(ground_truth_labels))  # Number of unique clusters
+                    # print(k)
+
+                    # Create the PhytClust object with the determined k
+                    clust_obj = PhytClust_worst(
+                        tree, should_plot_scores=False, num_peaks=1000, k=k
+                    )
+                    clusters = clust_obj.clusters
+                    results = {}  # Store results for each tree here
+                    for clade, label in clusters.items():
+                        clade_name = clade.name if clade.name else "Unnamed_Clade"
+                        if clade_name not in results:
+                            results[clade_name] = {}
+                        results[clade_name]["ALG_Label"] = label
+
+                    # Save results to CSV
+                    output_csv_path = os.path.join(
+                        tree_output_dir, f"{params}_clustering_results.csv"
+                    )
+                    with open(output_csv_path, "w", newline="") as csvfile:
+                        fieldnames = ["ID", "ALG_Label"]
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for clade_name, labels in results.items():
+                            row = {"ID": clade_name}
+                            row.update(labels)
+                            writer.writerow(row)
+
+                    # Compare with ground truth and save comparison results
+                    ground_truth_labels = []
+                    predicted_labels = []
+                    for clade_name, labels in results.items():
+                        ground_truth_label = ground_truth.get(clade_name, "Unknown")
+                        ground_truth_labels.append(ground_truth_label)
+                        predicted_labels.append(labels["ALG_Label"])
+                        comparison_results.append(
+                            {
+                                "Tree": params,
+                                "Clade": clade_name,
+                                "Ground_Truth": ground_truth_label,
+                                "Predicted_Labels": labels["ALG_Label"],
+                            }
+                        )
+
+                    # Calculate ARI
+                    ari = v_measure_score(ground_truth_labels, predicted_labels)
+                    comparison_results.append(
+                        {
+                            "Tree": params,
+                            "ARI": ari,
+                        }
+                    )
+
+            # Save comparison results to a JSON file for each tree
+            comparison_output_path = os.path.join(
+                tree_output_dir, "comparison_results.json"
+            )
+            with open(comparison_output_path, "w") as jsonfile:
+                json.dump(comparison_results, jsonfile, indent=4)
+
+
+if __name__ == "__main__":
+    case_folder = f"/home/ganesank/project/phytclust/simulations_2/data/N_100_K_{num_clusters}_short"
+    output_dir = f"/home/ganesank/project/phytclust/simulations_2/results/phytclust_single_k_worst/N_100_K_{num_clusters}_short"
+    process_trees(case_folder, output_dir)
+    print("Processing completed.")

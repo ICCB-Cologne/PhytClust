@@ -11,7 +11,7 @@ from scipy.interpolate import UnivariateSpline
 import json
 from collections import defaultdict
 
-num_clusters = 20
+num_clusters = 10
 
 
 def load_ground_truth_labels(tree_folder):
@@ -431,7 +431,7 @@ def process_trees(case_folder, output_dir):
 
 
 if __name__ == "__main__":
-    case_folder = f"/home/ganesank/project/phytclust/simulations_2/data_new/N_100_K_{num_clusters}"
-    output_dir = f"/home/ganesank/project/phytclust/simulations_2/results_fmi/random_single_k/N_100_K_{num_clusters}"
+    case_folder = f"/home/ganesank/project/phytclust/simulations_2/data/N_100_K_{num_clusters}_short"
+    output_dir = f"/home/ganesank/project/phytclust/simulations_2/results/random_single_k/N_100_K_{num_clusters}_short"
     process_trees(case_folder, output_dir)
     print("Processing completed.")

@@ -16,6 +16,44 @@ from collections import defaultdict
 from math import log
 
 
+# Colless index
+def colless_index_calc(tree):
+    """
+    Calculate the Colless index for a phylogenetic tree.
+
+    Args:
+        tree (Tree): The phylogenetic tree.
+
+    Returns:
+        int: The Colless index.
+    """
+    internal_nodes = [node for node in tree.find_clades(terminal=False)]
+    colless_sum = 0
+    for node in internal_nodes:
+        left_size = len(node.clades[0].get_terminals())
+        right_size = len(node.clades[1].get_terminals())
+        colless_sum += abs(left_size - right_size)
+    return colless_sum
+
+
+def normalized_colless(tree):
+    """
+    Calculate the normalized Colless index for a phylogenetic tree.
+
+    Args:
+        tree (Tree): The phylogenetic tree.
+
+    Returns:
+        float: The normalized Colless index.
+    """
+    colless_sum = colless_index_calc(tree)
+    n = tree.count_terminals()
+    if n <= 2:
+        return 0
+    normalized_colless = (2 * colless_sum) / ((n - 1) * (n - 2))
+    return normalized_colless
+
+
 def variation_of_information(true_labels, predicted_labels):
     # Convert label lists to clusters
     true_clusters = [
@@ -151,7 +189,9 @@ def process_trees(case_folder, output_dir):
                                 }
                             )
 
-                        vmeasure = v_measure_score(ground_truth_labels, predicted_labels)
+                        vmeasure = v_measure_score(
+                            ground_truth_labels, predicted_labels
+                        )
 
                         # Calculate the ratio
                         ground_truth_clusters = defaultdict(list)
@@ -167,9 +207,9 @@ def process_trees(case_folder, output_dir):
                             calculate_within_cluster_branch_length(tree, cluster)
                             for cluster in ground_truth_clusters.values()
                         )
-                        ratio = within_cluster_branch_lengths / (
+                        ratio = (
                             total_branch_length - within_cluster_branch_lengths
-                        )
+                        ) / within_cluster_branch_lengths
 
                         vmeasure_results.append(
                             {
@@ -190,14 +230,42 @@ def process_trees(case_folder, output_dir):
                             )
                             ground_truth_labels.append(ground_truth_label)
 
-                        vmeasure = v_measure_score(ground_truth_labels, predicted_labels)
-                        vmeasure_results.append(
-                            {
-                                "Tree": params,
-                                "VMeasure": vmeasure,
-                            }
+                        vmeasure = v_measure_score(
+                            ground_truth_labels, predicted_labels
                         )
-                    vmeasure_results.append({"Tree": params, "VMeasure": vmeasure})
+                        ground_truth_clusters = defaultdict(list)
+                        for clade_name, cluster_id in nested_ground_truth.items():
+                            ground_truth_clusters[int(cluster_id)].append(clade_name)
+
+                        total_branch_length = calculate_total_branch_length_to_root(
+                            tree
+                        )
+                        assign_names_to_internal_nodes(tree)
+                        # Calculate the sum of within-cluster branch lengths
+                        within_cluster_branch_lengths = sum(
+                            calculate_within_cluster_branch_length(tree, cluster)
+                            for cluster in ground_truth_clusters.values()
+                        )
+                        ratio = (
+                            total_branch_length - within_cluster_branch_lengths
+                        ) / within_cluster_branch_lengths
+                        colless = normalized_colless(tree)
+
+                        # vmeasure_results.append(
+                        #     {
+                        #         "Tree": params,
+                        #         "VMeasure": vmeasure,
+                        #         "Ratio":ratio
+                        #     }
+                        # )
+                    vmeasure_results.append(
+                        {
+                            "Tree": params,
+                            "VMeasure": vmeasure,
+                            "Ratio": ratio,
+                            "Colless": colless,
+                        }
+                    )
 
             vmeasure_output_path = os.path.join(
                 tree_output_dir, "vmeasure_results.json"
@@ -207,7 +275,7 @@ def process_trees(case_folder, output_dir):
 
 
 if __name__ == "__main__":
-    case_folder = "/home/ganesank/project/phytclust/simulations_2/data/N_100_K_5_short"
-    output_dir = "/home/ganesank/project/phytclust/simulations_2/results/phytclust_results_all_k/N_100_K_5_short"
+    case_folder = "/home/ganesank/project/phytclust/simulations_2/data/N_1000_K_5"
+    output_dir = "/home/ganesank/project/phytclust/simulations_2/results/phytclust_results_all_k/N_1000_K_5"
     process_trees(case_folder, output_dir)
     print("Processing completed.")
