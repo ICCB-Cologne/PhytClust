@@ -34,6 +34,14 @@ def main():
         action="store_true",
         help="Turn on resolution binning when selecting peaks.",
     )
+
+    parser.add_argument(
+        "--plot_scores",
+        type=bool,
+        default=True,
+        help="Whether scores should be plotted (default: True).",
+    )
+
     parser.add_argument(
         "--num_bins",
         type=int,
@@ -67,7 +75,6 @@ def main():
     parser.add_argument("--no_plot", action="store_true", help="Do not display plots.")
     args = parser.parse_args()
 
-    # Load the tree using Biopython
     try:
         tree = Phylo.read(args.tree, "newick")
     except Exception as e:
@@ -77,24 +84,10 @@ def main():
     clustering = PhytClust(
         tree=tree,
         k=args.k,
+        should_plot_scores=args.plot_scores,
         max_k=args.max_k,
         resolution_on=args.resolution_on,
         num_bins=args.num_bins,
-    )
-
-    clustering.run_dp_clustering(
-        num_peaks=args.global_peaks,
-        should_plot_scores=not args.no_plot,
-        resolution_on=args.resolution_on,
-        num_bins=args.num_bins,
-    )
-    find_score_peaks_with_resolution(
-        global_peaks=args.global_peaks,
-        peaks_per_bin=args.peaks_per_bin,
-        resolution_on=args.resolution_on,
-        num_bins=args.num_bins,
-        min_k=args.min_k,
-        plot=not args.no_plot,
     )
 
     clustering.save(results_dir=args.output_dir)

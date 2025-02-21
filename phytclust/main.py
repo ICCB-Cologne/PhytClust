@@ -12,7 +12,7 @@ import multiprocessing
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import (MaxNLocator, LogLocator, LogFormatter)
+from matplotlib.ticker import MaxNLocator, LogLocator, LogFormatter
 from scipy.signal import find_peaks
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
@@ -27,16 +27,13 @@ from phytclust.find_peaks import (
 )
 from phytclust.plotting import plot_cluster
 from phytclust.save import save_clusters
-import phytclust.greedy_alg as greedy_alg
 from phytclust.validation import (
     validate_and_set_outgroup,
     prune_outgroup,
     resolve_polytomies,
 )
 
-plt.rcParams["axes.prop_cycle"] = plt.cycler(
-    "color", plt.cm.tab20.colors
-)
+plt.rcParams["axes.prop_cycle"] = plt.cycler("color", plt.cm.tab20.colors)
 
 
 @dataclass
@@ -54,8 +51,8 @@ class PhytClust:
     use_branch_support_values: bool = False
     num_peaks: int = 3
     should_plot_scores: bool = False
-    compute_all_clusters: bool = False,
-    resolution_on: bool = True
+    compute_all_clusters: bool = (False,)
+    resolution_on: bool = False
     max_k_limit: int = 0.9
     num_bins: int = 3
     k: Optional[int] = None
@@ -66,7 +63,7 @@ class PhytClust:
 
     name_leaves_per_node: Dict[Any, List[Any]] = field(init=False, default_factory=dict)
     num_leaves_per_node: Dict[Any, int] = field(init=False, default_factory=dict)
-    num_terminals: int = field(init=False) #N
+    num_terminals: int = field(init=False)  # N
 
     dp_table: Dict[Any, Any] = field(init=False, default_factory=dict)
     backtrack: Dict[Any, Any] = field(init=False, default_factory=dict)
@@ -95,7 +92,8 @@ class PhytClust:
             node: node.get_terminals() for node in self.tree.find_clades()
         }
         self.num_leaves_per_node = {
-            node: len(terminals) for node, terminals in self.name_leaves_per_node.items()
+            node: len(terminals)
+            for node, terminals in self.name_leaves_per_node.items()
         }
         self.num_terminals = (
             (self.num_leaves_per_node[self.tree.root] - 1)
@@ -104,7 +102,7 @@ class PhytClust:
         )
 
         self.max_k = (
-            ceil(self.num_terminals*self.max_k_limit)
+            ceil(self.num_terminals * self.max_k_limit)
             if self.k is None and self.max_k is None
             else self.max_k if self.k is None else None
         )
@@ -166,7 +164,12 @@ class PhytClust:
             left_branch_length = left.branch_length or 0
             right_branch_length = right.branch_length or 0
 
-            cost_one_cluster = (left_dp[0] + right_dp[0] + left_size * left_branch_length + right_size * right_branch_length)
+            cost_one_cluster = (
+                left_dp[0]
+                + right_dp[0]
+                + left_size * left_branch_length
+                + right_size * right_branch_length
+            )
 
             if self.use_branch_support_values:
                 branch_support = (node.confidence / 100) if node.confidence else 1
@@ -199,7 +202,7 @@ class PhytClust:
     ) -> Dict[Any, int]:
         if k is None:
             raise ValueError("value of k is missing.")
-        cluster_index = k-1
+        cluster_index = k - 1
         active_tree = self._no_outgroup_tree if self.outgroup else self.tree
         root = active_tree.root
         root_id = self.node_to_id[root]
@@ -232,7 +235,9 @@ class PhytClust:
                 stack.append((left_id, left_k))
 
         if current_cluster_id != k:
-            raise ValueError(f"Number of clusters found: {current_cluster_id}, expected: {k}")
+            raise ValueError(
+                f"Number of clusters found: {current_cluster_id}, expected: {k}"
+            )
 
         return clusters
 
@@ -251,14 +256,18 @@ class PhytClust:
         resolution_on: bool = False,
         num_bins: int = 3,
         compute_all_clusters: bool = False,
-
     ) -> None:
         """Run the clustering algorithm."""
         if self.max_k is None and self.k:
             self.clusters = self.backtrack_dp_assignments(k=self.k, verbose=verbose)
         elif self.k is None:
             self._execute_clustering_for_all_k(
-                verbose, num_peaks, should_plot_scores, resolution_on, num_bins, compute_all_clusters
+                verbose,
+                num_peaks,
+                should_plot_scores,
+                resolution_on,
+                num_bins,
+                compute_all_clusters,
             )
         else:
             raise ValueError("Invalid cluster number. Please choose either k or max_k")
@@ -274,13 +283,13 @@ class PhytClust:
     ) -> None:
         """Helper method to handle the case when k is None."""
         if self.max_k is None:
-            self.max_k = ceil(self.num_terminals*self.max_k_limit)
+            self.max_k = ceil(self.num_terminals * self.max_k_limit)
         if not isinstance(self.max_k, int) or self.max_k <= 0:
             raise ValueError("Invalid max_k value. It should be a positive integer.")
 
         self.calculate_scores(plot=should_plot_scores)
         self.find_score_peaks(
-            n=num_peaks,
+            global_peaks=num_peaks,
             plot=should_plot_scores,
             resolution_on=resolution_on,
             num_bins=num_bins,
@@ -322,7 +331,9 @@ class PhytClust:
         """
 
         if not self.max_k or self.max_k <= 0:
-            raise ValueError("max_k must be set and positive to compute cluster scores.")
+            raise ValueError(
+                "max_k must be set and positive to compute cluster scores."
+            )
 
         active_tree = self._no_outgroup_tree if self.outgroup else self.tree
         root = active_tree.root
@@ -388,17 +399,16 @@ class PhytClust:
             den_list = np.array([norm_val])
             scores = np.array([sc])
 
-        elif (
-            isinstance(self.clusters, list)
-            and len(self.clusters) > 0
-        ):
+        elif isinstance(self.clusters, list) and len(self.clusters) > 0:
             results = []
             for cluster_dict in self.clusters:
                 if cluster_dict is None:
                     results.append((np.inf, np.inf, 0.0))
                 else:
                     results.append(
-                        self.compute_cluster_score(clusters=cluster_dict, output_all=output_all)
+                        self.compute_cluster_score(
+                            clusters=cluster_dict, output_all=output_all
+                        )
                     )
             beta_values, den_list, scores = zip(*results)
             beta_values = np.array(beta_values)
@@ -407,7 +417,9 @@ class PhytClust:
 
         else:
             if not self.max_k or self.max_k <= 0:
-                raise ValueError("max_k must be set and positive to compute DP-based scores.")
+                raise ValueError(
+                    "max_k must be set and positive to compute DP-based scores."
+                )
 
             results = []
             for k_val in range(1, self.max_k + 1):
@@ -429,7 +441,8 @@ class PhytClust:
         for i in range(n - 1):
             if beta_values[i] - beta_values[i + 1] != 0:
                 elbow_score = (
-                    (beta_values[i - 1] - beta_values[i]) / (beta_values[i] - beta_values[i + 1])
+                    (beta_values[i - 1] - beta_values[i])
+                    / (beta_values[i] - beta_values[i + 1])
                     if i > 0
                     else 0
                 )
@@ -467,7 +480,9 @@ class PhytClust:
         normalized_elbow = min_max_normalize(elbow_scores)
         normalized_scores = min_max_normalize(scores)
         combined_scores = normalized_elbow * normalized_scores
-        combined_scores = np.nan_to_num(combined_scores, nan=0.0, posinf=0.0, neginf=0.0)
+        combined_scores = np.nan_to_num(
+            combined_scores, nan=0.0, posinf=0.0, neginf=0.0
+        )
 
         self.scores = combined_scores
         self.beta_values = beta_values
@@ -476,7 +491,9 @@ class PhytClust:
         if plot:
             pass
 
-    def define_bins(self, num_bins: int = 3, log_base: int = None) -> List[Tuple[int, int]]:
+    def define_bins(
+        self, num_bins: int = 3, log_base: int = None
+    ) -> List[Tuple[int, int]]:
 
         if not self.num_terminals:
             raise ValueError("Number of terminals must be set to define bins.")
@@ -485,10 +502,10 @@ class PhytClust:
         k_max = self.num_terminals
 
         if log_base is None:
-            log_base = (k_max / k_mmin) ** (1 / num_bins)
+            log_base = (k_max / k_min) ** (1 / num_bins)
 
         bin_edges = k_min * (log_base ** np.arange(num_bins + 1))
-        bin_edges = np.ceil(bins).astype(int) #+ 1
+        bin_edges = np.ceil(bin_edges).astype(int)  # + 1
 
         if bin_edges[-1] < k_max:
             bin_edges[-1] = k_max
@@ -496,7 +513,7 @@ class PhytClust:
         bin_ranges = []
         for i in range(len(bin_edges) - 1):
             start = bin_edges[i]
-            end = bin_edges[i+1]
+            end = bin_edges[i + 1]
             bin_ranges.append((start, end))
 
         return bin_ranges
@@ -572,28 +589,43 @@ class PhytClust:
                 labels = ["Low", "High"]
             else:
                 light_colors = [
-                    c for c in mcolors.CSS4_COLORS.values()
-                    if c.lower() not in ["white","#ffffff"]
+                    c
+                    for c in mcolors.CSS4_COLORS.values()
+                    if c.lower() not in ["white", "#ffffff"]
                 ]
                 colors = random.sample(light_colors, num_bins)
                 labels = [f"Bin {i+1}" for i in range(num_bins)]
                 darker_colors = colors
 
-            for i in range(len(bin_edges)-1):
-                left, right = bin_edges[i], bin_edges[i+1]
-                plt.axvspan(left, right, color=colors[i], alpha=0.2,
-                            label=(f"Bin {i+1}: {left}-{right}" if num_bins in [2,3] else None))
+            for i in range(len(bin_edges) - 1):
+                left, right = bin_edges[i], bin_edges[i + 1]
+                plt.axvspan(
+                    left,
+                    right,
+                    color=colors[i],
+                    alpha=0.2,
+                    label=(
+                        f"Bin {i+1}: {left}-{right}" if num_bins in [2, 3] else None
+                    ),
+                )
 
             for edge in bin_edges:
                 plt.axvline(x=edge, color="grey", linestyle="--", linewidth=1)
 
-            if num_bins in [2,3]:
+            if num_bins in [2, 3]:
                 for i, lab in enumerate(labels):
-                    left, right = bin_edges[i], bin_edges[i+1]
-                    mid = left + (right-left)/2.0
-                    plt.text(mid, 0.5, lab, ha="center", va="center",
-                             fontsize=12, color=darker_colors[i],
-                             bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+                    left, right = bin_edges[i], bin_edges[i + 1]
+                    mid = left + (right - left) / 2.0
+                    plt.text(
+                        mid,
+                        0.5,
+                        lab,
+                        ha="center",
+                        va="center",
+                        fontsize=12,
+                        color=darker_colors[i],
+                        bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+                    )
 
         plt.xlabel("No. of Clusters (log)", fontsize=14)
         plt.ylabel("Scores (log)", fontsize=14)
@@ -619,7 +651,7 @@ class PhytClust:
         plt.show()
         return fig
 
-    def find_score_peaks_with_resolution(
+    def find_score_peaks(
         self,
         scores: Optional[np.ndarray] = None,
         global_peaks: int = 3,
@@ -679,10 +711,10 @@ class PhytClust:
             peak_to_prom = {pk: pr for pk, pr in zip(filtered_peaks, filtered_prom)}
 
             for i, (start_kv, end_kv) in enumerate(bin_ranges, start=1):
-            bin_label = f"Bin {i}: {start_kv}-{end_kv}"
-            cands = [pk for pk in filtered_peaks if start_kv <= pk <= end_kv]
-            cands.sort(key=lambda x: peak_to_prom[x], reverse=True)
-            chosen = cands[:peaks_per_bin]
+                bin_label = f"Bin {i}: {start_kv}-{end_kv}"
+                cands = [pk for pk in filtered_peaks if start_kv <= pk <= end_kv]
+                cands.sort(key=lambda x: peak_to_prom[x], reverse=True)
+                chosen = cands[:peaks_per_bin]
             self.resolution_info[bin_label] = chosen
             final_peaks.extend(chosen)
 
@@ -776,26 +808,28 @@ class PhytClust:
 
         os.makedirs(results_dir, exist_ok=True)
 
-        if hasattr(self, "scores") and self.scores is not None:
+        if hasattr(self, "plot_of_scores") and self.scores is not None:
             fig = self.plot_of_scores
             fig.savefig(os.path.join(results_dir, "scores.png"))
 
-        save_clusters(
-            scores=self.scores,
-            clusters=self.clusters,
-            results_dir=results_dir,
-            top_n=top_n,
-            filename=filename,
-            outlier=outlier,
-            selected_peaks=self.peaks_by_rank,
-            n=n,
-            output_all=output_all,
-        )
+        # save_clusters(
+        #     scores=self.scores,
+        #     clusters=self.clusters,
+        #     results_dir=results_dir,
+        #     top_n=top_n,
+        #     filename=filename,
+        #     outlier=outlier,
+        #     selected_peaks=self.peaks_by_rank,
+        #     n=n,
+        #     output_all=output_all,
+        # )
 
         peaks_by_rank_file = os.path.join(results_dir, "peaks_by_rank.txt")
         with open(peaks_by_rank_file, "w") as f:
-            for rank, kval in enumerate(self.peaks_by_rank, start=1):
+            for rank,kval in enumerate(self.peaks_by_rank, start=1):
+                # i = 1
                 f.write(f"Rank {rank}: {kval} clusters\n")
+                # i+=1
 
         if getattr(self, "resolution_info", None) is not None:
             resolution_file = os.path.join(results_dir, "resolution_bins.txt")

@@ -1,6 +1,6 @@
 from phytclust import PhytClust
 from phytclust import plot_tree
-from phytclust import pairwise_distances
+from phytclust import get_pairwise_distances
 import io
 import os
 from Bio import Phylo
