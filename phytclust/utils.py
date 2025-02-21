@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 from Bio.Phylo.BaseTree import Tree, Clade
 
 
-def pairwise_distances(
+def get_pairwise_distances(
     tree: Tree,
     mode: str = "terminals",
     as_dataframe: bool = False,
@@ -115,9 +115,9 @@ def find_all_min_indices(arr: List[float]) -> Tuple[List[int], float]:
     for i, value in enumerate(arr):
         if value < min_value:
             min_value = value
-            min_indices = [i]  # Start a new list of indices
+            min_indices = [i]
         elif value == min_value:
-            min_indices.append(i)  # Add index to existing list
+            min_indices.append(i)  
 
     return min_indices, min_value
 

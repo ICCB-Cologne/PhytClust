@@ -1,0 +1,12 @@
+{
+    "ntips": 5,
+    "total_terminals": 1000,
+    "output_dir": "/home/ganesank/project/phytclust/data/simulations/N_1000_K_5",
+    "seed": 42,
+    "outlier_steps": [0.0],
+    "sampling_steps": [1.0],
+    "noise_steps": [0.0],
+    "num_trees": 100,
+    "increase_factor":1,
+    "num_increases": 50
+}

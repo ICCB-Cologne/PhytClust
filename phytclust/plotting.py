@@ -65,7 +65,7 @@ def plot_tree(
     show_events: bool = False,
     branch_labels: Optional[Union[Dict[Any, str], Callable[[Any], str]]] = None,
     label_colors: Optional[Union[Dict[str, str], Callable[[str], str]]] = None,
-    hide_internal_nodes: bool = False,
+    hide_internal_nodes: bool = True,
     marker_size: Optional[int] = None,
     line_width: Optional[float] = None,
     **kwargs: Any,
@@ -398,10 +398,8 @@ def plot_tree(
     ax.set_xlabel("branch length")
     ax.set_ylabel("taxa")
 
-    # Parse and process key word arguments as pyplot options
     for key, value in kwargs.items():
         try:
-            # Check that the pyplot option input is iterable, as required
             list(value)
         except TypeError:
             raise ValueError(
@@ -457,12 +455,10 @@ def _get_y_positions(tree: Any, adjust: bool = False, outgroup: str = "outgroup"
             raise PlotError(f"Normal clade {outgroup} not found in tree")
         heights[normal_clades[0]] = maxheight
 
-    # Internal nodes: place at midpoint of children
     def calc_row(clade: Any) -> None:
         for subclade in clade:
             if subclade not in heights:
                 calc_row(subclade)
-        # Closure over heights
         heights[clade] = (heights[clade.clades[0]] + heights[clade.clades[-1]]) / 2.0
 
     if tree.root.clades:

@@ -1,4 +1,6 @@
 # PhytClust 
+
+## Markdown structure, or restructured test
 Monophyletic Clustering Algorithm for Phylogenetic Trees
 
 ### Intallation via pip (recommended)
@@ -35,6 +37,6 @@ Nature 592, 302–308 (2021). https://doi.org/10.1038/s41586-021-03357-x
 
 Please cite this repository if you use the algorithm in your work:
 
-> E. Billard, T.L. Kaufmann, R.F. Schwarz, PhyloTreeClus, (2023), Bitbucket repository, https://bitbucket.org/schwarzlab/phylotreeclustering
+> K. Ganesan, E. Billard, T.L. Kaufmann, R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phylotreeclustering
 
 

@@ -16,6 +16,7 @@ def save_clusters(
     outlier: bool = True,
     selected_peaks: Optional[List[int]] = None,
     n: Optional[int] = None,
+    output_all: bool = False,
 ) -> None:
     """
     Save clustering results to a CSV file.
@@ -29,6 +30,7 @@ def save_clusters(
     outlier (bool, optional): Whether to mark outliers with a cluster ID of -1. Defaults to True.
     selected_peaks (list, optional): Pre-selected peaks to use instead of finding peaks. Defaults to None.
     n (int, optional): Specific cluster index to save. Defaults to None.
+    output_all (bool, optional): Whether to output all solutions. Defaults to False.
 
     Returns:
     None
@@ -42,34 +44,41 @@ def save_clusters(
         logger.error("No peaks found.")
         return
 
-    selected_clusters = (
-        {n: clusters[n]}
-        if n is not None and n in clusters
-        else [clusters[i] for i in top_peaks]
-    )
-
     data = []
-    for cluster in selected_clusters:
-        cluster_ids = list(cluster.values())
-        outlier_clusters, non_outlier_clusters = identify_clusters(cluster_ids, outlier)
-
-        new_cluster_id_map = {
-            old_id: new_id
-            for new_id, old_id in enumerate(sorted(non_outlier_clusters), start=1)
-        }
-        data.extend(
-            {
-                "Node Name": node.name,
-                "Cluster Number": (
-                    -1
-                    if outlier and cluster_id in outlier_clusters
-                    else new_cluster_id_map.get(cluster_id, -1)
-                ),
-            }
-            for node, cluster_id in cluster.items()
+    if output_all:
+        for k in range(1, len(clusters) + 1):
+            cluster = clusters[k - 1]
+            for node, cluster_id in cluster.items():
+                data.append(
+                    {
+                        "Node Name": node.name,
+                        "Number of Clusters": k,
+                        "Cluster Number": cluster_id,
+                    }
+                )
+    else:
+        selected_clusters = (
+            {n: clusters[n]}
+            if n is not None and n in clusters
+            else [clusters[i] for i in top_peaks]
         )
+        for i, cluster in enumerate(selected_clusters, start=1):
+            for node, cluster_id in cluster.items():
+                data.append(
+                    {
+                        "Node Name": node.name,
+                        "Number of Clusters": top_peaks[i - 1] if selected_peaks else n,
+                        "Cluster Number": cluster_id,
+                    }
+                )
 
-    save_to_csv(data, results_dir, filename)
+    df = pd.DataFrame(data)
+    df_pivot = df.pivot(
+        index="Node Name", columns="Number of Clusters", values="Cluster Number"
+    )
+    df_pivot.columns = [f"{col}_clusters" for col in df_pivot.columns]
+    df_pivot.reset_index(inplace=True)
+    df_pivot.to_csv(os.path.join(results_dir, filename), index=False)
 
 
 def identify_clusters(cluster_ids: List[int], outlier: bool) -> Tuple[set, set]:
