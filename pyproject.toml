@@ -1,3 +1,38 @@
 [build-system]
-requires = ['setuptools>=42']
-build-backend = 'setuptools.build_meta'
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phytclust"
+version = "0.1.0"
+description = "PhytClust take a phylogenetic tree as an input, and outputs a set of monophyletic clusters that best fit the input tree."
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org" },
+  {name = "Roland F Schwarz", email = "roland.schwarz@iccb-cologne.org"}
+]
+maintainers = [
+  { name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org" }
+]
+keywords = ["phylogenetics", "clustering", "taxonomy", "classification", "dynamic programming"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3.9",
+  "License :: OSI Approved :: GNU License"
+]
+dependencies = [
+  "numpy>=1.24.4",
+  "biopython>=1.81",
+  "matplotlib>=3.7.1",
+]
+requires-python = ">=3.9"
+
+[project.urls]
+"Documentation" = "https://bitbucket.org/schwarzlab/phytclust"
+"Source" = "https://bitbucket.org/schwarzlab/phytclust"
+"Tracker" = "https://bitbucket.org/schwarzlab/phytclust/issues"
+
+[project.scripts]
+phytclust = "phytclust.cli:main"

@@ -1,42 +1,63 @@
-# PhytClust 
+# PhytClust &nbsp;<img alt="PyPI" src="https://img.shields.io/pypi/v/phytclust?color=brightgreen"> <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/schwarzlab/phytclust/ci.yml?label=CI&logo=github">
 
-## Markdown structure, or restructured test
-Monophyletic Clustering Algorithm for Phylogenetic Trees
+Monophyletic, dynamic-programming **clustering of phylogenetic trees** –
+pick an _exact_ `k`, search for the _global_ Calinski-Harabasz/Bowker
+(“CalBow”) peaks, or obtain one representative peak **per log-resolution
+bin**.
 
-### Intallation via pip (recommended)
-It is best to use a dedicated conda environment for your PhytClust installation with `conda create -n phyt_env`.
-After activating the environment with `conda activate phylo_env` you can install PhyloTreeCLustering via `pip install phyclust`
+_This is a modernised fork of the original “PhyloTreeClustering”
+algorithm by Schwarz lab._
 
-### Installation from source
-Clone the PhytClust repository using `git clone -b Phytclust https://bitbucket.org/schwarzlab/phylotreeclustering`
+---
 
-Then, inside the PhytClust folder, run `pip install . `to install PhytClust to your environment.
+## Installation
 
-## Usage
-An example notebook and input trees are provided. As an alternative, a newick string can also be used as input
+### 1. Recommended: clean conda environment + PyPI
 
-PhytClust creates the following output files:
--   tree.png: image of the tree with nodes coloured by cluster number. 
--   results.csv : list of all terminals nodes and the cluster they were assigned to. -1 refers to outliers
+```bash
+conda create -n phyt_env python=3.10
+conda activate phyt_env
+pip install phytclust
+
+### 2. Install from source
+
+git clone https://bitbucket.org/schwarzlab/phytclust.git
+cd phytclust
+pip install -e .[dev]         # editable install + dev extras (black, pytest, nbdev…)
+
+
+## Output Files
+
+
+## API Reference
 
 ## References
 
-**For the examples :**
 
-- Original data from Gao et al. 2016 
-Gao, R., Davis, A., McDonald, T. et al. 
-Punctuated copy number evolution and clonal stasis in triple-negative breast cancer. 
-Nat Genet 48, 1119–1130 (2016). https://doi.org/10.1038/ng.3641
-
-- Original data from Minussi et al. 2021
-Minussi, D.C., Nicholson, M.D., Ye, H. et al. 
-Breast tumours maintain a reservoir of subclonal diversity during expansion. 
-Nature 592, 302–308 (2021). https://doi.org/10.1038/s41586-021-03357-x
 
 ## Please cite
 
 Please cite this repository if you use the algorithm in your work:
 
-> K. Ganesan, E. Billard, T.L. Kaufmann, R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phylotreeclustering
+> K. Ganesan, E. Billard, T.L. Kaufmann, R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
+
+```
 
 
+from phytclust.metrics import normalized_colless, calculate_total_length_variation
+from phytclust.selection import select_representative_species
+
+nc = normalized_colless(tree)
+rt_tip_sd = calculate_total_length_variation(tree)
+
+reps = select_representative_species(tree, clusters, mode="maximize", distance_ref="mrca")
+
+
+# exact k=5, show plot, save PNG+CSV under ./results
+phytclust tree.nwk k --k 5 --save-fig
+
+# peak search: top 3, cap k at 200, save everything in ./out
+phytclust tree.nwk global --top-n 3 --max-k 200 --save-fig --out-dir out
+
+# one peak per 4 log-bins, don’t show plots interactively, save all k CSVs
+phytclust tree.nwk resolution --bins 4 --no-plot --save-all-k --save-fig
