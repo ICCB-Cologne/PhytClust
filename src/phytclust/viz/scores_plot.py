@@ -47,7 +47,11 @@ def plot_scores(
     data_range = data_max - data_min or 1.0
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    ax.plot(x_indices, scores_slice, "o-", label="Scores", markersize=2)
+
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+
+    ax.plot(x_indices, scores_slice, "o-", label="Scores", markersize=2, linewidth=7)
 
     if peaks:
         valid_peaks, valid_scores = [], []
@@ -124,7 +128,7 @@ def plot_scores(
                 )
 
             ax.set_xticks(mid_pts)
-            ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
+            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
             import matplotlib.ticker as mticker
 
             ax.xaxis.set_major_locator(mticker.FixedLocator(mid_pts))
@@ -141,7 +145,7 @@ def plot_scores(
         if resolution_on:
             ax.xaxis.set_major_locator(mticker.FixedLocator(mid_pts))
             ax.xaxis.set_minor_locator(mticker.NullLocator())
-            ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
+            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
         else:
             ax.xaxis.set_major_locator(LogLocator(base=10.0, numticks=10))
             ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs="auto", numticks=10))
@@ -149,18 +153,18 @@ def plot_scores(
             for label in ax.get_xticklabels():
                 label.set_rotation(45)
                 label.set_ha("right")
-                label.set_fontsize(tick_labelsize)
+                # label.set_fontsize(tick_labelsize)
         x_label_str = "No. of Clusters (log)"
 
     elif x_axis_mode == "linear":
         ax.set_xscale("linear")
         if resolution_on:
             ax.set_xticks(mid_pts)
-            ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
+            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
         else:
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-            for label in ax.get_xticklabels():
-                label.set_fontsize(tick_labelsize)
+            # for label in ax.get_xticklabels():
+            #     label.set_fontsize(tick_labelsize)
         x_label_str = "No. of Clusters"
 
     else:
@@ -171,9 +175,10 @@ def plot_scores(
         y_label_str = "Scores (log)"
     else:
         y_label_str = "Scores"
-    for label in ax.get_yticklabels():
-        label.set_fontsize(tick_labelsize)
+    # for label in ax.get_yticklabels():
+    #     label.set_fontsize(tick_labelsize)
 
+    ax.tick_params(axis="both", which="both", labelsize=tick_labelsize)
     ax.set_xlabel(x_label_str, fontsize=axis_label_fontsize)
     ax.set_ylabel(y_label_str, fontsize=axis_label_fontsize)
     ax.set_title("Scores", fontsize=title_fontsize, pad=40)
@@ -184,5 +189,4 @@ def plot_scores(
     ax.set_ylim(y_min - padding, y_max + padding)
 
     plt.tight_layout()
-    plt.show()
     return fig

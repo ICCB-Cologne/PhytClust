@@ -6,7 +6,7 @@ plot:
   height_scale: 0.30
   # Node marker size
   marker_size: 40
-  # Hide numbers on branches by default (keeps plots clean)
+  # Hide numbers on branches by default
   show_branch_lengths: false
   # Hide internal nodes' labels/markers to reduce clutter
   hide_internal_nodes: true

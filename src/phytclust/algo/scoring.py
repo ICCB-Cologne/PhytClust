@@ -14,11 +14,12 @@ def _single_cluster_score(
     active_tree = pc._tree_wo_outgroup if pc.outgroup else pc.tree
     root = active_tree.root
     root_id = pc.node_to_id[root]
-    dp_row = pc.dp_table[root_id][:]
+    dp_row = pc.dp_table[root_id]
 
     if dp_row is None:
-        raise ValueError("Root not found in dp_table")
+        raise ValueError("Root DP row missing (dp_table[root] is None).")
 
+    dp_row = np.asarray(dp_row, dtype=float)
     pc.beta_1 = dp_row[0]
     num_terminals = pc.num_terminals
 
@@ -26,10 +27,12 @@ def _single_cluster_score(
         num_clusters = len(set(clusters.values()))
         if num_clusters < 1 or num_clusters > pc.max_k:
             return (float("inf"), float("inf"), float("inf"))
+        if num_clusters - 1 >= len(dp_row):
+            return (float("inf"), float("inf"), float("inf"))
         beta = dp_row[num_clusters - 1]
 
     elif k is not None:
-        if k < 1 or k > pc.max_k:
+        if k < 1 or k > pc.max_k or k - 1 >= len(dp_row):
             return (float("inf"), float("inf"), float("inf"))
         num_clusters = k
         beta = dp_row[k - 1]
@@ -42,14 +45,17 @@ def _single_cluster_score(
     if np.isinf(beta):
         return (beta, float("inf"), 0.0)
 
-    beta_ratios = (pc.beta_1 - beta) / beta if beta != 0 else float("inf")
+    if beta == 0:
+        return (beta, float("inf"), 0.0)
+
+    beta_ratios = (pc.beta_1 - beta) / beta
     norm_ratios = (
         (num_terminals - num_clusters) / float(num_clusters)
         if num_clusters
         else float("inf")
     )
 
-    if norm_ratios in [float("inf"), float("nan")] or np.isinf(beta_ratios):
+    if not np.isfinite(beta_ratios) or not np.isfinite(norm_ratios):
         score = float("inf")
     else:
         score = beta_ratios * norm_ratios
@@ -94,43 +100,55 @@ def calculate_scores(pc, plot: bool = False) -> None:
 
     elbow_scores = [
         (
-            (
-                (beta_values[i - 1] - beta_values[i])
-                / (beta_values[i] - beta_values[i + 1])
-            )
+            (beta_values[i - 1] - beta_values[i])
+            / (beta_values[i] - beta_values[i + 1])
             if i > 0 and (beta_values[i] - beta_values[i + 1]) != 0
-            else 0
+            else 0.0
         )
         for i in range(len(beta_values) - 1)
     ]
-    elbow_scores.append(0)
+    elbow_scores.append(0.0)
+    elbow_scores = np.array(elbow_scores, dtype=float)
 
-    invalid_elbow = np.where(np.isnan(elbow_scores) | np.isinf(elbow_scores))[0]
-    invalid_scores = np.where(np.isnan(scores) | np.isinf(scores))[0]
-    min_invalid_index = min(
-        [idx for idxs in (invalid_elbow, invalid_scores) for idx in idxs],
-        default=len(elbow_scores),
+    invalid_mask = (
+        np.isnan(scores)
+        | np.isinf(scores)
+        | np.isnan(elbow_scores)
+        | np.isinf(elbow_scores)
     )
-    elbow_scores = elbow_scores[:min_invalid_index]
-    scores = scores[:min_invalid_index]
+    valid_mask = ~invalid_mask
 
-    if len(scores) == 0:
-        # No valid scores (e.g. DP says impossible / everything inf/NaN)
+    scores_valid = scores[valid_mask]
+    beta_valid = beta_values[valid_mask]
+    den_valid = den_list[valid_mask]
+    elbow_valid = elbow_scores[valid_mask]
+
+    if len(scores_valid) == 0:
         pc.scores = np.array([], dtype=float)
         pc.beta_values = np.array([], dtype=float)
         pc.norm_ratios = np.array([], dtype=float)
         return
 
     combined_scores = np.nan_to_num(
-        np.array(elbow_scores) * scores, nan=0.0, posinf=0.0, neginf=0.0
+        elbow_valid * scores_valid, nan=0.0, posinf=0.0, neginf=0.0
     )
 
+    eps = 1e-12
+    nonzero_idx = np.where(np.abs(combined_scores) > eps)[0]
+    if nonzero_idx.size > 0:
+        last_useful = nonzero_idx[-1] + 1
+    else:
+        last_useful = len(combined_scores)
+
+    combined_scores = combined_scores[:last_useful]
+    beta_valid = beta_valid[:last_useful]
+    den_valid = den_valid[:last_useful]
+
     pc.scores = combined_scores
-    pc.beta_values = beta_values
-    pc.norm_ratios = den_list
+    pc.beta_values = beta_valid
+    pc.norm_ratios = den_valid
 
     if plot:
-        # you can trigger plotting here if desired; your core uses find_score_peaks to make the figure
         pass
 
 
@@ -148,6 +166,7 @@ def find_score_peaks(
     smooth_window_size: int = 1,
     min_prominence: float = 1e-3,
     ranking_mode: str = "adjusted",
+    alpha=0.5,
 ) -> List[int]:
     """Direct split of your original _find_score_peaks (unchanged logic)."""
     import numpy as np
@@ -243,7 +262,7 @@ def find_score_peaks(
                     if score_max > score_min
                     else 1.0
                 )
-                combined_metric = 0.3 * prom_norm + 0.7 * score_norm
+                combined_metric = alpha * prom_norm + (1 - alpha) * score_norm
                 adjusted_data.append((pk, prom, sc, combined_metric))
             adjusted_data.sort(key=lambda x: x[3], reverse=True)
             peak_data = adjusted_data
@@ -251,8 +270,8 @@ def find_score_peaks(
             raise ValueError("ranking_mode must be either 'raw' or 'adjusted'.")
 
         chosen = peak_data[:global_peaks]
-        chosen_sorted = sorted(chosen, key=lambda x: x[0])
-        final_peaks = [int(x[0]) for x in chosen_sorted]
+        # chosen_sorted = sorted(chosen, key=lambda x: x[0])
+        final_peaks = [int(x[0]) for x in chosen]
         pc.peaks_by_rank = final_peaks
 
     else:
@@ -278,7 +297,7 @@ def find_score_peaks(
                 if score_max > score_min
                 else 1.0
             )
-            combined_metric = 0.3 * prom_norm + 0.7 * score_norm
+            combined_metric = (alpha) * prom_norm + (1 - alpha) * score_norm
             normed_data.append((pk, prom, sc, combined_metric))
 
         normed_data.sort(key=lambda x: x[3], reverse=True)

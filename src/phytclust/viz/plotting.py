@@ -95,22 +95,18 @@ def plot_tree(
     texts: list[str] = []
     text_colors: list[Any] = []
 
-    # auto-figure
     if ax is None:
         nsamp = len(list(input_tree.find_clades()))
         plot_height = max(1.5, height_scale * nsamp * 0.25)
-        # width heuristic (avoid huge canvases)
         plot_width = 5 + width_scale
         fig, ax = plt.subplots(figsize=(min(250, plot_width), min(250, plot_height)))
     else:
         fig = ax.figure
 
-    # default label color resolver
     def _black(_: str) -> str:
         return "black"
 
     if label_colors is None:
-        # color by terminal/internal and outgroup
         clade_colors: dict[str, Any] = {}
         for clade in input_tree.find_clades():
             name = getattr(clade, "name", None)
@@ -202,9 +198,7 @@ def plot_tree(
         def format_branch_label(clade):
             return value_to_str(branch_labels(clade))
 
-    # optional support labels (kept off by default)
     if show_branch_support:
-
         def format_support_value(clade):
             name = getattr(clade, "name", None)
             if name in (None, "root"):
@@ -217,6 +211,19 @@ def plot_tree(
                 return "/".join(value_to_str(c.value) for c in confidences)
             conf = getattr(clade, "confidence", None)
             return value_to_str(conf) if conf is not None else None
+        # if show_branch_support:
+        #     support_text = format_support_value(clade)
+        #     if support_text is not None:
+        #         ax.text(
+        #             x_here,
+        #             y_here - 0.15,   # small offset
+        #             support_text,
+        #             ha="center",
+        #             va="top",
+        #             fontsize=6,
+        #             color="grey",
+        #         )
+
 
     def draw_clade_lines(
         *,
@@ -499,11 +506,11 @@ def plot_cluster(
 
     # singletons → black when outlier=True
     unique, counts = np.unique(ids, return_counts=True)
-    if outlier:
-        size_map = dict(zip(unique, counts))
-        for i, cid in enumerate(ids):
-            if size_map[cid] == 1:
-                colours[i] = "black"
+    # if outlier:
+    #     size_map = dict(zip(unique, counts))
+    #     for i, cid in enumerate(ids):
+    #         if size_map[cid] == 1:
+    #             colours[i] = "black"
 
     leaf_names = [getattr(leaf, "name", str(leaf)) for leaf in cluster.keys()]
     clumap = dict(zip(leaf_names, colours))

@@ -16,19 +16,16 @@ def define_bins(
     if k_hi <= k_lo:
         raise ValueError("k_hi must be > k_lo")
 
-    if log_base is None:
-        log_base = (k_hi / k_lo) ** (1 / num_bins)
-
-    edges = np.geomspace(k_lo, k_hi, num_bins + 1)
-    edges = np.round(edges).astype(int)
+    raw = np.geomspace(k_lo, k_hi, num_bins + 1)
+    edges = np.unique(np.round(raw).astype(int))
     edges[0], edges[-1] = k_lo, k_hi
+    edges = np.maximum.accumulate(edges)
 
-    bin_ranges = []
+    bins = []
     for i in range(len(edges) - 1):
-        lo = int(edges[i])
-        hi = int(edges[i + 1])
-        if i:
-            lo = bin_ranges[-1][1] + 1
-        bin_ranges.append((lo, hi))
-
-    return bin_ranges
+        lo = edges[i] if i == 0 else bins[-1][1] + 1
+        hi = edges[i + 1]
+        if lo > hi:
+            continue
+        bins.append((lo, hi))
+    return bins
