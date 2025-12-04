@@ -1,8 +1,11 @@
-# PhytClust &nbsp;<img alt="PyPI" src="https://img.shields.io/pypi/v/phytclust?color=brightgreen"> <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/schwarzlab/phytclust/ci.yml?label=CI&logo=github">
+# PhytClust
+
+<img src="https://bitbucket.org/schwarzlab/phytclust/raw/HEAD/src/phytclust/phytclust_logo_colour.png"
+     alt="PhytClust logo" width="120">
 
 Monophyletic, dynamic-programming **clustering of phylogenetic trees**.
 
-PhytClust finds clusterings of the leaves of a rooted tree such that **every cluster is a monophyleti clade**. It supports:
+PhytClust finds clusterings of the leaves of a rooted tree such that **every cluster is a monophyletic clade**. It supports:
 
 - **Exact k-way clustering** (`run(k=...)`)
 - **Global peak search** in k using a Calinski–Harabasz + Elbow 1 Index for validating cluster quality
@@ -41,7 +44,7 @@ phytclust tree.nwk --k 5 --save-fig --out-dir results
 
 ### Global clustering solution
 
-Search for the top 3 CalBow peaks up to k = 200, save everything in ./out:
+Search for the top 3 Calinski–Harabasz + Elbow index peaks up to k = 200, save everything in ./out:
 
 ```bash
 phytclust tree.nwk --top-n 3 \
@@ -69,7 +72,7 @@ phytclust tree.nwk --bins 4 \
 
 Please cite this repository if you use the algorithm in your work:
 
-> K. Ganesan, E. Billard, T.L. Kaufmann, R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
+> K. Ganesan, E. Billard, T.L. Kaufmann, ____________________________ R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
 
 ```
 

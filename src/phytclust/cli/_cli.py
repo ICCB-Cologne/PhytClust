@@ -10,7 +10,7 @@ import time
 from typing import Any
 
 from Bio import Phylo
-from phytclust import PhytClust
+from ..algo.core import PhytClust
 
 try:
     from importlib.metadata import version, PackageNotFoundError
@@ -37,6 +37,14 @@ LOG = logging.getLogger("phytclust.cli")
 
 
 def print_banner():
+    try:
+        here = pathlib.Path(__file__).resolve().parent
+        logo_path = here / "ascii_logo.txt"
+        text = logo_path.read_test(encoding="utf-8")
+        print(text)
+    except Exception:
+        LOG.debug("ascii_logo.txt not found; skipping banner.")
+
     with open("phytclust/src/phytclust/cli/ascii_logo.txt", "r") as f:
         print(f.read())
 
@@ -110,11 +118,11 @@ def _add_common_run_flags(sp: argparse.ArgumentParser) -> None:
     sp.add_argument(
         "--save-all-k",
         action="store_true",
-        help="Write CSV rows for *every* k from 1..max_k (can be large!).",
+        help="Write tsv rows for *every* k from 1..max_k (can be large!).",
     )
-    sp.add_argument("--csv-name", default="phytclust_results.csv")
+    sp.add_argument("--tsv-name", default="phytclust_results.tsv")
     sp.add_argument(
-        "--no-csv", action="store_true", help="Skip writing the results CSV."
+        "--no-tsv", action="store_true", help="Skip writing the results tsv."
     )
     sp.add_argument(
         "--dpi", type=_positive_int, default=150, help="PNG resolution (DPI)."
@@ -254,13 +262,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--out-dir",
         type=pathlib.Path,
         default=pathlib.Path("results"),
-        help="Directory for PNGs / CSV (created if needed).",
+        help="Directory for PNGs / tsv (created if needed).",
     )
     p.add_argument("--outgroup", help="Taxon to exclude from all clusters.")
     p.add_argument(
         "--no-outlier",
         action="store_true",
-        help="Do NOT mark singleton clusters as -1 in CSV.",
+        help="Do NOT mark singleton clusters as -1 in tsv.",
     )
     p.add_argument(
         "-v",
@@ -366,7 +374,7 @@ def main(argv: list[str] | None = None) -> None:
 
     t0_total = time.perf_counter()
 
-    if args.save_fig or args.save_tree or not args.no_csv:
+    if args.save_fig or args.save_tree or not args.no_tsv:
         try:
             args.out_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
@@ -433,17 +441,18 @@ def main(argv: list[str] | None = None) -> None:
     except Exception as exc:
         LOG.warning("Plotting encountered a problem: %s", exc)
 
-    if not args.no_csv:
+    if not args.no_tsv:
         try:
-            with phase(args.time or args.progress, "write CSV"):
+            with phase(args.time or args.progress, "write tsv"):
                 pc.save(
                     results_dir=args.out_dir,
+                    filename=args.tsv_name,
                     outlier=not args.no_outlier,
                     output_all=args.save_all_k,
                     **save_cfg,
                 )
         except Exception as exc:
-            LOG.error("Failed to write CSV: %s", exc)
+            LOG.error("Failed to write tsv: %s", exc)
             sys.exit(1)
 
     if args.time:

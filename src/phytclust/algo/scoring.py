@@ -166,7 +166,7 @@ def find_score_peaks(
     smooth_window_size: int = 1,
     min_prominence: float = 1e-3,
     ranking_mode: str = "adjusted",
-    alpha=0.5,
+    alpha=0.7,
 ) -> List[int]:
     """Direct split of your original _find_score_peaks (unchanged logic)."""
     import numpy as np

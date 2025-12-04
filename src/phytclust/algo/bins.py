@@ -8,7 +8,6 @@ def define_bins(
     *,
     k_lo: int = 1,
     k_hi: Optional[int] = None,
-    log_base: Optional[float] = None,
 ) -> List[Tuple[int, int]]:
     """Return num_bins log-spaced (inclusive) ranges covering [k_lo … k_hi]."""
     if k_hi is None:

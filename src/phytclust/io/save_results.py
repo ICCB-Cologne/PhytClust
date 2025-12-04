@@ -23,8 +23,6 @@ def save_clusters(
 
     if getattr(pc, "plot_of_scores", None) is not None:
         pc.plot_of_scores.savefig(os.path.join(results_dir, "scores.png"))
-    if hasattr(pc, "plot_tree"):
-        pc.plot_tree(os.path.join(results_dir, "tree.png"))
 
     if pc.k is not None:
         ks = [pc.k]
@@ -59,7 +57,7 @@ def save_clusters(
     )
     pivot.columns = [f"clusters_k{col}" for col in pivot.columns]
     pivot.reset_index(inplace=True)
-    pivot.to_csv(os.path.join(results_dir, filename), index=False)
+    pivot.to_csv(os.path.join(results_dir, filename), index=False, sep="\t")
     print(f"Wrote clusters to {filename}")
 
     if getattr(pc, "peaks_by_rank", None):

@@ -124,6 +124,11 @@ class PhytClust:
     use_branch_support: bool = False
     min_support: float = 0.05
     support_weight: float = 1.0
+
+    # outlier penalties
+    outlier_size_threshold: Optional[int] = None
+    outlier_penalty: float = 0.0
+
     compute_all_clusters: bool = False
     drop_outliers: bool = False
 
@@ -201,7 +206,7 @@ class PhytClust:
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
         compute_all_clusters: bool = False,
-        alpha: float = 0.5,
+        alpha: float = 0.7,
     ) -> List[Dict[Any, int]]:
         """
         cluster-validity index-based global peak search.
@@ -265,7 +270,7 @@ class PhytClust:
         num_bins: int = 3,
         max_k: Optional[int] = None,
         plot_scores: bool = True,
-        alpha: float = 0.5,
+        alpha: float = 0.7,
     ) -> List[Dict[Any, int]]:
         """
         Multi-resolution mode: one peak per log-bin.
@@ -326,7 +331,7 @@ class PhytClust:
         max_k: Optional[int] = None,
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
-        alpha: float = 0.5,
+        alpha: float = 0.7,
     ) -> Dict[str, Any]:
         """
         Unified high-level entry point.
@@ -421,11 +426,11 @@ class PhytClust:
         self,
         results_dir: str,
         top_n: int = 1,
-        filename: str = "phyclust_results.csv",
+        filename: str = "phytclust_results.tsv",
         outlier: bool = True,
         n: Optional[int] = None,
         output_all: bool = False,
-    ) -> None:
+            ) -> None:
         save_clusters(
             self,
             results_dir=results_dir,
