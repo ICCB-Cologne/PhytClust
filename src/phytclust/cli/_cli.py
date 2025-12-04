@@ -40,16 +40,10 @@ def print_banner():
     try:
         here = pathlib.Path(__file__).resolve().parent
         logo_path = here / "ascii_logo.txt"
-        text = logo_path.read_test(encoding="utf-8")
+        text = logo_path.read_text(encoding="utf-8")
         print(text)
     except Exception:
         LOG.debug("ascii_logo.txt not found; skipping banner.")
-
-    with open("phytclust/src/phytclust/cli/ascii_logo.txt", "r") as f:
-        print(f.read())
-
-
-# ───────────────────────── helpers ─────────────────────────
 
 
 def _positive_int(value: str) -> int:

@@ -1,7 +1,5 @@
-# PhytClust
+# PhytClust <img src="https://bitbucket.org/schwarzlab/phytclust/raw/HEAD/src/phytclust/phytclust_logo_colour.png" width="120">
 
-<img src="https://bitbucket.org/schwarzlab/phytclust/raw/HEAD/src/phytclust/phytclust_logo_colour.png"
-     alt="PhytClust logo" width="120">
 
 Monophyletic, dynamic-programming **clustering of phylogenetic trees**.
 
@@ -16,7 +14,7 @@ PhytClust finds clusterings of the leaves of a rooted tree such that **every clu
 
 ## Installation
 
-### 1. Recommended: clean conda env + PyPI
+### 1. Recommended: clean conda environment and install with PyPI
 
 ```bash
 conda create -n phyt_env python=3.10
@@ -72,7 +70,7 @@ phytclust tree.nwk --bins 4 \
 
 Please cite this repository if you use the algorithm in your work:
 
-> K. Ganesan, E. Billard, T.L. Kaufmann, ____________________________ R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
+> K. Ganesan, E. Billard, T.L. Kaufmann, .... R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
 
 ```
 
