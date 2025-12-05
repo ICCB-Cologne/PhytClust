@@ -206,7 +206,7 @@ class PhytClust:
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
         compute_all_clusters: bool = False,
-        alpha: float = 0.7,
+        lambda_weight: float = 0.7,
     ) -> List[Dict[Any, int]]:
         """
         cluster-validity index-based global peak search.
@@ -245,7 +245,7 @@ class PhytClust:
             k_start=2,
             k_end=score_len,
             plot=plot_scores,
-            alpha=alpha,
+            lambda_weight=lambda_weight,
         )
 
         self.clusters = {}
@@ -270,7 +270,7 @@ class PhytClust:
         num_bins: int = 3,
         max_k: Optional[int] = None,
         plot_scores: bool = True,
-        alpha: float = 0.7,
+        lambda_weight: float = 0.7,
     ) -> List[Dict[Any, int]]:
         """
         Multi-resolution mode: one peak per log-bin.
@@ -294,7 +294,7 @@ class PhytClust:
                 max_k_limit=self.max_k_limit,
                 plot_scores=plot_scores,
                 compute_all_clusters=False,
-                alpha=alpha,
+                lambda_weight=lambda_weight,
             )
 
         score_len = score_k_count - 1
@@ -307,7 +307,7 @@ class PhytClust:
             k_start=2,
             k_end=score_len,
             plot=plot_scores,
-            alpha=alpha,
+            lambda_weight=lambda_weight,
         )
 
         self.clusters = {}
@@ -331,7 +331,7 @@ class PhytClust:
         max_k: Optional[int] = None,
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
-        alpha: float = 0.7,
+        lambda_weight: float = 0.7,
     ) -> Dict[str, Any]:
         """
         Unified high-level entry point.
@@ -385,7 +385,7 @@ class PhytClust:
                 num_bins=num_bins,
                 max_k=max_k,
                 plot_scores=plot_scores,
-                alpha=alpha,
+                lambda_weight=lambda_weight,
             )
             result = {
                 "mode": "resolution",
@@ -407,7 +407,7 @@ class PhytClust:
             max_k_limit=max_k_limit,
             plot_scores=plot_scores,
             compute_all_clusters=False,
-            alpha=alpha,
+            lambda_weight=lambda_weight,
         )
         result = {
             "mode": "global",

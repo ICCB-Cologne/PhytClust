@@ -166,7 +166,7 @@ def find_score_peaks(
     smooth_window_size: int = 1,
     min_prominence: float = 1e-3,
     ranking_mode: str = "adjusted",
-    alpha=0.7,
+    lambda_weight=0.7,
 ) -> List[int]:
     """Direct split of your original _find_score_peaks (unchanged logic)."""
     import numpy as np
@@ -262,7 +262,7 @@ def find_score_peaks(
                     if score_max > score_min
                     else 1.0
                 )
-                combined_metric = alpha * prom_norm + (1 - alpha) * score_norm
+                combined_metric = lambda_weight * prom_norm + (1 - lambda_weight) * score_norm
                 adjusted_data.append((pk, prom, sc, combined_metric))
             adjusted_data.sort(key=lambda x: x[3], reverse=True)
             peak_data = adjusted_data
@@ -297,7 +297,7 @@ def find_score_peaks(
                 if score_max > score_min
                 else 1.0
             )
-            combined_metric = (alpha) * prom_norm + (1 - alpha) * score_norm
+            combined_metric = (lambda_weight) * prom_norm + (1 - lambda_weight) * score_norm
             normed_data.append((pk, prom, sc, combined_metric))
 
         normed_data.sort(key=lambda x: x[3], reverse=True)

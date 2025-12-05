@@ -14,45 +14,51 @@ phytclust = ["*.png"]
 
 [project]
 name = "phytclust"
-version = "0.1.0"
+version = "0.1.1"
 description = "PhytClust takes a phylogenetic tree as input and outputs monophyletic leaf clusters that best fit the tree structure."
 readme = "README.md"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 authors = [
-  {name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org"},
-  {name = "Roland F Schwarz", email = "roland.schwarz@iccb-cologne.org"}
+    { name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org" },
+    { name = "Roland F Schwarz", email = "roland.schwarz@iccb-cologne.org" },
 ]
 maintainers = [
-  {name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org"}
+    { name = "Katyayni Ganesan", email = "katyayni.ganesan@iccb-cologne.org" },
 ]
-keywords = ["phylogenetics", "clustering", "taxonomy", "classification", "dynamic programming"]
+keywords = [
+    "phylogenetics",
+    "clustering",
+    "taxonomy",
+    "classification",
+    "dynamic programming",
+]
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Intended Audience :: Science/Research",
-  "Programming Language :: Python :: 3.9",
-  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.9",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 
 requires-python = ">=3.9"
 
 dependencies = [
-  "numpy>=1.24",
-  "biopython>=1.85",
-  "matplotlib>=3.7",
-  "pandas>=2.0",
-  "scipy>=1.10",
-  "PyYAML>=6.0",
-  "rich>=13.0",
+    "numpy>=1.24",
+    "biopython>=1.85",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "PyYAML>=6.0",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=7.0",
-  "pytest-cov>=4.0",
-  "black>=24.0",
-  "ruff>=0.5",
-  "mypy>=1.10",
-  "pre-commit>=3.0",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=24.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pre-commit>=3.0",
 ]
 
 [project.urls]

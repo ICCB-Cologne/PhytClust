@@ -1,6 +1,5 @@
 # PhytClust <img src="https://bitbucket.org/schwarzlab/phytclust/raw/HEAD/src/phytclust/phytclust_logo_colour.png" width="120">
 
-
 Monophyletic, dynamic-programming **clustering of phylogenetic trees**.
 
 PhytClust finds clusterings of the leaves of a rooted tree such that **every cluster is a monophyletic clade**. It supports:
@@ -70,7 +69,7 @@ phytclust tree.nwk --bins 4 \
 
 Please cite this repository if you use the algorithm in your work:
 
-> K. Ganesan, E. Billard, T.L. Kaufmann, .... R.F. Schwarz, PhytClust, (2024), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
+> K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, PhytClust, (2025), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
 
 ```
 
