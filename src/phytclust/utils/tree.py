@@ -82,6 +82,12 @@ def find_all_min_indices(arr: List[float]) -> Tuple[List[int], float]:
 def rename_internal_nodes(tree: Tree) -> None:
     """
     Rename every internal node to 'internal_X' with a running counter.
+
+    Notes
+    -----
+    This is a generic helper for ad hoc renaming and is NOT part of the
+    main PhytClust preprocessing / DP pipeline. The official renaming
+    used during clustering is in ``phytclust.validation.rename_nodes``.
     """
     internal_node_count = 1
     for clade in tree.find_clades():

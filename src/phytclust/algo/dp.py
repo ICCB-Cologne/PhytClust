@@ -148,10 +148,7 @@ def compute_dp_table(pc) -> None:
         len_right = _eff_length(right, pc)
 
         cost_one_cluster = (
-            left_dp[0]
-            + right_dp[0]
-            + n_left * len_left
-            + n_right * len_right
+            left_dp[0] + right_dp[0] + n_left * len_left + n_right * len_right
         )
 
         if getattr(pc, "use_branch_support", False):
@@ -266,6 +263,12 @@ def backtrack(pc, k: int, *, verbose: bool = False) -> Dict[Any, int]:
 
 
 def cluster_map(pc, k: int) -> Dict[Any, int]:
+    if not getattr(pc, "_dp_ready", False):
+        validate_args(pc)
+        prepare_tree(pc)
+        compute_dp_table(pc)
+
+    pc._dp_ready = True
     if k <= 0:
         raise ValueError("k must be a positive integer.")
 
