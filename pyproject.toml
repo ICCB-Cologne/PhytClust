@@ -49,6 +49,8 @@ dependencies = [
     "scipy>=1.10",
     "PyYAML>=6.0",
     "rich>=13.0",
+    "flask>=3.1.2",
+    "plot_phylo>=1.0.1",
 ]
 
 [project.optional-dependencies]
