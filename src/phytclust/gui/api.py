@@ -148,17 +148,12 @@ def run_phytclust(req: PhytclustRequest):
         except Exception:
             pass
 
-    # LOG.info("pc summary: %s", str(pc))
-    # LOG.info("bin_ranges_current: %s", pc.get("bin_ranges_current", None))
-    
-    # Log pc.get("bin_ranges_current", None) here!
     payload = {
         "mode": result.get("mode"),
         "k": result.get("k"),
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
         "outgroup": result.get("outgroup"),
-        # "bin_ranges_current": str(pc.get("bin_ranges_current", None)),
         "newick": req.newick,
         "scores": scores,
         "clusters": clusters_json,
