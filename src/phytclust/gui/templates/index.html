@@ -50,7 +50,7 @@
     <!-- Header: logo top-left, helper text below -->
     <div class="row">
         <div class="col-xs-8">
-            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:180px; height:auto; width:auto; display:block; margin-bottom:8px;" />
+            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
             <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
         </div>
         <div class="col-xs-4" style="text-align:right;">
@@ -476,7 +476,7 @@
                         plotHostReady.style.removeProperty('box-sizing');
                     }
                     latestOptimalKData = data;
-                    renderOptimalK(latestOptimalKData);
+                    drawOptimalK(latestOptimalKData);
                 } else {
                     // Clear plot if no scores
                     var plotHost = document.getElementById('optimalk_plot');
@@ -520,7 +520,7 @@
         treeHost.appendChild(svg);
     }
 
-    function renderOptimalK(data) {
+    function drawOptimalK(data) {
         // Prefer most recent data if none passed
         if (!data) { data = latestOptimalKData; }
         var plotEl = document.getElementById('optimalk_plot');
@@ -629,7 +629,7 @@
                 // Mark as user override so subsequent renders honor selection
                 axisModeEl.__userOverride = true;
                 // Re-render using the latest data, not the old closure
-                renderOptimalK();
+                drawOptimalK();
             });
         }
     }
