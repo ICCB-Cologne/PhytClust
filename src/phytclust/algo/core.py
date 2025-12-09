@@ -43,9 +43,19 @@ def _coerce_to_tree(obj: Any) -> Tree:
         return Phylo.read(str(obj), "newick")
 
     if isinstance(obj, str):
-        candidate = Path(obj)
-        if candidate.exists() and not any(ch in obj for ch in "() ;"):
-            return Phylo.read(str(candidate), "newick")
+        # Prefer treating obvious Newick strings directly to avoid filesystem checks
+        if any(ch in obj for ch in "() ;"):
+            handle = StringIO(obj)
+            return Phylo.read(handle, "newick")
+
+        # Otherwise, attempt to interpret as a file path, guarding against OS errors
+        try:
+            candidate = Path(obj)
+            if candidate.exists():
+                return Phylo.read(str(candidate), "newick")
+        except OSError:
+            # Path too long or invalid; fall back to parsing as Newick string
+            pass
 
         handle = StringIO(obj)
         return Phylo.read(handle, "newick")

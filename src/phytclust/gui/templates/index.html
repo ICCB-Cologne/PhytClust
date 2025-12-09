@@ -1,153 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8" />
-    <title>PhytClust Web GUI – Minimal Viewer</title>
-    <script src="https://d3js.org/d3.v6.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.1/underscore-min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-    <script src="/static/phylotree.js"></script>
+    <meta charset="utf-8">
+    <title>PhytClust – Phylogenetic Tree Viewer</title>
+
+    <!-- Bootstrap CSS (for look-and-feel only) -->
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+
+    <!-- Local phylotree styles -->
     <link rel="stylesheet" href="/static/phylotree.css">
 
+    <!-- D3 v6 (matches local phylotree usage) -->
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <!-- Underscore and Lodash are expected by the bundled phylotree UMD -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.7/underscore-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script>window._$1 = window._$1 || window._;</script>
+    <!-- Local phylotree build used by the app -->
+    <script src="/static/phylotree.js"></script>
+
     <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            margin: 30px;
-            max-width: 1100px;
-        }
+        body { padding: 20px; }
 
-        textarea {
-            width: 100%;
-            max-width: 800px;
-            height: 120px;
-            font-family: monospace;
-        }
-
-        button {
-            padding: 6px 14px;
-            margin-top: 8px;
-        }
-
-        pre {
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 4px;
-            max-height: 250px;
-            overflow: auto;
-            font-size: 12px;
-        }
-
-        #tree-container {
-            width: 800px;
-            height: 600px;
+        .tree-wrapper {
             border: 1px solid #ddd;
-            margin-top: 20px;
-            overflow: hidden;
+            border-radius: 4px;
+            min-height: 400px;
+            padding: 10px;
+            overflow: auto;
+            background: #fafafa;
         }
 
-        .row {
-            display: flex;
-            gap: 30px;
-            align-items: flex-start;
-            margin-top: 20px;
+        #tree_display {
+            width: 100%;
+            height: 600px;
         }
 
-        .col {
-            flex: 1;
-            min-width: 0;
-        }
+        .controls { margin-bottom: 15px; }
+        .small-note { font-size: 11px; color: #777; }
+        .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
     </style>
 </head>
-
 <body>
-    <h1>PhytClust Web GUI (Minimal)</h1>
 
-    <p>Paste a Newick tree and click <strong>Run PhytClust</strong>.</p>
+<div class="container-fluid">
+    <h2>PhytClust – Phylogenetic Tree Viewer</h2>
+    <p class="text-muted">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
 
-    <form id="form">
-        <textarea id="input" placeholder="Paste Newick here..."></textarea><br />
-        <button type="submit">Run PhytClust</button>
-    </form>
+    <!-- Loading indicator (hidden once DOM is ready) -->
+    <div id="app-loading" class="alert alert-info">Loading UI…</div>
 
-    <div class="row">
-        <div class="col">
-            <h2>Result JSON</h2>
-            <pre id="result">(waiting for run...)</pre>
+    <!-- Dynamic status messages -->
+    <div id="status-message" class="alert" style="display:none;"></div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Viewer</a></li>
+        <li><a href="#help" role="tab" data-toggle="tab">Help</a></li>
+    </ul>
+
+    <div class="tab-content" style="margin-top: 15px;">
+
+        <!-- Viewer Tab -->
+        <div class="tab-pane active" id="viewer">
+            <div class="row controls">
+                <div class="col-md-6">
+                    <h4>Load tree</h4>
+
+                    <form class="form-inline" onsubmit="return false;">
+                        <div class="form-group">
+                            <label for="file-input">From file:</label>
+                            <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">
+                        </div>
+                        <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
+                    </form>
+
+                    <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
+                    <textarea id="newick-input" class="form-control" rows="4" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+
+                    <div style="margin-top: 10px;">
+                        <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
+                        <button id="btn-load-example" class="btn btn-default btn-sm">Load example tree</button>
+                    </div>
+
+                    <h4 style="margin-top:20px;">Result JSON</h4>
+                    <pre id="result" class="result-box">(waiting for run...)</pre>
+                </div>
+
+                <div class="col-md-6">
+                    <h4>Tree</h4>
+                    <div class="tree-wrapper">
+                        <div id="tree_display"></div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="col">
-            <h2>Tree Visualization</h2>
-            <div id="tree-container" style="width:800px; height:600px;"></div>
+
+        <!-- Help Tab -->
+        <div class="tab-pane" id="help">
+            <div class="help-section">
+                <h3>Help</h3>
+                <h4>1. Input format</h4>
+                <ul>
+                    <li>Trees must be in <strong>Newick</strong> format.</li>
+                    <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
+                    <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain text files.</li>
+                </ul>
+                <h4>2. How to use</h4>
+                <ol>
+                    <li>Upload a Newick file or paste a Newick string.</li>
+                    <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
+                    <li>View the JSON response and tree rendering.</li>
+                </ol>
+                <h4>3. Notes</h4>
+                <ul>
+                    <li>Ensure your Newick string ends with a semicolon (<code>;</code>).</li>
+                    <li>Very large trees may render slowly in the browser.</li>
+                </ul>
+            </div>
         </div>
-    </div>
 
-    <script>
-        const form = document.getElementById("form");
-        const input = document.getElementById("input");
-        const resultEl = document.getElementById("result");
-        const treeContainer = document.getElementById("tree-container");
+    </div><!-- /.tab-content -->
 
-        // A tiny test tree as default
-        input.value = "(((A:5,B:3)C1:6,(C:3,D:7)D1:4)A13:22,(((E:7,F:13)E12:5,G:6)B23:10,H:60):35):0;";
+</div><!-- /.container-fluid -->
 
-        form.onsubmit = async (e) => {
-            e.preventDefault();
+<!-- Dependencies for Bootstrap tabs -->
+<script src="//code.jquery.com/jquery.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 
-            const newick = input.value.trim();
-            if (!newick) {
-                alert("Please paste a Newick tree.");
-                return;
-            }
+<script>
+    // Example tree (from your template)
+    var EXAMPLE_NEWICK = "(((EELA:0.150276,CONGERA:0.213019):0.230956,(EELB:0.263487,CONGERB:0.202633):0.246917):0.094785,((CAVEFISH:0.451027,(GOLDFISH:0.340495,ZEBRAFISH:0.390163):0.220565):0.067778,((((((NSAM:0.008113,NARG:0.014065):0.052991,SPUN:0.061003,(SMIC:0.027806,SDIA:0.015298,SXAN:0.046873):0.046977):0.009822,(NAUR:0.081298,(SSPI:0.023876,STIE:0.013652):0.058179):0.091775):0.073346,(MVIO:0.012271,MBER:0.039798):0.178835):0.147992,((BFNKILLIFISH:0.317455,(ONIL:0.029217,XCAU:0.084388):0.201166):0.055908,THORNYHEAD:0.252481):0.061905):0.157214,LAMPFISH:0.717196,((SCABBARDA:0.189684,SCABBARDB:0.362015):0.282263,((VIPERFISH:0.318217,BLACKDRAGON:0.109912):0.123642,LOOSEJAW:0.397100):0.287152):0.140663):0.206729):0.222485,(COELACANTH:0.558103,((CLAWEDFROG:0.441842,SALAMANDER:0.299607):0.135307,((CHAMELEON:0.771665,((PIGEON:0.150909,CHICKEN:0.172733):0.082163,ZEBRAFINCH:0.099172):0.272338):0.014055,((BOVINE:0.167569,DOLPHIN:0.157450):0.104783,ELEPHANT:0.166557):0.367205):0.050892):0.114731):0.295021)";
 
-            resultEl.textContent = "Running PhytClust...";
+    var newickEl = document.getElementById("newick-input");
+    var resultEl = document.getElementById("result");
+    var statusEl = document.getElementById("status-message");
+    var treeHost = document.getElementById("tree_display");
 
-            try {
-                const res = await fetch("/api/run", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        newick: newick,
-                        mode: "global",
-                        top_n: 1
-                    })
-                });
+    function showStatus(message, type) {
+        var el = $("#status-message");
+        type = type || "info";
+        el.removeClass();
+        el.addClass("alert alert-" + type);
+        el.text(message);
+        el.show();
+    }
 
-                const data = await res.json();
-                resultEl.textContent = JSON.stringify(data, null, 2);
+    function clearTree() {
+        treeHost.innerHTML = "";
+    }
 
-                if (data.newick && data.clusters && data.clusters.length > 0) {
-                    drawTree(data.newick, data.clusters[0]);
-                } else {
-                    treeContainer.innerHTML = "(no clusters in response)";
-                }
-            } catch (err) {
-                console.error(err);
-                resultEl.textContent = "Error: " + err;
-            }
-        };
-
-        function drawTree(newick, clusters) {
-            treeContainer.innerHTML = "";
-
-            const tree = new phylotree.phylotree(newick);
-
-            tree.render({
-                container: "#tree-container",
-                "left-right-spacing": "fit-to-size",
-                "top-bottom-spacing": "fit-to-size"
-            });
-
-            const svg = tree.display.show();
-
-            // CORRECT: append DOM element returned by show()
-            treeContainer.appendChild(svg);
-
-            console.log("SVG inserted:", document.querySelector("#tree-container svg"));
+    async function runPhytClust() {
+        var newickText = (newickEl.value || "").trim();
+        if (!newickText) {
+            alert("Please upload a Newick tree file or paste a Newick string.");
+            return;
         }
+        showStatus("Running PhytClust...", "info");
+        resultEl.textContent = "Running PhytClust...";
+        clearTree();
 
+        try {
+            const res = await fetch("/api/run", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ newick: newickText, mode: "global", top_n: 1 })
+            });
+            const data = await res.json();
+            resultEl.textContent = JSON.stringify(data, null, 2);
 
+            if (data.newick && data.clusters && data.clusters.length > 0) {
+                drawTree(data.newick, data.clusters[0]);
+                showStatus("Rendering finished.", "success");
+            } else {
+                treeHost.innerHTML = "(no clusters in response)";
+                showStatus("No clusters returned.", "warning");
+            }
+        } catch (e) {
+            console.error(e);
+            showStatus("Error: " + e, "danger");
+            resultEl.textContent = "Error: " + e;
+        }
+    }
 
-    </script>
+    function drawTree(newick, clusters) {
+        clearTree();
+        // Use existing phylotree API (as before)
+        var tree = new phylotree.phylotree(newick);
+        tree.render({
+            container: "#tree_display",
+            "left-right-spacing": "fit-to-size",
+            "top-bottom-spacing": "fit-to-size"
+        });
+        var svg = tree.display.show();
+        treeHost.appendChild(svg);
+    }
+
+    function handleFileSelect(evt) {
+        var file = evt.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var text = e.target.result || "";
+            newickEl.value = text.trim();
+            showStatus("File loaded. Ready to run.", "info");
+        };
+        reader.readAsText(file);
+    }
+
+    // On DOM ready
+    $(function() {
+        $("#app-loading").hide();
+        showStatus("Application loaded. Example tree is prefilled.", "info");
+
+        // Wire controls
+        document.getElementById("file-input").addEventListener("change", handleFileSelect);
+        document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
+        document.getElementById("btn-load-example").addEventListener("click", function(e){
+            e.preventDefault();
+            newickEl.value = EXAMPLE_NEWICK;
+            showStatus("Example tree loaded. Ready to run.", "info");
+        });
+
+        // Prefill example and auto-run once for convenience
+        newickEl.value = EXAMPLE_NEWICK;
+        runPhytClust();
+    });
+</script>
+
 </body>
-
 </html>
