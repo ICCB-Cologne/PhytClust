@@ -1,893 +1,347 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <title>PhytClust – Phylogenetic Tree Viewer</title>
 
-    <!-- Bootstrap CSS (for look-and-feel only) -->
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
-
-    <!-- Local phylotree styles -->
-    <link rel="stylesheet" href="/static/phylotree.css">
-
-    <!-- D3 v6 (matches local phylotree usage) -->
-    <script src="https://d3js.org/d3.v6.min.js"></script>
-    <!-- Underscore and Lodash are expected by the bundled phylotree UMD -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.7/underscore-min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-    <script>window._$1 = window._$1 || window._;</script>
-    <!-- Local phylotree build used by the app -->
-    <script src="/static/phylotree.js"></script>
-    <!-- Plotly for the Optimal k interactive chart -->
-    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-
     <style>
-        body { padding: 20px; }
+        body {
+            padding: 20px;
+        }
 
         .tree-wrapper {
             border: 1px solid #ddd;
             border-radius: 4px;
             min-height: 400px;
-            padding: 10px;
+            max-height: 80vh;
+            padding: 0;
             overflow: auto;
             background: #fafafa;
         }
 
         #tree_display {
             width: 100%;
-            height: 600px;
+            height: 100%;
+            position: relative;
         }
 
-        .controls { margin-bottom: 15px; }
-        .small-note { font-size: 11px; color: #777; }
-        .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
+        svg {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+        }
 
+        .tree-link {
+            fill: none;
+            stroke: #999;
+            stroke-width: 1.2px;
+        }
+
+        .tree-node circle {
+            stroke: #333;
+            stroke-width: 1px;
+        }
+
+        .tree-node text {
+            font-size: 11px;
+        }
+
+        .small-note {
+            font-size: 11px;
+            color: #777;
+        }
+
+        .result-box {
+            max-height: 260px;
+            overflow: auto;
+            font-size: 12px;
+        }
+
+        .d3-tooltip {
+            position: absolute;
+            padding: 4px 8px;
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            border-radius: 3px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            z-index: 2000;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="container-fluid">
-    <!-- Header: logo top-left, helper text below -->
-    <div class="row">
-        <div class="col-xs-8">
-            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
-            <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
-        </div>
-        <div class="col-xs-4" style="text-align:right;">
-            <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px;">About</button>
-            <button id="btn-help" class="btn btn-info" style="margin-top:8px;">Help</button>
-        </div>
-    </div>
-
-    <!-- Loader and parameters stacked below header -->
-    <div class="row">
-        <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
-            <h4>Load tree</h4>
-
-            <form class="form-inline" onsubmit="return false;">
-                <div class="form-group">
-                    <label for="file-input">From file:</label>
-                    <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">
-                </div>
-                <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
-            </form>
-
-            <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
-            <textarea id="newick-input" class="form-control" rows="2" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
-
-            <!-- Extra parameters toggle -->
-            <div style="margin-top: 10px;">
-                <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle">
-                    <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
-                    &nbsp;Extra parameters
-                </a>
+    <div class="container-fluid">
+        <!-- Header: logo top-left, helper text below -->
+        <div class="row">
+            <div class="col-xs-8">
+                <img src="/static/phytclust_logo_colour.png" alt="PhytClust"
+                    style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
+                <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and
+                    visualize the result.</p>
             </div>
+            <div class="col-xs-4" style="text-align:right;">
+                <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal"
+                    style="margin-top:8px;">About</button>
+                <button id="btn-help" class="btn btn-info" style="margin-top:8px;">Help</button>
+            </div>
+        </div>
 
-            <div class="collapse" id="extra-params" style="margin-top:10px;">
-                <div class="panel panel-default">
-                    <div class="panel-body">
-                        <div class="form-group">
-                            <label for="extra-k">Number of clusters</label>
-                            <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
-                            <p class="small-note">Exact k-way partition.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-outgroup">Outgroup</label>
-                            <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
-                            <p class="small-note">Any leaf node from the tree.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-topn">Top N peaks</label>
-                            <input type="number" min="1" id="extra-topn" class="form-control input-sm" placeholder="default 1">
-                            <p class="small-note">Number of optimal number of clusters to return.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-maxk">Max k</label>
-                            <input type="number" min="1" id="extra-maxk" class="form-control input-sm" placeholder="e.g. 100">
-                            <p class="small-note">Upper bound for the number of clusters.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-maxklimit">Max k limit</label>
-                            <input type="number" id="extra-maxklimit" class="form-control input-sm" placeholder="e.g. 0.1">
-                            <p class="small-note">If "max K" is not set, set max_k = ceil(max_k_limit * num_leaves).</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-lambda">Lambda weight</label>
-                            <input type="number" id="extra-lambda" class="form-control input-sm" placeholder="default 0.7">
-                            <p class="small-note">Peak prominence parameter for score peak selection.</p>
-                        </div>
-                        <hr>
-                        <div class="form-group">
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" id="extra-resolution"> Use multi-resolution mode
-                                </label>
+        <!-- Loader and parameters stacked below header -->
+        <div class="row">
+            <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
+                <h4>Load tree</h4>
+
+                <form class="form-inline" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="file-input">From file:</label>
+                        <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt"
+                            class="form-control input-sm">
+                    </div>
+                    <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
+                </form>
+
+                <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
+                <textarea id="newick-input" class="form-control" rows="2"
+                    placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+
+                <!-- Extra parameters toggle -->
+                <div style="margin-top: 10px;">
+                    <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false"
+                        aria-controls="extra-params" id="extra-params-toggle">
+                        <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
+                        &nbsp;Extra parameters
+                    </a>
+                </div>
+
+                <div class="collapse" id="extra-params" style="margin-top:10px;">
+                    <div class="panel panel-default">
+                        <div class="panel-body">
+                            <div class="form-group">
+                                <label for="extra-k">Number of clusters</label>
+                                <input type="number" min="1" id="extra-k" class="form-control input-sm"
+                                    placeholder="e.g. 2">
+                                <p class="small-note">Exact k-way partition.</p>
                             </div>
-                            <p class="small-note">One peak per log-spaced bin.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-bins">Number of bins (resolution)</label>
-                            <input type="number" min="1" id="extra-bins" class="form-control input-sm" placeholder="default 3">
-                            <p class="small-note">Number of log bins when using multi-resolution mode.</p>
-                        </div>
-                        <hr>
-                        <div>
-                            <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button" title="Reset Extra parameters to defaults">Reset to defaults</button>
+                            <div class="form-group">
+                                <label for="extra-outgroup">Outgroup</label>
+                                <input type="text" id="extra-outgroup" class="form-control input-sm"
+                                    placeholder="Taxon name">
+                                <p class="small-note">Any leaf node from the tree.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="extra-topn">Top N peaks</label>
+                                <input type="number" min="1" id="extra-topn" class="form-control input-sm"
+                                    placeholder="default 1">
+                                <p class="small-note">Number of optimal number of clusters to return.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="extra-maxk">Max k</label>
+                                <input type="number" min="1" id="extra-maxk" class="form-control input-sm"
+                                    placeholder="e.g. 100">
+                                <p class="small-note">Upper bound for the number of clusters.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="extra-maxklimit">Max k limit</label>
+                                <input type="number" id="extra-maxklimit" class="form-control input-sm"
+                                    placeholder="e.g. 0.1">
+                                <p class="small-note">If "max K" is not set, set max_k = ceil(max_k_limit *
+                                    num_leaves).
+                                </p>
+                            </div>
+                            <div class="form-group">
+                                <label for="extra-lambda">Lambda weight</label>
+                                <input type="number" id="extra-lambda" class="form-control input-sm"
+                                    placeholder="default 0.7">
+                                <p class="small-note">Peak prominence parameter for score peak selection.</p>
+                            </div>
+                            <hr>
+                            <div class="form-group">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" id="extra-resolution"> Use multi-resolution mode
+                                    </label>
+                                </div>
+                                <p class="small-note">One peak per log-spaced bin.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="extra-bins">Number of bins (resolution)</label>
+                                <input type="number" min="1" id="extra-bins" class="form-control input-sm"
+                                    placeholder="default 3">
+                                <p class="small-note">Number of log bins when using multi-resolution mode.</p>
+                            </div>
+                            <hr>
+                            <div>
+                                <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button"
+                                    title="Reset Extra parameters to defaults">Reset to defaults</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div style="margin-top: 10px;">
-                <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
-                <button id="btn-save" class="btn btn-primary btn-sm">Save</button>
-                <div class="form-inline" style="margin-top:8px;">
-                    <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
-                    <input type="text" id="output-dir" class="form-control input-sm" placeholder="results" style="width:220px;">
+                <div style="margin-top: 10px;">
+                    <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
+                    <button id="btn-save" class="btn btn-primary btn-sm">Save</button>
+                    <div class="form-inline" style="margin-top:8px;">
+                        <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
+                        <input type="text" id="output-dir" class="form-control input-sm" placeholder="results"
+                            style="width:220px;">
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- About Modal -->
-    <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalLabel">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                    <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
+        <!-- About Modal -->
+        <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalLabel">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span></button>
+                        <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>Please cite this repository if you use the algorithm in your work: <br>
+                            K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C.
+                            Dessimoz, R.F. Schwarz, <b>PhytClust</b> (2025). Bitbucket repository: <a
+                                href="https://bitbucket.org/schwarzlab/phytclust">https://bitbucket.org/schwarzlab/phytclust</a>.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <p>Please cite this repository if you use the algorithm in your work: <br>
-                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, <b>PhytClust</b> (2025). Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust">https://bitbucket.org/schwarzlab/phytclust</a>.
+            </div>
+        </div>
+
+        <!-- Loading indicator (hidden once DOM is ready) -->
+        <div id="app-loading" class="alert alert-info">Loading UI…</div>
+
+        <!-- Dynamic status messages -->
+        <div id="status-message" class="alert" style="display:none;"></div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
+            <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
+            <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
+            <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
+        </ul>
+
+        <div class="tab-content" style="margin-top: 15px;">
+
+            <div class="controls" style="margin-bottom:8px;">
+
+                <!-- Layout Selector -->
+                <label for="layout-mode" style="margin-right:6px;">Layout:</label>
+                <select id="layout-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <option value="cladogram">Cladogram (linear)</option>
+                    <option value="rectangular">Rectangular (vertical lines)</option>
+                    <option value="circular">Circular</option>
+                </select>
+
+                <!-- Palette Selector -->
+                <label for="palette-select" style="margin-left:15px; margin-right:6px;">Palette:</label>
+                <select id="palette-select" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <option value="default">Default</option>
+                    <option value="pastel">Pastel</option>
+                    <option value="vivid">Vivid</option>
+                    <option value="dark">Dark</option>
+                    <option value="custom">Custom…</option>
+                </select>
+
+                <label for="color-mode" style="margin-left:15px; margin-right:6px;">Colour:</label>
+                <select id="color-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <option value="nodes">Nodes</option>
+                    <option value="bars">Side bars</option>
+                </select>
+
+                <!-- Palette Preview -->
+                <span id="palette-preview" style="display:inline-block; margin-left:8px; vertical-align:middle;"></span>
+
+                <span class="small-note" style="margin-left:8px;">
+                    Click nodes to collapse/expand. Zoom &amp; pan with mouse.
+                </span>
+            </div>
+                <div class="tree-wrapper">
+                    <div id="tree_display"></div>
+                </div>
+            </div>
+
+            <!-- Optimal k Tab -->
+            <div class="tab-pane" id="viewer-optimal-k">
+                <div class="controls" style="margin-bottom:8px;">
+                    <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
+                    <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                        <option value="log">Log</option>
+                        <option value="normal">Normal</option>
+                    </select>
+                    <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+                </div>
+                <div id="optimalk_plot" style="width:100%; height:420px;"></div>
+            </div>
+
+            <!-- Help Sidebar (off-canvas style) -->
+            <div id="help-sidebar"
+                style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
+                <div
+                    style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
+                    <h4 class="modal-title" id="aboutModalLabel">Help</h4>
+                    <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>
+                </div>
+                <div class="help-section" style="padding:12px;">
+                    <h4>Input format</h4>
+                    <ul>
+                        <li>Trees must be in <strong>Newick</strong> format.</li>
+                        <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
+                        <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain
+                            text
+                            files.</li>
+                    </ul>
+                    <h4>How to use</h4>
+                    <ol>
+                        <li>Upload a Newick file or paste a Newick string.</li>
+                        <li>Set optional parameters (k, outgroup) as needed.</li>
+                        <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
+                        <li>View the Tree, JSON, and Logs in their tabs.</li>
+                    </ol>
+                    <h4>Example</h4>
+                    <p>
+                        Use our small built-in tree to try PhytClust quickly.
+                        <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load
+                            example tree</button>
                     </p>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
-                </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Loading indicator (hidden once DOM is ready) -->
-    <div id="app-loading" class="alert alert-info">Loading UI…</div>
-
-    <!-- Dynamic status messages -->
-    <div id="status-message" class="alert" style="display:none;"></div>
-
-    <!-- Tabs -->
-    <ul class="nav nav-tabs" role="tablist">
-        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
-        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
-        <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
-        <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
-    </ul>
-
-    <div class="tab-content" style="margin-top: 15px;">
-
-        <!-- Viewer Tab -->
-        <div class="tab-pane active" id="viewer">
-            <div class="tree-wrapper">
-                <div id="tree_display"></div>
+            <!-- Log Tab -->
+            <div class="tab-pane" id="log">
+                <h4>Execution Log</h4>
+                <pre id="log-output" class="result-box">(logs will appear here)</pre>
             </div>
-        </div>
 
-        <!-- Optimal k Tab -->
-        <div class="tab-pane" id="viewer-optimal-k">
-            <!-- <h4>Optimal number of clusters</h4> -->
-            <div class="controls" style="margin-bottom:8px;">
-                <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
-                <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
-                    <option value="log">Log</option>
-                    <option value="normal">Normal</option>
-                </select>
-                <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+            <!-- JSON Tab -->
+            <div class="tab-pane" id="debug">
+                <h4>JSON</h4>
+                <pre id="result" class="result-box">(waiting for run...)</pre>
             </div>
-            <div id="optimalk_plot" style="width:100%; height:420px;"></div>
-        </div>
 
-        <!-- Help Sidebar (off-canvas style) -->
-        <div id="help-sidebar" style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
-            <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
-                <h4 class="modal-title" id="aboutModalLabel">Help</h4>
-                <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>
-            </div>
-            <div class="help-section" style="padding:12px;">
-                <h4>Input format</h4>
-                <ul>
-                    <li>Trees must be in <strong>Newick</strong> format.</li>
-                    <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
-                    <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain text files.</li>
-                </ul>
-                <h4>How to use</h4>
-                <ol>
-                    <li>Upload a Newick file or paste a Newick string.</li>
-                    <li>Set optional parameters (k, outgroup) as needed.</li>
-                    <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
-                    <li>View the Tree, JSON, and Logs in their tabs.</li>
-                </ol>
-                <h4>Example</h4>
-                <p>
-                    Use our small built-in tree to try PhytClust quickly.
-                    <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>
-                </p>
-            </div>
-        </div>
+        </div><!-- /.tab-content -->
 
-        <!-- Log Tab -->
-        <div class="tab-pane" id="log">
-            <h4>Execution Log</h4>
-            <pre id="log-output" class="result-box">(logs will appear here)</pre>
-        </div>
+    </div><!-- /.container-fluid -->
 
-        <!-- JSON Tab -->
-        <div class="tab-pane" id="debug">
-            <h4>JSON</h4>
-            <pre id="result" class="result-box">(waiting for run...)</pre>
-        </div>
+    <!-- Dependencies for Bootstrap tabs + D3 + your tree code -->
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="//code.jquery.com/jquery.js"></script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 
-    </div><!-- /.tab-content -->
-
-</div><!-- /.container-fluid -->
-
-<!-- Dependencies for Bootstrap tabs -->
-<script src="//code.jquery.com/jquery.js"></script>
-<script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
-
-<script>
-    // Example tree (from your template)
-    var EXAMPLE_NEWICK = "(((A:5, B:3)C1:6, (C:3, D:7)D1:4)A13:22, (((E:7, F:13)E12:5, G:6)B23:10, H:60):35):0;";
-
-    var newickEl = document.getElementById("newick-input");
-    var resultEl = document.getElementById("result");
-    var statusEl = document.getElementById("status-message");
-    var treeHost = document.getElementById("tree_display");
-
-    const CLUSTER_COLORS = [
-        "#1f77b4", "#d62728", "#2ca02c", "#9467bd",
-        "#ff7f0e", "#8c564b", "#e377c2", "#17becf"
-    ];
-
-    let CURRENT_CLUSTERS = {};
-
-    function nodeStyler(selection, node) {
-        const isLeaf = !node.children || node.children.length === 0;
-        const name = node.data && node.data.name;
-
-        // --- ensure there is a circle ---
-        let circle = selection.select("circle");
-        if (circle.empty()) {
-            circle = selection.append("circle");
-        }
-
-        // --- size: adjust to your liking ---
-        const baseR = isLeaf ? 5 : 3;   // smaller circle sizes
-        circle.attr("r", baseR);
-
-        // --- color by cluster ---
-        const cid = name && CURRENT_CLUSTERS && CURRENT_CLUSTERS[name];
-        if (cid !== undefined) {
-            const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-            circle
-                .style("fill", color)
-                .style("stroke", "black")
-                .style("stroke-width", "1px");
-        } else {
-            circle
-                .style("fill", isLeaf ? "steelblue" : "#ccc")
-                .style("stroke", "black")
-                .style("stroke-width", "0.5px");
-        }
-
-        // --- shift labels to the right ---
-        const labelShift = baseR + 6;
-        selection.select("text")
-            .attr("dx", labelShift)
-            .style("font-weight", cid !== undefined ? "bold" : null)
-            .style("fill", cid !== undefined ? CLUSTER_COLORS[cid % CLUSTER_COLORS.length] : null);
-    }
-
-
-    var statusHideTimeout = null;
-    var isRunning = false;
-    var extraKEl = document.getElementById("extra-k");
-    var extraOutgroupEl = document.getElementById("extra-outgroup");
-    var extraTopNEl = document.getElementById("extra-topn");
-    var extraResolutionEl = document.getElementById("extra-resolution");
-    var extraBinsEl = document.getElementById("extra-bins");
-    var extraMaxKEl = document.getElementById("extra-maxk");
-    var extraMaxKLimitEl = document.getElementById("extra-maxklimit");
-    var extraLambdaEl = document.getElementById("extra-lambda");
-
-    function resetExtraParams() {
-        if (extraKEl) extraKEl.value = "";
-        if (extraOutgroupEl) extraOutgroupEl.value = "";
-        if (extraTopNEl) extraTopNEl.value = "";
-        if (extraResolutionEl) extraResolutionEl.checked = false;
-        if (extraBinsEl) extraBinsEl.value = "";
-        if (extraMaxKEl) extraMaxKEl.value = "";
-        if (extraMaxKLimitEl) extraMaxKLimitEl.value = "";
-        if (extraLambdaEl) extraLambdaEl.value = "";
-        showStatus("Extra parameters reset to defaults.", "info");
-    }
-    // Track latest response for Optimal k rendering to avoid stale closures
-    var latestOptimalKData = null;
-    function escapeRegExp(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    function isOutgroupInNewick(newick, outgroup) {
-        if (!outgroup) return true;
-        var name = escapeRegExp(outgroup);
-        // match quoted or unquoted names with token boundaries typical in Newick
-        var quoted = new RegExp("[\\(,]\\s*'" + name + "'\\s*(?:[:,\\)])");
-        var unquoted = new RegExp("[\\(,]\\s*" + name + "\\s*(?:[:,\\)])");
-        return quoted.test(newick) || unquoted.test(newick);
-    }
-
-    // Roughly estimate number of samples (leaves) as comma count + 1, ignoring commas inside quotes
-    function estimateLeafCount(newick) {
-        var inQuote = null;
-        var commas = 0;
-        for (var i = 0; i < newick.length; i++) {
-            var ch = newick[i];
-            if (inQuote) {
-                if (ch === inQuote) { inQuote = null; }
-                continue;
-            }
-            if (ch === '"' || ch === "'") { inQuote = ch; continue; }
-            if (ch === ',') { commas++; }
-        }
-        return Math.max(0, commas + 1);
-    }
-
-    function showStatus(message, type) {
-        var el = $("#status-message");
-        type = type || "info";
-        if (statusHideTimeout) { clearTimeout(statusHideTimeout); statusHideTimeout = null; }
-        el.removeClass();
-        el.addClass("alert alert-" + type);
-        el.text(message);
-        el.show();
-        // Auto-hide any success message after 5s
-        if (type === "success") {
-            statusHideTimeout = setTimeout(function(){ el.hide(); }, 5000);
-        }
-    }
-
-    function clearTree() {
-        treeHost.innerHTML = "";
-    }
-
-    async function runPhytClust() {
-        if (isRunning) { return; }
-        var newickText = (newickEl.value || "").trim();
-        if (!newickText) {
-            alert("Please upload a Newick tree file or paste a Newick string.");
-            return;
-        }
-        // Estimate number of samples (leaves)
-        var numSamples = estimateLeafCount(newickText);
-        // Determine mode based on optional k / resolution inputs
-        var kVal = null;
-        if (extraKEl) {
-            var kRaw = (extraKEl.value || "").trim();
-            if (kRaw) {
-                var parsed = parseInt(kRaw, 10);
-                if (!isNaN(parsed) && parsed >= 1) {
-                    kVal = parsed;
-                }
-            }
-        }
-
-        var payload;
-        var outgroupVal = null;
-        if (extraOutgroupEl) {
-            var ogRaw = (extraOutgroupEl.value || "").trim();
-            if (ogRaw) { outgroupVal = ogRaw; }
-        }
-        var topNVal = null;
-        if (extraTopNEl) {
-            var tnRaw = (extraTopNEl.value || "").trim();
-            if (tnRaw) { var tni = parseInt(tnRaw, 10); if (!isNaN(tni) && tni >= 1) topNVal = tni; }
-        }
-        var resolutionFlag = !!(extraResolutionEl && extraResolutionEl.checked);
-        var binsVal = null;
-        if (extraBinsEl) {
-            var bRaw = (extraBinsEl.value || "").trim();
-            if (bRaw) { var bi = parseInt(bRaw, 10); if (!isNaN(bi) && bi >= 1) binsVal = bi; }
-        }
-        var maxKVal = null;
-        if (extraMaxKEl) {
-            var mkRaw = (extraMaxKEl.value || "").trim();
-            if (mkRaw) {
-                var mki = parseInt(mkRaw, 10);
-                if (!isNaN(mki)) {
-                    if (mki < 4) { mki = 4; if (extraMaxKEl) extraMaxKEl.value = String(mki); }
-                    maxKVal = mki;
-                }
-            }
-        }
-        var maxKLimitVal = null;
-        if (extraMaxKLimitEl) {
-            var mklRaw = (extraMaxKLimitEl.value || "").trim();
-            if (mklRaw) {
-                var mkli = parseFloat(mklRaw);
-                if (!isNaN(mkli)) {
-                    var minLimit = (numSamples > 0) ? (4 / numSamples) : 0;
-                    if (mkli < minLimit) { mkli = minLimit; if (extraMaxKLimitEl) extraMaxKLimitEl.value = String(mkli); }
-                    maxKLimitVal = mkli;
-                }
-            }
-        }
-        var lambdaVal = null;
-        if (extraLambdaEl) {
-            var lRaw = (extraLambdaEl.value || "").trim();
-            if (lRaw) { var li = parseFloat(lRaw); if (!isNaN(li)) lambdaVal = li; }
-        }
-
-        // quick client-side validation for outgroup presence
-        if (outgroupVal && !isOutgroupInNewick(newickText, outgroupVal)) {
-            showStatus("Outgroup not found in Newick.", "danger");
-            return;
-        }
-        if (kVal !== null) {
-            payload = { newick: newickText, mode: "k", k: kVal };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust (fixed k-mode)…", "info");
-            resultEl.textContent = "Running PhytClust (k-mode)…";
-        } else if (resolutionFlag) {
-            payload = { newick: newickText, mode: "resolution", top_n: (topNVal || 1) };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (binsVal !== null) { payload.num_bins = binsVal; }
-            if (maxKVal !== null) { payload.max_k = maxKVal; }
-            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust (resolution mode)…", "info");
-            resultEl.textContent = "Running PhytClust (resolution mode)…";
-        } else {
-            payload = { newick: newickText, mode: "global", top_n: (topNVal || 1) };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (maxKVal !== null) { payload.max_k = maxKVal; }
-            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust...", "info");
-            resultEl.textContent = "Running PhytClust...";
-        }
-        clearTree();
-
-        try {
-            isRunning = true;
-            // disable Save while running
-            var saveBtn = document.getElementById('btn-save');
-            if (saveBtn) { saveBtn.disabled = true; }
-            const res = await fetch("/api/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            resultEl.textContent = JSON.stringify(data, null, 2);
-
-            if (!res.ok) {
-                showStatus("Error running PhytClust", "danger");
-            }
-
-            // Update log tab if available
-            var logEl = document.getElementById("log-output");
-            if (logEl) {
-                if (data && data.log) {
-                    logEl.textContent = data.log;
-                } else {
-                    logEl.textContent = "(no logs)";
-                }
-            }
-
-            if (data.newick && data.clusters && data.clusters.length > 0) {
-                drawTree(data.newick, data.clusters[0]);
-                showStatus("PhytClust finished.", "success");
-            } else {
-                drawTree(data.newick, null);
-                showStatus("No clusters found (likely because there are not enough samples).", "danger");
-            }
-
-            // Render Optimal k plot if scores are available
-            try {
-                if (data && data.scores) {
-                    // Remove any fixed-k message and temporary sizing before plotting
-                    var plotHostReady = document.getElementById('optimalk_plot');
-                    if (plotHostReady) {
-                        plotHostReady.innerHTML = '';
-                        plotHostReady.style.removeProperty('box-sizing');
-                    }
-                    latestOptimalKData = data;
-                    drawOptimalK(latestOptimalKData);
-                } else {
-                    // Clear plot if no scores
-                    var plotHost = document.getElementById('optimalk_plot');
-                    if (plotHost) {
-                        // Ensure full-width container before inserting message
-                        plotHost.style.width = '100%';
-                        plotHost.style.height = '420px';
-                        plotHost.style.boxSizing = 'border-box';
-                        var kDisplay = (typeof kVal === 'number' && kVal >= 1) ? kVal : 'user-defined fixed k';
-                        plotHost.innerHTML = '<div class="alert alert-info" style="width:100%; margin:0;">Optimal number of clusters plot is unavailable in fixed k mode. Using k = ' + kDisplay + ' from parameters.</div>';
-                    }
-                }
-            } catch (plotErr) {
-                console.warn('Plot rendering error:', plotErr);
-            }
-        } catch (e) {
-            console.error(e);
-            showStatus("PhytClust failed with Error: " + e, "danger");
-            resultEl.textContent = "Error: " + e;
-            var logEl = document.getElementById("log-output");
-            if (logEl) {
-                logEl.textContent = "(error encountered; no logs captured)";
-            }
-        } finally {
-            isRunning = false;
-            var saveBtn2 = document.getElementById('btn-save');
-            if (saveBtn2) { saveBtn2.disabled = false; }
-        }
-    }
-
-    function colorNodesByCluster(clusters) {
-    if (!clusters) return;
-
-    d3.selectAll("#tree_display g.node").each(function () {
-        const g = d3.select(this);
-        const label = g.select("text").text();
-        if (!label) return;
-
-        const cid = clusters[label];
-        if (cid === undefined) return;
-
-        const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-
-        // color the node shape
-        g.selectAll("circle, ellipse, rect")
-            .style("fill", color)
-            .style("stroke", "black");
-
-        // make terminal circles even bigger:
-        if (g.classed("leaf")) {
-            g.select("circle")
-                .attr("r", 10);   // <-- terminal node size override
-        }
-
-        // color text
-        g.select("text")
-            .style("fill", color)
-            .style("font-weight", "bold");
-    });
-    }
-
-    function drawTree(newick, clusters) {
-        clearTree();
-
-        // expose clusters to nodeStyler
-        CURRENT_CLUSTERS = clusters || {};
-
-        var tree = new phylotree.phylotree(newick);
-
-        tree.render({
-            container: "#tree_display",
-            "left-right-spacing": "fit-to-size",
-            "top-bottom-spacing": "fit-to-size",
-            "node-styler": nodeStyler
-        });
-
-        var svg = tree.display.show();
-        treeHost.appendChild(svg);
-    }
-
-
-    function drawOptimalK(data) {
-        // Prefer most recent data if none passed
-        if (!data) { data = latestOptimalKData; }
-        var plotEl = document.getElementById('optimalk_plot');
-        if (!plotEl) return;
-        var axisModeEl = document.getElementById('axis-mode');
-
-        var scores = data.scores || [];
-        var peaks = data.peaks || [];
-        if (!Array.isArray(scores) || scores.length === 0) {
-            plotEl.innerHTML = '<div class="alert alert-warning">No scores available to plot.</div>';
-            return;
-        }
-
-        // Build x (k) starting at 2 and y (score) arrays
-        var x = [];
-        var y = [];
-        for (var i = 0; i < scores.length; i++) {
-            x.push(i + 2);
-            y.push(scores[i+1]);
-        }
-
-        // Base line trace
-        var lineTrace = {
-            x: x,
-            y: y,
-            mode: 'lines+markers',
-            name: 'Score',
-            line: { color: '#1f77b4' },
-            marker: { size: 12 }
-        };
-
-        // Peaks trace (if any)
-        var peakXs = [];
-        var peakYs = [];
-        if (Array.isArray(peaks)) {
-            for (var p = 0; p < peaks.length; p++) {
-                var kVal = peaks[p];
-                if (typeof kVal === 'number') {
-                    var idx = kVal - 2;
-                    if (idx >= 0 && idx < y.length) {
-                        peakXs.push(kVal);
-                        peakYs.push(y[idx]);
-                    }
-                }
-            }
-        }
-
-        var peakTrace = {
-            x: peakXs,
-            y: peakYs,
-            mode: 'markers',
-            name: 'Optimal k',
-            marker: { size: 20, color: '#d62728', symbol: 'star' }
-        };
-
-        // Limit x ticks to at most 10 for large trees (linear mode default)
-        var nPoints = x.length;
-        var xDtick = Math.max(1, Math.ceil(nPoints / 10));
-        var layout = {
-            margin: { l: 50, r: 10, t: 10, b: 40 },
-            xaxis: { title: 'k (number of clusters)', tickmode: 'linear', dtick: xDtick },
-            yaxis: { title: 'Score' },
-            hovermode: 'closest'
-        };
-
-        // Apply axis mode with user override support
-        var defaultMode = (scores.length > 50) ? 'log' : 'normal';
-        var mode = defaultMode;
-        if (axisModeEl) {
-            // If the user changed the select, honor their choice
-            if (axisModeEl.__userOverride) {
-                mode = axisModeEl.value || defaultMode;
-            } else {
-                // Otherwise reflect our default in the UI
-                axisModeEl.value = defaultMode;
-            }
-        }
-        layout.xaxis.type = (mode === 'log' ? 'log' : 'linear');
-        if (mode === 'log') {
-            // Show ticks at length scales: 2, 10, 100, 1000, ... up to max x
-            var xmin = Math.min.apply(null, x);
-            var xmax = Math.max.apply(null, x);
-            var tickVals = [];
-            // Always include 2 if within range
-            if (xmin <= 2 && xmax >= 2) tickVals.push(2);
-            // Powers of 10 starting from 10 up to <= xmax
-            var pow = 1;
-            while (true) {
-                var val = Math.pow(10, pow);
-                if (val > xmax) break;
-                if (val >= xmin) tickVals.push(val);
-                pow += 1;
-            }
-            // Ensure tickmode uses provided values
-            layout.xaxis.tickmode = 'array';
-            layout.xaxis.tickvals = tickVals;
-            layout.xaxis.ticktext = tickVals.map(function(v){ return String(v); });
-        }
-
-        Plotly.newPlot(plotEl, [lineTrace, peakTrace], layout, {displayModeBar: false});
-
-        // Re-render on axis mode change
-        if (axisModeEl && !axisModeEl.__wired) {
-            axisModeEl.__wired = true;
-            axisModeEl.addEventListener('change', function(){
-                // Mark as user override so subsequent renders honor selection
-                axisModeEl.__userOverride = true;
-                // Re-render using the latest data, not the old closure
-                drawOptimalK();
-            });
-        }
-    }
-
-    function handleFileSelect(evt) {
-        var file = evt.target.files[0];
-        if (!file) return;
-        showStatus("Tree is loading", "info");
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            var text = e.target.result || "";
-            newickEl.value = text.trim();
-            showStatus("Tree successfully loaded", "success");
-        };
-        reader.readAsText(file);
-    }
-
-    // On DOM ready
-    $(function() {
-        // Help sidebar toggle
-        document.getElementById('btn-help').addEventListener('click', function(){
-            var sb = document.getElementById('help-sidebar');
-            if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
-            else { sb.style.display = 'none'; }
-        });
-        document.getElementById('btn-help-close').addEventListener('click', function(){
-            document.getElementById('help-sidebar').style.display = 'none';
-        });
-        $("#app-loading").hide();
-        showStatus("Application loaded. Example tree is prefilled.", "info");
-
-        // Wire controls
-        document.getElementById("file-input").addEventListener("change", handleFileSelect);
-        document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
-        document.getElementById("btn-save").addEventListener("click", async function(e){
-            e.preventDefault();
-            if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
-            var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
-            if (!fname) { fname = "phytclust_results.tsv"; }
-
-            // Prefer client-side save using File System Access API if available
-            if (window.showDirectoryPicker) {
-                try {
-                    const dirHandle = await window.showDirectoryPicker();
-                    const res = await fetch('/api/export_tsv', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    if (!res.ok) {
-                        const errData = await res.json().catch(() => ({}));
-                        const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
-                        showStatus(msg, 'danger');
-                        return;
-                    }
-                    const text = await res.text();
-                    const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                    showStatus('Saved ' + fname + ' to selected directory', 'success');
-                } catch (err) {
-                    // Fallback to server-side save if user cancels picker or API not permitted
-                    if (err && err.name === 'AbortError') { return; }
-                    // fallback: server-side save using provided output directory field
-                    try {
-                        var dirInput = document.getElementById('output-dir');
-                        var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
-                        const res2 = await fetch('/api/save', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                results_dir: dir,
-                                filename: fname,
-                                top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                                outlier: true,
-                                output_all: false
-                            })
-                        });
-                        const data2 = await res2.json();
-                        if (!res2.ok) {
-                            var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
-                            showStatus(msg2, 'danger');
-                        } else {
-                            showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
-                        }
-                    } catch (err2) {
-                        showStatus('Save error: ' + err2, 'danger');
-                    }
-                }
-            } else {
-                // Legacy fallback: server-side save to specified directory
-                try {
-                    var dirInputF = document.getElementById('output-dir');
-                    var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
-                    const res3 = await fetch('/api/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            results_dir: dirF,
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    const data3 = await res3.json();
-                    if (!res3.ok) {
-                        var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
-                        showStatus(msg3, 'danger');
-                    } else {
-                        showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
-                    }
-                } catch (err3) {
-                    showStatus('Save error: ' + err3, 'danger');
-                }
-            }
-        });
-        // Example tree loads automatically on start; no manual button needed
-
-        var resetBtn = document.getElementById("btn-extra-reset");
-        if (resetBtn) {
-            resetBtn.addEventListener("click", function(e){ e.preventDefault(); resetExtraParams(); });
-        }
-
-        // Help sidebar: load example tree button
-        var helpExampleBtn = document.getElementById('btn-help-load-example');
-        if (helpExampleBtn) {
-            helpExampleBtn.addEventListener('click', function(e){
-                e.preventDefault();
-                showStatus("tree is loading", "info");
-                newickEl.value = EXAMPLE_NEWICK;
-                showStatus("tree was loaded", "success");
-                // Optionally trigger a run so users immediately see results
-                runPhytClust();
-            });
-        }
-
-        // Indicate loading when user types/pastes Newick, then loaded shortly after
-        var loadTimer = null;
-        newickEl.addEventListener('input', function(){
-            if (loadTimer) { clearTimeout(loadTimer); }
-            showStatus("tree is loading", "info");
-            loadTimer = setTimeout(function(){
-                showStatus("tree was loaded", "success");
-            }, 250);
-        });
-
-        // Toggle plus/minus icon on extra parameters collapse
-        $('#extra-params').on('shown.bs.collapse', function () {
-            $('#extra-params-icon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
-        });
-        $('#extra-params').on('hidden.bs.collapse', function () {
-            $('#extra-params-icon').removeClass('glyphicon-minus').addClass('glyphicon-plus');
-        });
-
-        // Prefill example and auto-run once for convenience
-        newickEl.value = EXAMPLE_NEWICK;
-        runPhytClust();
-
-            // Ensure Plotly resizes properly when tab becomes visible
-            $('a[href="#viewer-optimal-k"]').on('shown.bs.tab', function(){
-                if (window.Plotly && document.getElementById('optimalk_plot')) {
-                    try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
-                }
-            });
-    });
-</script>
+    <!-- Your tree visualisation logic -->
+    <script src="/static/tree_viz.js"></script>
 
 </body>
+
 </html>
