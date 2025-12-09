@@ -23,7 +23,7 @@
     <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
     <style>
-        body { padding: 20px; }
+        body { padding: 0px; }
 
         .tree-wrapper {
             border: 1px solid #ddd;
@@ -42,13 +42,20 @@
         .controls { margin-bottom: 15px; }
         .small-note { font-size: 11px; color: #777; }
         .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
+
+        .header-bar {
+            background: #F2F2F2;         /* light grey background */
+            border-bottom: 1px solid #000; /* thin black line */
+            padding: 15px 10px 10px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container-fluid">
-    <!-- Header: logo top-left, helper text below -->
-    <div class="row">
+<!-- Header: logo top-left, helper text below -->
+<div class="header-bar">
+    <div class="row" style="padding-left:40px">
         <div class="col-xs-8">
             <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
             <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
@@ -58,6 +65,12 @@
             <button id="btn-help" class="btn btn-info" style="margin-top:8px;">Help</button>
         </div>
     </div>
+</div>
+
+<div class="container-fluid" style="padding:40px">
+
+
+
 
     <!-- Loader and parameters stacked below header -->
     <div class="row">
