@@ -7,6 +7,9 @@ var resultEl = document.getElementById("result");
 var statusEl = document.getElementById("status-message");
 var treeHost = document.getElementById("tree_display");
 
+let TREE_WIDTH_SCALE = 1.0;
+let TREE_HEIGHT_SCALE = 1.0;
+
 const BASE_COLORS = [
         "#b84b4b",
         "#849060",
@@ -30,8 +33,8 @@ const BASE_COLORS = [
     let CLUSTER_COLORS = [];
     let CURRENT_CLUSTERS = {};
     let NEWICK_RAW_TREE = null;
-    let CURRENT_LAYOUT_MODE = 'cladogram';
-    let COLOR_MODE = 'nodes';
+    let CURRENT_LAYOUT_MODE = 'rectangular';
+    let COLOR_MODE = 'bars';
 
 
 
@@ -316,10 +319,9 @@ async function runPhytClust() {
         console.error(e);
         showStatus("PhytClust failed with Error: " + e, "danger");
         resultEl.textContent = "Error: " + e;
-        var logEl2 = document.getElementById("log-output");
-        if (logEl2) {
-            logEl2.textContent = "(error encountered; no logs captured)";
-        }
+        latestOptimalKData = null;
+        let plotHost = document.getElementById("optimalk_plot");
+        if (plotHost) plotHost.innerHTML = "";
     } finally {
         isRunning = false;
         var saveBtn2 = document.getElementById('btn-save');
@@ -438,8 +440,8 @@ function drawTree() {
     clearTree();
     if (!NEWICK_RAW_TREE) return;
 
-    var layoutMode = CURRENT_LAYOUT_MODE || 'cladogram';
-    var colorMode = COLOR_MODE || 'nodes';
+    var layoutMode = CURRENT_LAYOUT_MODE || 'rectangular';
+    var colorMode = COLOR_MODE || 'bars';
     var container = d3.select("#tree_display");
     var width = treeHost.clientWidth || 800;
     var height = treeHost.clientHeight || 500;
@@ -452,11 +454,17 @@ function drawTree() {
     var zoomLayer = svg.append("g");
     var g = zoomLayer.append("g");
 
-    if (layoutMode === "circular") {
-        g.attr("transform", "translate(" + (width / 2) + "," + (height / 2) + ")");
-    } else {
-        g.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-    }
+    g.attr("transform",
+        (layoutMode === "circular")
+            ? `translate(${width/2},${height/2})`
+            : `translate(${margin.left},${margin.top})`
+    );
+
+    // if (layoutMode === "circular") {
+    //     g.attr("transform", "translate(" + (width / 2) + "," + (height / 2) + ")");
+    // } else {
+    //     g.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    // }
 
     var zoom = d3.zoom()
         .scaleExtent([0.5, 5])
@@ -500,7 +508,10 @@ function drawTree() {
         function radialPoint(d) {
             var angle = (d._angle || 0) - Math.PI / 2;
             var r = d._radius || 0;
-            return [r * Math.cos(angle), r * Math.sin(angle)];
+            return [
+                (r * Math.cos(angle)) * TREE_WIDTH_SCALE,
+                (r * Math.sin(angle)) * TREE_HEIGHT_SCALE
+            ];
         }
 
         var link = g.append("g")
@@ -608,14 +619,12 @@ function drawTree() {
     .attr("d", function (d) {
 
         if (layoutMode === "rectangular") {
-            // elbow ( ┘ shape )
-            return "M" + d.source._y + "," + d.source._x +
-                   "V" + d.target._x +
-                   "H" + d.target._y;
+            return "M" + (d.source._y * TREE_WIDTH_SCALE) + "," + (d.source._x * TREE_HEIGHT_SCALE) +
+            "V" + (d.target._x * TREE_HEIGHT_SCALE) +
+            "H" + (d.target._y * TREE_WIDTH_SCALE);
         } else {
-            // cladogram (straight line)
-            return "M" + d.source._y + "," + d.source._x +
-                   "L" + d.target._y + "," + d.target._x;
+            return "M" + (d.source._y * TREE_WIDTH_SCALE) + "," + (d.source._x * TREE_HEIGHT_SCALE) +
+            "L" + (d.target._y * TREE_WIDTH_SCALE) + "," + (d.target._x * TREE_HEIGHT_SCALE);
         }
     });
 
@@ -626,7 +635,9 @@ function drawTree() {
         .enter().append("g")
         .attr("class", "tree-node")
         .attr("transform", function (d) {
-            return "translate(" + (d._y || 0) + "," + (d._x || 0) + ")";
+            const x = (d._y || 0) * TREE_WIDTH_SCALE;
+            const y = (d._x || 0) * TREE_HEIGHT_SCALE;
+            return `translate(${x},${y})`;
         });
 
     node.append("circle")
@@ -767,11 +778,11 @@ function drawTree() {
                 : CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
 
             labelsG.append("rect")
-                .attr("x", labelColumnX)
-                .attr("y", top)
-                .attr("width", labelWidth)
-                .attr("height", bottom - top)
-                .attr("fill", color);
+            .attr("x", labelColumnX * TREE_WIDTH_SCALE)
+            .attr("y", top * TREE_HEIGHT_SCALE)
+            .attr("width", labelWidth)
+            .attr("height", (bottom - top) * TREE_HEIGHT_SCALE)
+            .attr("fill", color);
 
                 const totalLeaves = leafNodes.length;
                 const clusterSize = info.lastIndex - info.firstIndex + 1;
@@ -779,8 +790,8 @@ function drawTree() {
                 // Only label clusters ≥ 10% of total leaves
                 if (clusterSize / totalLeaves >= 0.10) {
                     labelsG.append("text")
-                        .attr("x", labelColumnX + labelWidth + 4)
-                        .attr("y", labelY)
+                        .attr("x", (labelColumnX + labelWidth + 4) * TREE_WIDTH_SCALE)
+                        .attr("y", labelY * TREE_HEIGHT_SCALE)
                         .attr("dominant-baseline", "middle")
                         .attr("font-size", 10)
                         .text("C" + cid);
@@ -1032,7 +1043,7 @@ function drawOptimalK(data) {
         axisModeEl.__wired = true;
         axisModeEl.addEventListener('change', function () {
             axisModeEl.__userOverride = true;
-            drawOptimalK(); 
+            drawOptimalK();
         });
     }
 }
@@ -1329,5 +1340,17 @@ $(function () {
             }
         });
     }
+    const widthScaleInput  = document.getElementById("tree-width-scale");
+    const heightScaleInput = document.getElementById("tree-height-scale");
+
+    widthScaleInput.addEventListener("input", function () {
+        TREE_WIDTH_SCALE = parseFloat(this.value);
+        drawTree();
+    });
+
+    heightScaleInput.addEventListener("input", function () {
+        TREE_HEIGHT_SCALE = parseFloat(this.value);
+        drawTree();
+    });
     }
 });
