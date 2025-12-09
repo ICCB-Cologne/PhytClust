@@ -193,7 +193,7 @@ def find_score_peaks(
     k_start = k_start if k_start is not None else 1
     k_end = k_end if k_end is not None else len(scores)
     if not (0 <= k_start < len(scores)):
-        raise ValueError(f"k_start must be between 0 and {len(scores)-1}.")
+        raise ValueError(f"k_start ({k_start}) must be between 0 and {len(scores)-1}.")
     if not (k_start < k_end <= len(scores)):
         raise ValueError(f"k_end must be <= {len(scores)} and > k_start.")
 

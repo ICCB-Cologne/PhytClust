@@ -52,6 +52,14 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError("value must be ≥ 1")
     return ivalue
 
+def _min_int(min_value: int):
+    def _check(value: str) -> int:
+        ivalue = int(value)
+        if ivalue < min_value:
+            raise argparse.ArgumentTypeError(f"value must be ≥ {min_value}")
+        return ivalue
+    return _check
+
 
 def _existing_path_or_stdin(p: str) -> pathlib.Path | str:
     if p == "-":
@@ -308,7 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-k",
         "--k",
-        type=_positive_int,
+        type=_min_int(2),
         help="Exact k-way partition. If given, overrides --top-n/--resolution.",
     )
     p.add_argument(
@@ -330,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--max-k",
-        type=_positive_int,
+        type=_min_int(4),
         help="Upper bound for k in peak search (global or resolution modes).",
     )
     p.add_argument(
