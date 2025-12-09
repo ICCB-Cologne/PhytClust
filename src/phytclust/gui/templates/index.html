@@ -45,13 +45,21 @@
 <body>
 
 <div class="container-fluid">
-    <div class="row controls"></div>
-        <div class="col-md-6">
-            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:240px; height:auto; width:auto; display:block; margin-bottom:8px; float:left;" />
-            <!-- <p class="text-muted">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p> -->
-            <!-- <div style="clear: both;"></div> -->
+    <!-- Header: logo top-left, helper text below -->
+    <div class="row">
+        <div class="col-xs-8">
+            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:180px; height:auto; width:auto; display:block; margin-bottom:8px;" />
+            <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
         </div>
-        <div class="col-md-6">
+        <div class="col-xs-4" style="text-align:right;">
+            <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px;">About</button>
+            <button id="btn-help" class="btn btn-info" style="margin-top:8px;">Help</button>
+        </div>
+    </div>
+
+    <!-- Loader and parameters stacked below header -->
+    <div class="row">
+        <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
             <h4>Load tree</h4>
 
             <form class="form-inline" onsubmit="return false;">
@@ -62,37 +70,55 @@
                 <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
             </form>
 
-                    <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
-            <textarea id="newick-input" class="form-control" rows="4" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+            <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
+            <textarea id="newick-input" class="form-control" rows="2" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
 
-                    <!-- Extra parameters toggle -->
-                    <div style="margin-top: 10px;">
-                        <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle">
-                            <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
-                            &nbsp;Extra parameters
-                        </a>
-                    </div>
+            <!-- Extra parameters toggle -->
+            <div style="margin-top: 10px;">
+                <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle">
+                    <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
+                    &nbsp;Extra parameters
+                </a>
+            </div>
 
-                    <div class="collapse" id="extra-params" style="margin-top:10px;">
-                        <div class="panel panel-default">
-                            <div class="panel-body">
-                                <div class="form-group">
-                                    <label for="extra-k">Number of clusters</label>
-                                    <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
-                                    <p class="small-note">Optional. Integer ≥ 1.</p>
-                                </div>
-                                <div class="form-group">
-                                    <label for="extra-outgroup">Outgroup</label>
-                                    <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
-                                    <p class="small-note">Optional. Any leaf node from the tree.</p>
-                                </div>
-                            </div>
+            <div class="collapse" id="extra-params" style="margin-top:10px;">
+                <div class="panel panel-default">
+                    <div class="panel-body">
+                        <div class="form-group">
+                            <label for="extra-k">Number of clusters</label>
+                            <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
+                            <p class="small-note">Optional. Integer ≥ 1.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-outgroup">Outgroup</label>
+                            <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
+                            <p class="small-note">Optional. Any leaf node from the tree.</p>
                         </div>
                     </div>
+                </div>
+            </div>
 
             <div style="margin-top: 10px;">
                 <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
                 <button id="btn-load-example" class="btn btn-default btn-sm">Load example tree</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
+                </div>
+                <div class="modal-body">
+                    <p>TODO.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                </div>
             </div>
         </div>
     </div>
@@ -106,8 +132,7 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs" role="tablist">
         <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
-        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal k</a></li>
-        <li><a href="#help" role="tab" data-toggle="tab">Help</a></li>
+        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal nr of cluster</a></li>
         <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
         <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
     </ul>
@@ -116,7 +141,6 @@
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
-            <h4>Tree</h4>
             <div class="tree-wrapper">
                 <div id="tree_display"></div>
             </div>
@@ -128,10 +152,13 @@
             <p>TODO </p>
         </div>
 
-        <!-- Help Tab -->
-        <div class="tab-pane" id="help">
-            <div class="help-section">
-                <h3>Help</h3>
+        <!-- Help Sidebar (off-canvas style) -->
+        <div id="help-sidebar" style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
+            <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
+                <strong>Help</strong>
+                <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>
+            </div>
+            <div class="help-section" style="padding:12px;">
                 <h4>1. Input format</h4>
                 <ul>
                     <li>Trees must be in <strong>Newick</strong> format.</li>
@@ -141,8 +168,9 @@
                 <h4>2. How to use</h4>
                 <ol>
                     <li>Upload a Newick file or paste a Newick string.</li>
+                    <li>Set optional parameters (k, outgroup) as needed.</li>
                     <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
-                    <li>View the JSON response and tree rendering.</li>
+                    <li>View the Tree, JSON, and Logs in their tabs.</li>
                 </ol>
                 <h4>3. Notes</h4>
                 <ul>
@@ -286,8 +314,8 @@
                 drawTree(data.newick, data.clusters[0]);
                 showStatus("Rendering finished.", "success");
             } else {
-                treeHost.innerHTML = "(no clusters in response)";
-                showStatus("No clusters returned.", "warning");
+                drawTree(data.newick, null);
+                showStatus("No clusters found (likely because there are not enough samples).", "danger");
             }
         } catch (e) {
             console.error(e);
@@ -327,6 +355,15 @@
 
     // On DOM ready
     $(function() {
+                // Help sidebar toggle
+                document.getElementById('btn-help').addEventListener('click', function(){
+                    var sb = document.getElementById('help-sidebar');
+                    if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
+                    else { sb.style.display = 'none'; }
+                });
+                document.getElementById('btn-help-close').addEventListener('click', function(){
+                    document.getElementById('help-sidebar').style.display = 'none';
+                });
         $("#app-loading").hide();
         showStatus("Application loaded. Example tree is prefilled.", "info");
 
