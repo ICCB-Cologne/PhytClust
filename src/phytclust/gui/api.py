@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from phytclust.algo.core import PhytClust
 import tempfile
 from pathlib import Path
+import logging
 
 # ------------------------------------------------------
 # Create the FastAPI app
@@ -24,6 +25,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Keep the last PhytClust instance and result in memory (simple session)
 LAST_PC: Optional[PhytClust] = None
 LAST_RESULT: Optional[Dict[str, Any]] = None
+LOG = logging.getLogger("phytclust.gui.api")
 
 
 # ------------------------------------------------------
@@ -146,15 +148,20 @@ def run_phytclust(req: PhytclustRequest):
         except Exception:
             pass
 
+    # LOG.info("pc summary: %s", str(pc))
+    # LOG.info("bin_ranges_current: %s", pc.get("bin_ranges_current", None))
+    
+    # Log pc.get("bin_ranges_current", None) here!
     payload = {
         "mode": result.get("mode"),
         "k": result.get("k"),
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
         "outgroup": result.get("outgroup"),
+        # "bin_ranges_current": str(pc.get("bin_ranges_current", None)),
+        "newick": req.newick,
         "scores": scores,
         "clusters": clusters_json,
-        "newick": req.newick,
     }
 
     # store last instance and result for use by /api/save

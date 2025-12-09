@@ -33,7 +33,7 @@ except Exception:
 
 console = Console() if Console else None
 
-LOG = logging.getLogger("phytclust.cli")
+logger = logging.getLogger("phytclust.cli")
 
 
 def print_banner():
@@ -43,7 +43,7 @@ def print_banner():
         text = logo_path.read_text(encoding="utf-8")
         print(text)
     except Exception:
-        LOG.debug("ascii_logo.txt not found; skipping banner.")
+        logger.debug("ascii_logo.txt not found; skipping banner.")
 
 
 def _positive_int(value: str) -> int:
@@ -95,7 +95,7 @@ def _load_config(path: pathlib.Path | None) -> dict:
 
             return json.loads(text or "{}")
     except Exception as exc:
-        LOG.warning("Could not read config %s: %s", path, exc)
+        logger.warning("Could not read config %s: %s", path, exc)
         return {}
 
 
@@ -132,7 +132,7 @@ def _add_common_run_flags(sp: argparse.ArgumentParser) -> None:
 
 
 def _configure_logging(
-    verbosity: int, quiet: int, no_color: bool, log_format: str
+    verbosity: int, quiet: int, debug: int, no_color: bool, log_format: str
 ) -> None:
     """
     Configure a single handler for the 'phytclust' logger hierarchy so that
@@ -142,7 +142,7 @@ def _configure_logging(
     level = logging.WARNING
     if verbosity > 0:
         level = logging.INFO
-    if verbosity > 1:
+    if debug > 0:
         level = logging.DEBUG
     if quiet > 0:
         level = logging.ERROR
@@ -150,6 +150,7 @@ def _configure_logging(
         level = logging.CRITICAL
 
     # Remove any existing handlers (avoid duplicate logs during tests)
+    # Use the lowercase package root so all submodules inherit correctly
     root = logging.getLogger("phytclust")
     root.handlers.clear()
     root.setLevel(level)
@@ -211,7 +212,7 @@ class phase:
         if self.enabled and self.status:
             self.status.stop()
         # single source of truth for timing lines:
-        LOG.info("⏱ %s: %.3fs", self.label, dt)
+        logger.debug("⏱ %s: %.3fs", self.label, dt)
 
 
 # def phase(enabled: bool, label: str):
@@ -228,7 +229,7 @@ class phase:
 #         def __exit__(self, exc_type, exc, tb):
 #             if enabled:
 #                 dt = time.perf_counter() - self.t0
-#                 LOG.info("⏱ %s: %.3fs", label, dt)
+#                 logger.info("⏱ %s: %.3fs", label, dt)
 
 #     return _Ctx()
 
@@ -277,7 +278,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="count",
         default=0,
-        help="Increase logging verbosity (-vv for DEBUG).",
+        help="Increase logging verbosity.",
+    )
+    p.add_argument(
+        "-d",
+        "--debug",
+        action="count",
+        default=0,
+        help="Max logging verbosity.",
     )
     p.add_argument(
         "-q",
@@ -367,7 +375,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    _configure_logging(args.verbose, args.quiet, args.no_color, args.log_format)
+    _configure_logging(args.verbose, args.quiet, args.debug, args.no_color, args.log_format)
+    logger.debug("logging configured (level may be adjusted via -v/-q)")
 
     print_banner()
 
@@ -381,7 +390,7 @@ def main(argv: list[str] | None = None) -> None:
         try:
             args.out_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            LOG.error("Cannot create output directory '%s': %s", args.out_dir, exc)
+            logger.error("Cannot create output directory '%s': %s", args.out_dir, exc)
             sys.exit(2)
 
     # Load tree
@@ -390,20 +399,20 @@ def main(argv: list[str] | None = None) -> None:
             handle: Any = sys.stdin if args.tree == "-" else args.tree
             tree = Phylo.read(handle, "newick")
     except Exception as exc:
-        LOG.error("Cannot read tree: %s", exc)
+        logger.error("Cannot read tree: %s", exc)
         sys.exit(2)
 
     try:
         with phase(args.time or args.progress, "initialization"):
             pc = PhytClust(tree=tree, outgroup=args.outgroup)
-        LOG.info("Tree terminals (after outgroup handling): %d", pc.num_terminals)
+        logger.info("Tree terminals (after outgroup handling): %d", pc.num_terminals)
     except Exception as exc:
-        LOG.error("Failed to initialize PhytClust: %s", exc)
+        logger.error("Failed to initialize PhytClust: %s", exc)
         sys.exit(1)
 
     try:
         with phase(args.time or args.progress, "clustering"):
-            LOG.info(
+            logger.info(
                 "Running PhytClust (k=%s, top_n=%d, resolution=%s, max_k=%s)…",
                 args.k or "auto",
                 args.top_n,
@@ -424,10 +433,10 @@ def main(argv: list[str] | None = None) -> None:
             pc.run(**run_kwargs)
 
     except ValueError as e:
-        LOG.error("Clustering failed: %s", e)
+        logger.error("Clustering failed: %s", e)
         sys.exit(1)
     except Exception as exc:
-        LOG.error("Unexpected error during clustering: %s", exc)
+        logger.error("Unexpected error during clustering: %s", exc)
         sys.exit(1)
 
     try:
@@ -442,7 +451,7 @@ def main(argv: list[str] | None = None) -> None:
                     **plot_cfg,
                 )
     except Exception as exc:
-        LOG.warning("Plotting encountered a problem: %s", exc)
+        logger.warning("Plotting encountered a problem: %s", exc)
 
     if not args.no_tsv:
         try:
@@ -455,10 +464,10 @@ def main(argv: list[str] | None = None) -> None:
                     **save_cfg,
                 )
         except Exception as exc:
-            LOG.error("Failed to write tsv: %s", exc)
+            logger.error("Failed to write tsv: %s", exc)
             sys.exit(1)
 
     if args.time:
-        LOG.info("Total runtime: %.3fs", time.perf_counter() - t0_total)
+        logger.info("Total runtime: %.3fs", time.perf_counter() - t0_total)
 
-    LOG.info("Done.")
+    logger.info("Done.")

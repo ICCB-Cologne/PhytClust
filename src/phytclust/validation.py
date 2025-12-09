@@ -9,6 +9,7 @@ from Bio import Phylo
 from Bio.Phylo.BaseTree import Clade, Tree
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def validate_and_set_outgroup(

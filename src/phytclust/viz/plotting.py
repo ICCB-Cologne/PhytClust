@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 COLORS = {
     "allele_a": mpl.colors.to_rgba("orange"),

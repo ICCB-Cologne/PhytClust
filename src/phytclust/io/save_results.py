@@ -1,8 +1,13 @@
 import os
+import logging
 from typing import Any, Optional
 import pandas as pd
 
 from ..algo.dp import cluster_map
+
+logger = logging.getLogger("Save results")
+logger.setLevel(logging.INFO)
+print(logger)
 
 
 def save_clusters(
@@ -48,7 +53,7 @@ def save_clusters(
             records.append({"Node Name": node.name, "k": k_val, "Cluster ID": mark})
 
     if not records:
-        print("No clusters to save.")
+        logger.info("No clusters to save.")
         return
 
     df = pd.DataFrame(records)
@@ -58,10 +63,10 @@ def save_clusters(
     pivot.columns = [f"clusters_k{col}" for col in pivot.columns]
     pivot.reset_index(inplace=True)
     pivot.to_csv(os.path.join(results_dir, filename), index=False, sep="\t")
-    print(f"Wrote clusters to {filename}")
+    logger.info(f"Wrote clusters to {filename}")
 
     if getattr(pc, "peaks_by_rank", None):
         with open(os.path.join(results_dir, "peaks_by_rank.txt"), "w") as fh:
             for rank, k_val in enumerate(pc.peaks_by_rank, 1):
                 fh.write(f"Rank {rank}: {k_val} clusters\n")
-        print("Wrote peaks_by_rank.txt")
+        logger.info("Wrote peaks_by_rank.txt")

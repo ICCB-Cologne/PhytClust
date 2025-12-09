@@ -20,7 +20,8 @@ from ..algo.scoring import calculate_scores, find_score_peaks
 from ..viz.cluster_plot import plot_clusters
 from ..io.save_results import save_clusters
 
-logger = logging.getLogger("phytclust")
+logger = logging.getLogger("PhytClust")
+logger.setLevel(logging.INFO)
 
 IntMap = Dict[Any, int]
 

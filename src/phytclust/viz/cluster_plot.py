@@ -1,10 +1,13 @@
 import os
+import logging
 from typing import Optional, Dict, Any, List, Tuple
 import matplotlib.pyplot as plt
 
 from ..algo.dp import cluster_map
 from .plotting import plot_cluster
 
+logger = logging.getLogger("Cluster plotter")
+logger.setLevel(logging.INFO)
 
 def plot_clusters(
     pc,
@@ -25,11 +28,11 @@ def plot_clusters(
     **kwargs,
 ) -> None:
     if pc.clusters is None:
-        print("No clusters to plot – run get_clusters / best_* first.")
+        logger.info("No clusters to plot – run get_clusters / best_* first.")
         return
 
     if pc.k is None and (pc.scores is None):
-        print("Scores not available – continuing without a score plot.")
+        logger.info("Scores not available – continuing without a score plot.")
 
     clusters_to_plot: list[tuple[int, dict]] = []
 
@@ -48,7 +51,7 @@ def plot_clusters(
                 clusters_to_plot.append((k_val, clmap))
 
     if not clusters_to_plot:
-        print("No clusters to plot – check your arguments.")
+        logger.info("No clusters to plot – check your arguments.")
         return
 
     if (save or results_dir) and results_dir is not None:
@@ -71,10 +74,10 @@ def plot_clusters(
             results_dir=None,
             **kwargs,
         )
-        print(f"Plotted clusters for k={k_val}.")
+        logger.info(f"Plotted clusters for k={k_val}.")
 
         if save or results_dir:
             out_dir = results_dir or "."
             out_name = filename or f"tree_k{k_val}.png"
             fig.savefig(os.path.join(out_dir, out_name), bbox_inches="tight")
-            print(f"Saved figure → {os.path.join(out_dir, out_name)}")
+            logger.info(f"Saved figure → {os.path.join(out_dir, out_name)}")
