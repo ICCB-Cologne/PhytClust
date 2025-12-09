@@ -634,15 +634,15 @@
 
     // On DOM ready
     $(function() {
-                // Help sidebar toggle
-                document.getElementById('btn-help').addEventListener('click', function(){
-                    var sb = document.getElementById('help-sidebar');
-                    if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
-                    else { sb.style.display = 'none'; }
-                });
-                document.getElementById('btn-help-close').addEventListener('click', function(){
-                    document.getElementById('help-sidebar').style.display = 'none';
-                });
+        // Help sidebar toggle
+        document.getElementById('btn-help').addEventListener('click', function(){
+            var sb = document.getElementById('help-sidebar');
+            if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
+            else { sb.style.display = 'none'; }
+        });
+        document.getElementById('btn-help-close').addEventListener('click', function(){
+            document.getElementById('help-sidebar').style.display = 'none';
+        });
         $("#app-loading").hide();
         showStatus("Application loaded. Example tree is prefilled.", "info");
 
