@@ -42,6 +42,7 @@
         .controls { margin-bottom: 15px; }
         .small-note { font-size: 11px; color: #777; }
         .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
+
     </style>
 </head>
 <body>
@@ -262,6 +263,52 @@
     var resultEl = document.getElementById("result");
     var statusEl = document.getElementById("status-message");
     var treeHost = document.getElementById("tree_display");
+
+    const CLUSTER_COLORS = [
+        "#1f77b4", "#d62728", "#2ca02c", "#9467bd",
+        "#ff7f0e", "#8c564b", "#e377c2", "#17becf"
+    ];
+
+    let CURRENT_CLUSTERS = {};
+
+    function nodeStyler(selection, node) {
+        const isLeaf = !node.children || node.children.length === 0;
+        const name = node.data && node.data.name;
+
+        // --- ensure there is a circle ---
+        let circle = selection.select("circle");
+        if (circle.empty()) {
+            circle = selection.append("circle");
+        }
+
+        // --- size: adjust to your liking ---
+        const baseR = isLeaf ? 5 : 3;   // smaller circle sizes
+        circle.attr("r", baseR);
+
+        // --- color by cluster ---
+        const cid = name && CURRENT_CLUSTERS && CURRENT_CLUSTERS[name];
+        if (cid !== undefined) {
+            const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
+            circle
+                .style("fill", color)
+                .style("stroke", "black")
+                .style("stroke-width", "1px");
+        } else {
+            circle
+                .style("fill", isLeaf ? "steelblue" : "#ccc")
+                .style("stroke", "black")
+                .style("stroke-width", "0.5px");
+        }
+
+        // --- shift labels to the right ---
+        const labelShift = baseR + 6;
+        selection.select("text")
+            .attr("dx", labelShift)
+            .style("font-weight", cid !== undefined ? "bold" : null)
+            .style("fill", cid !== undefined ? CLUSTER_COLORS[cid % CLUSTER_COLORS.length] : null);
+    }
+
+
     var statusHideTimeout = null;
     var isRunning = false;
     var extraKEl = document.getElementById("extra-k");
@@ -272,7 +319,7 @@
     var extraMaxKEl = document.getElementById("extra-maxk");
     var extraMaxKLimitEl = document.getElementById("extra-maxklimit");
     var extraLambdaEl = document.getElementById("extra-lambda");
-    
+
     function resetExtraParams() {
         if (extraKEl) extraKEl.value = "";
         if (extraOutgroupEl) extraOutgroupEl.value = "";
@@ -507,18 +554,56 @@
         }
     }
 
+    function colorNodesByCluster(clusters) {
+    if (!clusters) return;
+
+    d3.selectAll("#tree_display g.node").each(function () {
+        const g = d3.select(this);
+        const label = g.select("text").text();
+        if (!label) return;
+
+        const cid = clusters[label];
+        if (cid === undefined) return;
+
+        const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
+
+        // color the node shape
+        g.selectAll("circle, ellipse, rect")
+            .style("fill", color)
+            .style("stroke", "black");
+
+        // make terminal circles even bigger:
+        if (g.classed("leaf")) {
+            g.select("circle")
+                .attr("r", 10);   // <-- terminal node size override
+        }
+
+        // color text
+        g.select("text")
+            .style("fill", color)
+            .style("font-weight", "bold");
+    });
+    }
+
     function drawTree(newick, clusters) {
         clearTree();
-        // Use existing phylotree API (as before)
+
+        // expose clusters to nodeStyler
+        CURRENT_CLUSTERS = clusters || {};
+
         var tree = new phylotree.phylotree(newick);
+
         tree.render({
             container: "#tree_display",
             "left-right-spacing": "fit-to-size",
-            "top-bottom-spacing": "fit-to-size"
+            "top-bottom-spacing": "fit-to-size",
+            "node-styler": nodeStyler
         });
+
         var svg = tree.display.show();
         treeHost.appendChild(svg);
     }
+
 
     function drawOptimalK(data) {
         // Prefer most recent data if none passed
