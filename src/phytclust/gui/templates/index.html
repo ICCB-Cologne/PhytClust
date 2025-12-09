@@ -140,6 +140,11 @@
 
             <div style="margin-top: 10px;">
                 <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
+                <button id="btn-save" class="btn btn-primary btn-sm">Save</button>
+                <div class="form-inline" style="margin-top:8px;">
+                    <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
+                    <input type="text" id="output-dir" class="form-control input-sm" placeholder="results" style="width:220px;">
+                </div>
             </div>
         </div>
     </div>
@@ -258,6 +263,7 @@
     var statusEl = document.getElementById("status-message");
     var treeHost = document.getElementById("tree_display");
     var statusHideTimeout = null;
+    var isRunning = false;
     var extraKEl = document.getElementById("extra-k");
     var extraOutgroupEl = document.getElementById("extra-outgroup");
     var extraTopNEl = document.getElementById("extra-topn");
@@ -328,6 +334,7 @@
     }
 
     async function runPhytClust() {
+        if (isRunning) { return; }
         var newickText = (newickEl.value || "").trim();
         if (!newickText) {
             alert("Please upload a Newick tree file or paste a Newick string.");
@@ -425,6 +432,10 @@
         clearTree();
 
         try {
+            isRunning = true;
+            // disable Save while running
+            var saveBtn = document.getElementById('btn-save');
+            if (saveBtn) { saveBtn.disabled = true; }
             const res = await fetch("/api/run", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -489,6 +500,10 @@
             if (logEl) {
                 logEl.textContent = "(error encountered; no logs captured)";
             }
+        } finally {
+            isRunning = false;
+            var saveBtn2 = document.getElementById('btn-save');
+            if (saveBtn2) { saveBtn2.disabled = false; }
         }
     }
 
@@ -649,6 +664,95 @@
         // Wire controls
         document.getElementById("file-input").addEventListener("change", handleFileSelect);
         document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
+        document.getElementById("btn-save").addEventListener("click", async function(e){
+            e.preventDefault();
+            if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
+            var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
+            if (!fname) { fname = "phytclust_results.tsv"; }
+
+            // Prefer client-side save using File System Access API if available
+            if (window.showDirectoryPicker) {
+                try {
+                    const dirHandle = await window.showDirectoryPicker();
+                    const res = await fetch('/api/export_tsv', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            filename: fname,
+                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+                            outlier: true,
+                            output_all: false
+                        })
+                    });
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
+                        showStatus(msg, 'danger');
+                        return;
+                    }
+                    const text = await res.text();
+                    const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(text);
+                    await writable.close();
+                    showStatus('Saved ' + fname + ' to selected directory', 'success');
+                } catch (err) {
+                    // Fallback to server-side save if user cancels picker or API not permitted
+                    if (err && err.name === 'AbortError') { return; }
+                    // fallback: server-side save using provided output directory field
+                    try {
+                        var dirInput = document.getElementById('output-dir');
+                        var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
+                        const res2 = await fetch('/api/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                results_dir: dir,
+                                filename: fname,
+                                top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+                                outlier: true,
+                                output_all: false
+                            })
+                        });
+                        const data2 = await res2.json();
+                        if (!res2.ok) {
+                            var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
+                            showStatus(msg2, 'danger');
+                        } else {
+                            showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
+                        }
+                    } catch (err2) {
+                        showStatus('Save error: ' + err2, 'danger');
+                    }
+                }
+            } else {
+                // Legacy fallback: server-side save to specified directory
+                try {
+                    var dirInputF = document.getElementById('output-dir');
+                    var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
+                    const res3 = await fetch('/api/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            results_dir: dirF,
+                            filename: fname,
+                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+                            outlier: true,
+                            output_all: false
+                        })
+                    });
+                    const data3 = await res3.json();
+                    if (!res3.ok) {
+                        var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
+                        showStatus(msg3, 'danger');
+                    } else {
+                        showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
+                    }
+                } catch (err3) {
+                    showStatus('Save error: ' + err3, 'danger');
+                }
+            }
+        });
         // Example tree loads automatically on start; no manual button needed
 
         var resetBtn = document.getElementById("btn-extra-reset");
