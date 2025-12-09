@@ -260,6 +260,28 @@
                     <option value="bars">Side bars</option>
                 </select>
 
+                <label style="margin-left:15px;">
+                    <input type="checkbox" id="show-leaf-names" checked>
+                    Show terminal (leaf) names
+                </label>
+
+                <label style="margin-left:15px;">
+                    <input type="checkbox" id="show-internal-names">
+                    Show internal node names
+                </label>
+
+                <label style="margin-left:15px;">
+                    Node size:
+                    <input type="number" id="node-size" class="form-control input-sm" style="width:60px; display:inline-block;" min="1"
+                        max="10" value="2.5">
+                </label>
+
+                <label style="margin-left:10px;">
+                    Label size:
+                    <input type="number" id="label-size" class="form-control input-sm" style="width:60px; display:inline-block;" min="6"
+                        max="14" value="9">
+                </label>
+
                 <!-- Palette Preview -->
                 <span id="palette-preview" style="display:inline-block; margin-left:8px; vertical-align:middle;"></span>
 

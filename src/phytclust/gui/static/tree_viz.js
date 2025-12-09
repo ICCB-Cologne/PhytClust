@@ -16,11 +16,23 @@ const BASE_COLORS = [
         "#3f408a",
         "#da63aa"
     ];
-let CLUSTER_COLORS = [];
-let CURRENT_CLUSTERS = {};
-let NEWICK_RAW_TREE = null;
-let CURRENT_LAYOUT_MODE = 'cladogram';
-let COLOR_MODE = 'nodes';
+
+    let SHOW_LEAF_NAMES = true;
+    let SHOW_INTERNAL_NAMES = false;
+
+    let LEAF_NODE_RADIUS = 3.0;
+    let INTERNAL_NODE_RADIUS = 1.8;
+
+    let LABEL_FONT_SIZE = 9;
+
+
+    let CLUSTER_COLORS = [];
+    let CURRENT_CLUSTERS = {};
+    let NEWICK_RAW_TREE = null;
+    let CURRENT_LAYOUT_MODE = 'cladogram';
+    let COLOR_MODE = 'nodes';
+
+
 
 var statusHideTimeout = null;
 var isRunning = false;
@@ -474,12 +486,14 @@ function drawTree() {
         });
     svg.call(zoom);
 
-    // Hierarchy used only for tree structure / collapsing;
-    // positions come from precomputed _x/_y/_angle/_radius
     var root = d3.hierarchy(NEWICK_RAW_TREE, function (d) {
         return d._collapsed ? null : d.children;
     });
 
+    function nodeRadius(d) {
+        const isLeaf = !d.children || !d.children.length;
+        return isLeaf ? LEAF_NODE_RADIUS : INTERNAL_NODE_RADIUS;
+    }
     function nodeFill(d) {
         var name = d.data.name;
 
@@ -536,7 +550,7 @@ function drawTree() {
             });
 
         node.append("circle")
-            .attr("r", 3.5)
+            .attr("r", nodeRadius)
             .attr("fill", nodeFill)
             .style("cursor", function (d) {
                 return (d.data.children && d.data.children.length) ? "pointer" : "default";
@@ -551,11 +565,16 @@ function drawTree() {
                 var name = d.data.name || "(internal)";
                 var cid = (CURRENT_CLUSTERS && d.data.name) ? CURRENT_CLUSTERS[d.data.name] : null;
                 var clusterStr = (cid == null ? "none" : cid.toString());
+                var bl = (typeof d.data.length === "number")
+                    ? d.data.length.toFixed(4)
+                    : "n/a";
+
                 d3Tooltip
                     .style("opacity", 1)
                     .html(
                         "<strong>" + name + "</strong><br/>" +
                         "Depth: " + d.depth + "<br/>" +
+                        "Branch length: " + bl + "<br/>" +
                         "Cluster: " + clusterStr
                     );
             })
@@ -569,14 +588,26 @@ function drawTree() {
             });
 
         node.append("text")
-            .attr("dy", "0.31em")
-            .attr("x", function (d) { return (d.data._angle || 0) < Math.PI ? 8 : -8; })
-            .attr("text-anchor", function (d) { return (d.data._angle || 0) < Math.PI ? "start" : "end"; })
-            .attr("transform", function (d) {
-                return (d.data._angle || 0) >= Math.PI ? "rotate(180)" : null;
-            })
-            .text(function (d) { return d.data.name || ""; });
+        .attr("dy", 3) // or "0.31em" in circular, keep as you had
+        .attr("x", function (d) {
+            // keep your existing x logic (this is the cartesian one)
+            return (d.children && d.children.length) ? -8 : 8;
+        })
+        .style("text-anchor", function (d) {
+            return (d.children && d.children.length) ? "end" : "start";
+        })
+        .style("font-size", LABEL_FONT_SIZE + "px")
+        .text(function (d) {
+            const isLeaf = !d.children || d.children.length === 0;
 
+            if (isLeaf && SHOW_LEAF_NAMES) {
+                return d.data.name || "";
+            }
+            if (!isLeaf && SHOW_INTERNAL_NAMES) {
+                return d.data.name || "";
+            }
+            return "";
+        });
         return;
     }
 
@@ -619,7 +650,7 @@ function drawTree() {
         });
 
     node.append("circle")
-        .attr("r", 4)
+        .attr("r", nodeRadius)
         .attr("fill", nodeFill)
         .style("cursor", function (d) {
             return (d.data.children && d.data.children.length) ? "pointer" : "default";
@@ -634,11 +665,16 @@ function drawTree() {
             var name = d.data.name || "(internal)";
             var cid = (CURRENT_CLUSTERS && d.data.name) ? CURRENT_CLUSTERS[d.data.name] : null;
             var clusterStr = (cid == null ? "none" : cid.toString());
+            var bl = (typeof d.data.length === "number")
+            ? d.data.length.toFixed(4)
+            : "n/a";
+
             d3Tooltip
                 .style("opacity", 1)
                 .html(
                     "<strong>" + name + "</strong><br/>" +
                     "Depth: " + d.depth + "<br/>" +
+                    "Branch length: " + bl + "<br/>" +
                     "Cluster: " + clusterStr
                 );
         })
@@ -652,14 +688,27 @@ function drawTree() {
         });
 
     node.append("text")
-        .attr("dy", 3)
-        .attr("x", function (d) {
-            return (d.children && d.children.length) ? -8 : 8;
-        })
-        .style("text-anchor", function (d) {
-            return (d.children && d.children.length) ? "end" : "start";
-        })
-        .text(function (d) { return d.data.name || ""; });
+    .attr("dy", 3)
+    .attr("x", function (d) {
+        return (d.children && d.children.length) ? -8 : 8;
+    })
+    .style("text-anchor", function (d) {
+        return (d.children && d.children.length) ? "end" : "start";
+    })
+    .style("font-size", LABEL_FONT_SIZE + "px")
+    .text(function (d) {
+        const isLeaf = !d.children || d.children.length === 0;
+
+        if (isLeaf && SHOW_LEAF_NAMES) {
+            return d.data.name || "";
+        }
+        if (!isLeaf && SHOW_INTERNAL_NAMES) {
+            return d.data.name || "";
+        }
+        return "";
+    });
+
+
     if (colorMode === "bars") {
 
         // All leaves, sorted top-to-bottom
@@ -692,7 +741,18 @@ function drawTree() {
                 clusterInfo.get(cid).lastIndex = idx;
             }
         });
-
+        const usedLabelYs = [];
+        function findNonOverlappingY(y0) {
+            let y = y0;
+            const minGap = 10; // px between labels
+            let safety = 0;
+            while (usedLabelYs.some(u => Math.abs(u - y) < minGap) && safety < 50) {
+                y += minGap;
+                safety++;
+            }
+            usedLabelYs.push(y);
+            return y;
+        }
         // Draw one contiguous bar per cluster
         clusterInfo.forEach((info, cid) => {
             const first = leafNodes[info.firstIndex];
@@ -720,6 +780,7 @@ function drawTree() {
                 const yNext = nextLeaf.data._x_cart || 0;
                 bottom = (yLast + yNext) / 2;
             }
+            const labelY = findNonOverlappingY((top + bottom) / 2);
 
             const color = (cid == null || !CLUSTER_COLORS.length)
                 ? "lightgrey"
@@ -732,18 +793,48 @@ function drawTree() {
                 .attr("height", bottom - top)
                 .attr("fill", color);
 
-            // One label per cluster, centred on its bar
-            labelsG.append("text")
-                .attr("x", labelColumnX + labelWidth + 4)
-                .attr("y", (top + bottom) / 2)
-                .attr("dominant-baseline", "middle")
-                .attr("font-size", 10)
-                .text("C" + cid);
+                const totalLeaves = leafNodes.length;
+                const clusterSize = info.lastIndex - info.firstIndex + 1;
+
+                // Only label clusters ≥ 10% of total leaves
+                if (clusterSize / totalLeaves >= 0.10) {
+                    labelsG.append("text")
+                        .attr("x", labelColumnX + labelWidth + 4)
+                        .attr("y", labelY)
+                        .attr("dominant-baseline", "middle")
+                        .attr("font-size", 10)
+                        .text("C" + cid);
+                }
         });
+        // --------------------------------------------------
+        //  BRANCH-LENGTH AXIS (for cladogram/rectangular)
+        // --------------------------------------------------
+        if (layoutMode !== "circular") {
+
+            // compute horizontal scale (branch length → y position)
+            const allNodes = root.descendants();
+            const maxY = d3.max(allNodes, d => d.data._y_cart || 0) || 0;
+
+            const blVals = allNodes.map(d => d.data._bl || 0);
+            const maxBl = d3.max(blVals) || 1;
+
+            const blScale = d3.scaleLinear()
+                .domain([0, maxBl])
+                .range([0, maxY]);
+
+            const axisGroup = g.append("g")
+                .attr("class", "branch-length-axis")
+                .attr("transform", `translate(0, ${height - margin.bottom - margin.top - 5})`)
+                .call(d3.axisBottom(blScale).ticks(5));
+
+            g.append("text")
+                .attr("x", maxY / 2)
+                .attr("y", height - margin.bottom - margin.top + 15)
+                .attr("text-anchor", "middle")
+                .attr("font-size", 10)
+                .text("Branch length");
+        }
     }
-
-
-
 }
 
 // ---- D3 Optimal-k plot ----
@@ -1219,8 +1310,45 @@ $(function () {
         });
     }
 
-    // Initialize preview on load
     updatePalettePreview(BASE_COLORS);
 
+    const internalNamesCheckbox = document.getElementById("show-internal-names");
+    if (internalNamesCheckbox) {
+        internalNamesCheckbox.checked = SHOW_INTERNAL_NAMES;
+        internalNamesCheckbox.addEventListener("change", function () {
+            SHOW_INTERNAL_NAMES = this.checked;
+            drawTree();   // redraw tree
+        });
+    }
+    const leafNamesCheckbox = document.getElementById("show-leaf-names");
+    if (leafNamesCheckbox) {
+        leafNamesCheckbox.checked = SHOW_LEAF_NAMES;
+        leafNamesCheckbox.addEventListener("change", function () {
+            SHOW_LEAF_NAMES = this.checked;
+            drawTree();
+        });
+    }
+    const nodeSizeInput = document.getElementById("node-size");
+    if (nodeSizeInput) {
+        nodeSizeInput.value = LEAF_NODE_RADIUS;
+        nodeSizeInput.addEventListener("input", function () {
+            const v = parseFloat(this.value);
+            if (!isNaN(v) && v >= 1 && v <= 10) {
+                LEAF_NODE_RADIUS = v;  // only terminal nodes
+                drawTree();
+            }
+        });
+    }
+    const labelSizeInput = document.getElementById("label-size");
+    if (labelSizeInput) {
+        labelSizeInput.value = LABEL_FONT_SIZE;
+        labelSizeInput.addEventListener("input", function () {
+            const v = parseFloat(this.value);
+            if (!isNaN(v) && v >= 6 && v <= 14) {
+                LABEL_FONT_SIZE = v;
+                drawTree();
+            }
+        });
+    }
     }
 });
