@@ -39,3 +39,6 @@ Thumbs.db
 .ruff_cache/
 .pyre/
 *.egg-info
+
+# Results from local execution
+results/

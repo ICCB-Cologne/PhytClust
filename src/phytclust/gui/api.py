@@ -41,6 +41,7 @@ class PhytclustRequest(BaseModel):
     max_k: Optional[int] = None
     max_k_limit: Optional[float] = None
     lambda_weight: float = 0.7
+    outgroup: Optional[str] = None
 
 
 # ------------------------------------------------------
@@ -84,7 +85,7 @@ def run_phytclust(req: PhytclustRequest):
         )
 
     try:
-        pc = PhytClust(tree=req.newick)
+        pc = PhytClust(tree=req.newick, outgroup=req.outgroup)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse Newick: {e}")
 
@@ -141,6 +142,7 @@ def run_phytclust(req: PhytclustRequest):
         "k": result.get("k"),
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
+        "outgroup": result.get("outgroup"),
         "scores": scores,
         "clusters": clusters_json,
         "newick": req.newick,

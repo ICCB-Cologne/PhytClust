@@ -45,8 +45,57 @@
 <body>
 
 <div class="container-fluid">
-    <h2>PhytClust – Phylogenetic Tree Viewer</h2>
-    <p class="text-muted">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
+    <div class="row controls"></div>
+        <div class="col-md-6">
+            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:240px; height:auto; width:auto; display:block; margin-bottom:8px; float:left;" />
+            <!-- <p class="text-muted">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p> -->
+            <!-- <div style="clear: both;"></div> -->
+        </div>
+        <div class="col-md-6">
+            <h4>Load tree</h4>
+
+            <form class="form-inline" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="file-input">From file:</label>
+                    <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">
+                </div>
+                <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
+            </form>
+
+                    <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
+            <textarea id="newick-input" class="form-control" rows="4" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+
+                    <!-- Extra parameters toggle -->
+                    <div style="margin-top: 10px;">
+                        <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle">
+                            <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
+                            &nbsp;Extra parameters
+                        </a>
+                    </div>
+
+                    <div class="collapse" id="extra-params" style="margin-top:10px;">
+                        <div class="panel panel-default">
+                            <div class="panel-body">
+                                <div class="form-group">
+                                    <label for="extra-k">Number of clusters</label>
+                                    <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
+                                    <p class="small-note">Optional. Integer ≥ 1.</p>
+                                </div>
+                                <div class="form-group">
+                                    <label for="extra-outgroup">Outgroup</label>
+                                    <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
+                                    <p class="small-note">Optional. Any leaf node from the tree.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+            <div style="margin-top: 10px;">
+                <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
+                <button id="btn-load-example" class="btn btn-default btn-sm">Load example tree</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Loading indicator (hidden once DOM is ready) -->
     <div id="app-loading" class="alert alert-info">Loading UI…</div>
@@ -56,45 +105,27 @@
 
     <!-- Tabs -->
     <ul class="nav nav-tabs" role="tablist">
-        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Viewer</a></li>
+        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
+        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal k</a></li>
         <li><a href="#help" role="tab" data-toggle="tab">Help</a></li>
+        <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
+        <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
     </ul>
 
     <div class="tab-content" style="margin-top: 15px;">
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
-            <div class="row controls">
-                <div class="col-md-6">
-                    <h4>Load tree</h4>
-
-                    <form class="form-inline" onsubmit="return false;">
-                        <div class="form-group">
-                            <label for="file-input">From file:</label>
-                            <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">
-                        </div>
-                        <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
-                    </form>
-
-                    <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
-                    <textarea id="newick-input" class="form-control" rows="4" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
-
-                    <div style="margin-top: 10px;">
-                        <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
-                        <button id="btn-load-example" class="btn btn-default btn-sm">Load example tree</button>
-                    </div>
-
-                    <h4 style="margin-top:20px;">Result JSON</h4>
-                    <pre id="result" class="result-box">(waiting for run...)</pre>
-                </div>
-
-                <div class="col-md-6">
-                    <h4>Tree</h4>
-                    <div class="tree-wrapper">
-                        <div id="tree_display"></div>
-                    </div>
-                </div>
+            <h4>Tree</h4>
+            <div class="tree-wrapper">
+                <div id="tree_display"></div>
             </div>
+        </div>
+
+        <!-- Optimal k Tab -->
+        <div class="tab-pane" id="viewer-optimal-k">
+            <h4>Optimal number of clusters</h4>
+            <p>TODO </p>
         </div>
 
         <!-- Help Tab -->
@@ -121,6 +152,18 @@
             </div>
         </div>
 
+        <!-- Log Tab -->
+        <div class="tab-pane" id="log">
+            <h4>Execution Log</h4>
+            <pre id="log-output" class="result-box">(logs will appear here)</pre>
+        </div>
+
+        <!-- JSON Tab -->
+        <div class="tab-pane" id="debug">
+            <h4>JSON</h4>
+            <pre id="result" class="result-box">(waiting for run...)</pre>
+        </div>
+
     </div><!-- /.tab-content -->
 
 </div><!-- /.container-fluid -->
@@ -137,14 +180,34 @@
     var resultEl = document.getElementById("result");
     var statusEl = document.getElementById("status-message");
     var treeHost = document.getElementById("tree_display");
+    var statusHideTimeout = null;
+    var extraKEl = document.getElementById("extra-k");
+    var extraOutgroupEl = document.getElementById("extra-outgroup");
+    function escapeRegExp(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function isOutgroupInNewick(newick, outgroup) {
+        if (!outgroup) return true;
+        var name = escapeRegExp(outgroup);
+        // match quoted or unquoted names with token boundaries typical in Newick
+        var quoted = new RegExp("[\\(,]\\s*'" + name + "'\\s*(?:[:,\\)])");
+        var unquoted = new RegExp("[\\(,]\\s*" + name + "\\s*(?:[:,\\)])");
+        return quoted.test(newick) || unquoted.test(newick);
+    }
 
     function showStatus(message, type) {
         var el = $("#status-message");
         type = type || "info";
+        if (statusHideTimeout) { clearTimeout(statusHideTimeout); statusHideTimeout = null; }
         el.removeClass();
         el.addClass("alert alert-" + type);
         el.text(message);
         el.show();
+        // Auto-hide the "Rendering finished." success message after 5s
+        if (type === "success" && message === "Rendering finished.") {
+            statusHideTimeout = setTimeout(function(){ el.hide(); }, 5000);
+        }
     }
 
     function clearTree() {
@@ -157,18 +220,67 @@
             alert("Please upload a Newick tree file or paste a Newick string.");
             return;
         }
-        showStatus("Running PhytClust...", "info");
-        resultEl.textContent = "Running PhytClust...";
+        // Determine mode based on optional k input
+        var kVal = null;
+        if (extraKEl) {
+            var kRaw = (extraKEl.value || "").trim();
+            if (kRaw) {
+                var parsed = parseInt(kRaw, 10);
+                if (!isNaN(parsed) && parsed >= 1) {
+                    kVal = parsed;
+                }
+            }
+        }
+
+        var payload;
+        var outgroupVal = null;
+        if (extraOutgroupEl) {
+            var ogRaw = (extraOutgroupEl.value || "").trim();
+            if (ogRaw) { outgroupVal = ogRaw; }
+        }
+
+        // quick client-side validation for outgroup presence
+        if (outgroupVal && !isOutgroupInNewick(newickText, outgroupVal)) {
+            showStatus("Outgroup not found in Newick.", "danger");
+            return;
+        }
+        if (kVal !== null) {
+            payload = { newick: newickText, mode: "k", k: kVal };
+            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
+            showStatus("Running PhytClust (k-mode)…", "info");
+            resultEl.textContent = "Running PhytClust (k-mode)…";
+        } else {
+            payload = { newick: newickText, mode: "global", top_n: 1 };
+            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
+            showStatus("Running PhytClust...", "info");
+            resultEl.textContent = "Running PhytClust...";
+        }
         clearTree();
 
         try {
             const res = await fetch("/api/run", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ newick: newickText, mode: "global", top_n: 1 })
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             resultEl.textContent = JSON.stringify(data, null, 2);
+
+            if (!res.ok) {
+                showStatus("Error running PhytClust", "danger");
+            }
+
+            // Update log tab if available
+            var logEl = document.getElementById("log-output");
+            if (logEl) {
+                if (data && data.log) {
+                    logEl.textContent = data.log;
+                } else if (data && data.detail && typeof data.detail === 'object' && data.detail.log) {
+                    logEl.textContent = data.detail.log;
+                } else {
+                    logEl.textContent = "(no logs)";
+                }
+            }
 
             if (data.newick && data.clusters && data.clusters.length > 0) {
                 drawTree(data.newick, data.clusters[0]);
@@ -181,6 +293,10 @@
             console.error(e);
             showStatus("Error: " + e, "danger");
             resultEl.textContent = "Error: " + e;
+            var logEl = document.getElementById("log-output");
+            if (logEl) {
+                logEl.textContent = "(error encountered; no logs captured)";
+            }
         }
     }
 
@@ -221,6 +337,14 @@
             e.preventDefault();
             newickEl.value = EXAMPLE_NEWICK;
             showStatus("Example tree loaded. Ready to run.", "info");
+        });
+
+        // Toggle plus/minus icon on extra parameters collapse
+        $('#extra-params').on('shown.bs.collapse', function () {
+            $('#extra-params-icon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
+        });
+        $('#extra-params').on('hidden.bs.collapse', function () {
+            $('#extra-params-icon').removeClass('glyphicon-minus').addClass('glyphicon-plus');
         });
 
         // Prefill example and auto-run once for convenience

@@ -378,6 +378,7 @@ class PhytClust:
                 "clusters": cmap,
                 "scores": None,
                 "peaks": [k_val],
+                "outgroup": self.outgroup,
             }
             self._last_result = result
             return result
@@ -403,6 +404,7 @@ class PhytClust:
                 "clusters": clusters,
                 "scores": None if self.scores is None else self.scores.copy(),
                 "peaks": list(self.peaks_by_rank or []),
+                "outgroup": self.outgroup,
             }
             self._last_result = result
             return result
@@ -425,6 +427,7 @@ class PhytClust:
             "clusters": clusters,
             "scores": None if self.scores is None else self.scores.copy(),
             "peaks": list(self.peaks_by_rank or []),
+            "outgroup": self.outgroup,
         }
         self._last_result = result
         return result

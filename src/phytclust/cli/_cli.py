@@ -342,8 +342,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
-        "--alpha",
+        "--lambda-weight",
         type=float,
+        dest='lambda_weight',
         default=0.5,
         help="Peak prominence parameter for score peak selection.",
     )
@@ -410,7 +411,7 @@ def main(argv: list[str] | None = None) -> None:
                 max_k=args.max_k,
                 max_k_limit=args.max_k_limit,
                 plot_scores=args.plot,
-                alpha=args.alpha,
+                lambda_weight=args.lambda_weight,
             )
             pc.run(**run_kwargs)
 
