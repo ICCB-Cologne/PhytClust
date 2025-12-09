@@ -274,11 +274,22 @@ async function runPhytClust() {
             accumulateBranchLength(NEWICK_RAW_TREE);
             computeLayouts();
             // Extract cluster map (may be empty)
-            const clusterMap = (data.clusters && data.clusters.length > 0)
-                ? data.clusters[0]
-                : {};
+            // data.clusters is now assumed = [ {A:1,B:2,…}, {A:0,B:1,…}, ... ]
+            const clusterSets = Array.isArray(data.clusters) ? data.clusters : [];
 
-            CURRENT_CLUSTERS = clusterMap;
+            // store all solutions
+            window.ALL_CLUSTER_SETS = clusterSets;
+
+            // default to the first one
+            if (clusterSets.length > 0) {
+                CURRENT_CLUSTERS = clusterSets[0];
+
+                const maxCluster = Math.max(...Object.values(CURRENT_CLUSTERS));
+                CLUSTER_COLORS = generateClusterColors(maxCluster + 1);
+            } else {
+                CURRENT_CLUSTERS = {};
+                CLUSTER_COLORS = [];
+            }
 
             // Generate cluster colors BEFORE drawing the tree
             if (Object.keys(clusterMap).length > 0) {
