@@ -216,7 +216,10 @@ class PhytClust:
         self._ensure_dp()
 
         self.max_k_limit = max_k_limit if max_k_limit is not None else 0.9
-        self.max_k = max_k or max(2, ceil(self.num_terminals * self.max_k_limit))
+        self.max_k = min(self.num_terminals, max_k or max(2, ceil(self.num_terminals * self.max_k_limit)))
+
+        if self.max_k < 4:
+            raise ValueError("max_k must be at least 4.")
 
         calculate_scores(self, plot=plot_scores)
         logger.debug(
