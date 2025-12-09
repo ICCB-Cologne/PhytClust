@@ -38,6 +38,7 @@ class PhytclustRequest(BaseModel):
     k: Optional[int] = None
     top_n: int = 1
     by_resolution: bool = False
+    num_bins: Optional[int] = None
     max_k: Optional[int] = None
     max_k_limit: Optional[float] = None
     lambda_weight: float = 0.7
@@ -108,14 +109,14 @@ def run_phytclust(req: PhytclustRequest):
                 k=None,
                 top_n=req.top_n,
                 by_resolution=True,
-                num_bins=None,
+                num_bins=req.num_bins,
                 max_k=req.max_k,
                 max_k_limit=req.max_k_limit,
                 plot_scores=False,
                 lambda_weight=req.lambda_weight,
             )
 
-        else:  # global mode
+        elif mode == "global":
             result = pc.run(
                 k=None,
                 top_n=req.top_n,
@@ -125,6 +126,8 @@ def run_phytclust(req: PhytclustRequest):
                 plot_scores=False,
                 lambda_weight=req.lambda_weight,
             )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mode.")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PhytClust error: {e}")

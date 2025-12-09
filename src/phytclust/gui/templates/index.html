@@ -19,6 +19,8 @@
     <script>window._$1 = window._$1 || window._;</script>
     <!-- Local phylotree build used by the app -->
     <script src="/static/phylotree.js"></script>
+    <!-- Plotly for the Optimal k interactive chart -->
+    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
     <style>
         body { padding: 20px; }
@@ -87,12 +89,50 @@
                         <div class="form-group">
                             <label for="extra-k">Number of clusters</label>
                             <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
-                            <p class="small-note">Optional. Integer ≥ 1.</p>
+                            <p class="small-note">Exact k-way partition.</p>
                         </div>
                         <div class="form-group">
                             <label for="extra-outgroup">Outgroup</label>
                             <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
-                            <p class="small-note">Optional. Any leaf node from the tree.</p>
+                            <p class="small-note">Any leaf node from the tree.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-topn">Top N peaks</label>
+                            <input type="number" min="1" id="extra-topn" class="form-control input-sm" placeholder="default 1">
+                            <p class="small-note">Number of optimal number of clusters to return.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-maxk">Max k</label>
+                            <input type="number" min="1" id="extra-maxk" class="form-control input-sm" placeholder="e.g. 100">
+                            <p class="small-note">Upper bound for the number of clusters.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-maxklimit">Max k limit</label>
+                            <input type="number" id="extra-maxklimit" class="form-control input-sm" placeholder="e.g. 0.1">
+                            <p class="small-note">If "max K" is not set, set max_k = ceil(max_k_limit * num_leaves).</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-lambda">Lambda weight</label>
+                            <input type="number" id="extra-lambda" class="form-control input-sm" placeholder="default 0.7">
+                            <p class="small-note">Peak prominence parameter for score peak selection.</p>
+                        </div>
+                        <hr>
+                        <div class="form-group">
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" id="extra-resolution"> Use multi-resolution mode
+                                </label>
+                            </div>
+                            <p class="small-note">One peak per log-spaced bin.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="extra-bins">Number of bins (resolution)</label>
+                            <input type="number" min="1" id="extra-bins" class="form-control input-sm" placeholder="default 3">
+                            <p class="small-note">Number of log bins when using multi-resolution mode.</p>
+                        </div>
+                        <hr>
+                        <div>
+                            <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button" title="Reset Extra parameters to defaults">Reset to defaults</button>
                         </div>
                     </div>
                 </div>
@@ -100,7 +140,6 @@
 
             <div style="margin-top: 10px;">
                 <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
-                <button id="btn-load-example" class="btn btn-default btn-sm">Load example tree</button>
             </div>
         </div>
     </div>
@@ -114,7 +153,9 @@
                     <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
                 </div>
                 <div class="modal-body">
-                    <p>TODO.</p>
+                    <p>Please cite this repository if you use the algorithm in your work: <br>
+                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, <b>PhytClust</b> (2025). Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust">https://bitbucket.org/schwarzlab/phytclust</a>.
+                    </p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
@@ -132,7 +173,7 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs" role="tablist">
         <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
-        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal nr of cluster</a></li>
+        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
         <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
         <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
     </ul>
@@ -148,35 +189,43 @@
 
         <!-- Optimal k Tab -->
         <div class="tab-pane" id="viewer-optimal-k">
-            <h4>Optimal number of clusters</h4>
-            <p>TODO </p>
+            <!-- <h4>Optimal number of clusters</h4> -->
+            <div class="controls" style="margin-bottom:8px;">
+                <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
+                <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <option value="log">Log</option>
+                    <option value="normal">Normal</option>
+                </select>
+                <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+            </div>
+            <div id="optimalk_plot" style="width:100%; height:420px;"></div>
         </div>
 
         <!-- Help Sidebar (off-canvas style) -->
         <div id="help-sidebar" style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
             <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
-                <strong>Help</strong>
+                <h4 class="modal-title" id="aboutModalLabel">Help</h4>
                 <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>
             </div>
             <div class="help-section" style="padding:12px;">
-                <h4>1. Input format</h4>
+                <h4>Input format</h4>
                 <ul>
                     <li>Trees must be in <strong>Newick</strong> format.</li>
                     <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
                     <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain text files.</li>
                 </ul>
-                <h4>2. How to use</h4>
+                <h4>How to use</h4>
                 <ol>
                     <li>Upload a Newick file or paste a Newick string.</li>
                     <li>Set optional parameters (k, outgroup) as needed.</li>
                     <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
                     <li>View the Tree, JSON, and Logs in their tabs.</li>
                 </ol>
-                <h4>3. Notes</h4>
-                <ul>
-                    <li>Ensure your Newick string ends with a semicolon (<code>;</code>).</li>
-                    <li>Very large trees may render slowly in the browser.</li>
-                </ul>
+                <h4>Example</h4>
+                <p>
+                    Use our small built-in tree to try PhytClust quickly.
+                    <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>
+                </p>
             </div>
         </div>
 
@@ -202,7 +251,7 @@
 
 <script>
     // Example tree (from your template)
-    var EXAMPLE_NEWICK = "(((EELA:0.150276,CONGERA:0.213019):0.230956,(EELB:0.263487,CONGERB:0.202633):0.246917):0.094785,((CAVEFISH:0.451027,(GOLDFISH:0.340495,ZEBRAFISH:0.390163):0.220565):0.067778,((((((NSAM:0.008113,NARG:0.014065):0.052991,SPUN:0.061003,(SMIC:0.027806,SDIA:0.015298,SXAN:0.046873):0.046977):0.009822,(NAUR:0.081298,(SSPI:0.023876,STIE:0.013652):0.058179):0.091775):0.073346,(MVIO:0.012271,MBER:0.039798):0.178835):0.147992,((BFNKILLIFISH:0.317455,(ONIL:0.029217,XCAU:0.084388):0.201166):0.055908,THORNYHEAD:0.252481):0.061905):0.157214,LAMPFISH:0.717196,((SCABBARDA:0.189684,SCABBARDB:0.362015):0.282263,((VIPERFISH:0.318217,BLACKDRAGON:0.109912):0.123642,LOOSEJAW:0.397100):0.287152):0.140663):0.206729):0.222485,(COELACANTH:0.558103,((CLAWEDFROG:0.441842,SALAMANDER:0.299607):0.135307,((CHAMELEON:0.771665,((PIGEON:0.150909,CHICKEN:0.172733):0.082163,ZEBRAFINCH:0.099172):0.272338):0.014055,((BOVINE:0.167569,DOLPHIN:0.157450):0.104783,ELEPHANT:0.166557):0.367205):0.050892):0.114731):0.295021)";
+    var EXAMPLE_NEWICK = "(((A:5, B:3)C1:6, (C:3, D:7)D1:4)A13:22, (((E:7, F:13)E12:5, G:6)B23:10, H:60):35):0;";
 
     var newickEl = document.getElementById("newick-input");
     var resultEl = document.getElementById("result");
@@ -211,6 +260,26 @@
     var statusHideTimeout = null;
     var extraKEl = document.getElementById("extra-k");
     var extraOutgroupEl = document.getElementById("extra-outgroup");
+    var extraTopNEl = document.getElementById("extra-topn");
+    var extraResolutionEl = document.getElementById("extra-resolution");
+    var extraBinsEl = document.getElementById("extra-bins");
+    var extraMaxKEl = document.getElementById("extra-maxk");
+    var extraMaxKLimitEl = document.getElementById("extra-maxklimit");
+    var extraLambdaEl = document.getElementById("extra-lambda");
+    
+    function resetExtraParams() {
+        if (extraKEl) extraKEl.value = "";
+        if (extraOutgroupEl) extraOutgroupEl.value = "";
+        if (extraTopNEl) extraTopNEl.value = "";
+        if (extraResolutionEl) extraResolutionEl.checked = false;
+        if (extraBinsEl) extraBinsEl.value = "";
+        if (extraMaxKEl) extraMaxKEl.value = "";
+        if (extraMaxKLimitEl) extraMaxKLimitEl.value = "";
+        if (extraLambdaEl) extraLambdaEl.value = "";
+        showStatus("Extra parameters reset to defaults.", "info");
+    }
+    // Track latest response for Optimal k rendering to avoid stale closures
+    var latestOptimalKData = null;
     function escapeRegExp(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
@@ -224,6 +293,22 @@
         return quoted.test(newick) || unquoted.test(newick);
     }
 
+    // Roughly estimate number of samples (leaves) as comma count + 1, ignoring commas inside quotes
+    function estimateLeafCount(newick) {
+        var inQuote = null;
+        var commas = 0;
+        for (var i = 0; i < newick.length; i++) {
+            var ch = newick[i];
+            if (inQuote) {
+                if (ch === inQuote) { inQuote = null; }
+                continue;
+            }
+            if (ch === '"' || ch === "'") { inQuote = ch; continue; }
+            if (ch === ',') { commas++; }
+        }
+        return Math.max(0, commas + 1);
+    }
+
     function showStatus(message, type) {
         var el = $("#status-message");
         type = type || "info";
@@ -232,8 +317,8 @@
         el.addClass("alert alert-" + type);
         el.text(message);
         el.show();
-        // Auto-hide the "Rendering finished." success message after 5s
-        if (type === "success" && message === "Rendering finished.") {
+        // Auto-hide any success message after 5s
+        if (type === "success") {
             statusHideTimeout = setTimeout(function(){ el.hide(); }, 5000);
         }
     }
@@ -248,7 +333,9 @@
             alert("Please upload a Newick tree file or paste a Newick string.");
             return;
         }
-        // Determine mode based on optional k input
+        // Estimate number of samples (leaves)
+        var numSamples = estimateLeafCount(newickText);
+        // Determine mode based on optional k / resolution inputs
         var kVal = null;
         if (extraKEl) {
             var kRaw = (extraKEl.value || "").trim();
@@ -266,6 +353,45 @@
             var ogRaw = (extraOutgroupEl.value || "").trim();
             if (ogRaw) { outgroupVal = ogRaw; }
         }
+        var topNVal = null;
+        if (extraTopNEl) {
+            var tnRaw = (extraTopNEl.value || "").trim();
+            if (tnRaw) { var tni = parseInt(tnRaw, 10); if (!isNaN(tni) && tni >= 1) topNVal = tni; }
+        }
+        var resolutionFlag = !!(extraResolutionEl && extraResolutionEl.checked);
+        var binsVal = null;
+        if (extraBinsEl) {
+            var bRaw = (extraBinsEl.value || "").trim();
+            if (bRaw) { var bi = parseInt(bRaw, 10); if (!isNaN(bi) && bi >= 1) binsVal = bi; }
+        }
+        var maxKVal = null;
+        if (extraMaxKEl) {
+            var mkRaw = (extraMaxKEl.value || "").trim();
+            if (mkRaw) {
+                var mki = parseInt(mkRaw, 10);
+                if (!isNaN(mki)) {
+                    if (mki < 4) { mki = 4; if (extraMaxKEl) extraMaxKEl.value = String(mki); }
+                    maxKVal = mki;
+                }
+            }
+        }
+        var maxKLimitVal = null;
+        if (extraMaxKLimitEl) {
+            var mklRaw = (extraMaxKLimitEl.value || "").trim();
+            if (mklRaw) {
+                var mkli = parseFloat(mklRaw);
+                if (!isNaN(mkli)) {
+                    var minLimit = (numSamples > 0) ? (4 / numSamples) : 0;
+                    if (mkli < minLimit) { mkli = minLimit; if (extraMaxKLimitEl) extraMaxKLimitEl.value = String(mkli); }
+                    maxKLimitVal = mkli;
+                }
+            }
+        }
+        var lambdaVal = null;
+        if (extraLambdaEl) {
+            var lRaw = (extraLambdaEl.value || "").trim();
+            if (lRaw) { var li = parseFloat(lRaw); if (!isNaN(li)) lambdaVal = li; }
+        }
 
         // quick client-side validation for outgroup presence
         if (outgroupVal && !isOutgroupInNewick(newickText, outgroupVal)) {
@@ -275,11 +401,24 @@
         if (kVal !== null) {
             payload = { newick: newickText, mode: "k", k: kVal };
             if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            showStatus("Running PhytClust (k-mode)…", "info");
+            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
+            showStatus("Running PhytClust (fixed k-mode)…", "info");
             resultEl.textContent = "Running PhytClust (k-mode)…";
-        } else {
-            payload = { newick: newickText, mode: "global", top_n: 1 };
+        } else if (resolutionFlag) {
+            payload = { newick: newickText, mode: "resolution", top_n: (topNVal || 1) };
             if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
+            if (binsVal !== null) { payload.num_bins = binsVal; }
+            if (maxKVal !== null) { payload.max_k = maxKVal; }
+            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
+            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
+            showStatus("Running PhytClust (resolution mode)…", "info");
+            resultEl.textContent = "Running PhytClust (resolution mode)…";
+        } else {
+            payload = { newick: newickText, mode: "global", top_n: (topNVal || 1) };
+            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
+            if (maxKVal !== null) { payload.max_k = maxKVal; }
+            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
+            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
             showStatus("Running PhytClust...", "info");
             resultEl.textContent = "Running PhytClust...";
         }
@@ -303,8 +442,6 @@
             if (logEl) {
                 if (data && data.log) {
                     logEl.textContent = data.log;
-                } else if (data && data.detail && typeof data.detail === 'object' && data.detail.log) {
-                    logEl.textContent = data.detail.log;
                 } else {
                     logEl.textContent = "(no logs)";
                 }
@@ -312,14 +449,41 @@
 
             if (data.newick && data.clusters && data.clusters.length > 0) {
                 drawTree(data.newick, data.clusters[0]);
-                showStatus("Rendering finished.", "success");
+                showStatus("PhytClust finished.", "success");
             } else {
                 drawTree(data.newick, null);
                 showStatus("No clusters found (likely because there are not enough samples).", "danger");
             }
+
+            // Render Optimal k plot if scores are available
+            try {
+                if (data && data.scores) {
+                    // Remove any fixed-k message and temporary sizing before plotting
+                    var plotHostReady = document.getElementById('optimalk_plot');
+                    if (plotHostReady) {
+                        plotHostReady.innerHTML = '';
+                        plotHostReady.style.removeProperty('box-sizing');
+                    }
+                    latestOptimalKData = data;
+                    renderOptimalK(latestOptimalKData);
+                } else {
+                    // Clear plot if no scores
+                    var plotHost = document.getElementById('optimalk_plot');
+                    if (plotHost) {
+                        // Ensure full-width container before inserting message
+                        plotHost.style.width = '100%';
+                        plotHost.style.height = '420px';
+                        plotHost.style.boxSizing = 'border-box';
+                        var kDisplay = (typeof kVal === 'number' && kVal >= 1) ? kVal : 'user-defined fixed k';
+                        plotHost.innerHTML = '<div class="alert alert-info" style="width:100%; margin:0;">Optimal number of clusters plot is unavailable in fixed k mode. Using k = ' + kDisplay + ' from parameters.</div>';
+                    }
+                }
+            } catch (plotErr) {
+                console.warn('Plot rendering error:', plotErr);
+            }
         } catch (e) {
             console.error(e);
-            showStatus("Error: " + e, "danger");
+            showStatus("PhytClust failed with Error: " + e, "danger");
             resultEl.textContent = "Error: " + e;
             var logEl = document.getElementById("log-output");
             if (logEl) {
@@ -341,14 +505,129 @@
         treeHost.appendChild(svg);
     }
 
+    function renderOptimalK(data) {
+        // Prefer most recent data if none passed
+        if (!data) { data = latestOptimalKData; }
+        var plotEl = document.getElementById('optimalk_plot');
+        if (!plotEl) return;
+        var axisModeEl = document.getElementById('axis-mode');
+
+        var scores = data.scores || [];
+        var peaks = data.peaks || [];
+        if (!Array.isArray(scores) || scores.length === 0) {
+            plotEl.innerHTML = '<div class="alert alert-warning">No scores available to plot.</div>';
+            return;
+        }
+
+        // Build x (k) starting at 2 and y (score) arrays
+        var x = [];
+        var y = [];
+        for (var i = 0; i < scores.length; i++) {
+            x.push(i + 2);
+            y.push(scores[i+1]);
+        }
+
+        // Base line trace
+        var lineTrace = {
+            x: x,
+            y: y,
+            mode: 'lines+markers',
+            name: 'Score',
+            line: { color: '#1f77b4' },
+            marker: { size: 12 }
+        };
+
+        // Peaks trace (if any)
+        var peakXs = [];
+        var peakYs = [];
+        if (Array.isArray(peaks)) {
+            for (var p = 0; p < peaks.length; p++) {
+                var kVal = peaks[p];
+                if (typeof kVal === 'number') {
+                    var idx = kVal - 2;
+                    if (idx >= 0 && idx < y.length) {
+                        peakXs.push(kVal);
+                        peakYs.push(y[idx]);
+                    }
+                }
+            }
+        }
+
+        var peakTrace = {
+            x: peakXs,
+            y: peakYs,
+            mode: 'markers',
+            name: 'Optimal k',
+            marker: { size: 20, color: '#d62728', symbol: 'star' }
+        };
+
+        // Limit x ticks to at most 10 for large trees (linear mode default)
+        var nPoints = x.length;
+        var xDtick = Math.max(1, Math.ceil(nPoints / 10));
+        var layout = {
+            margin: { l: 50, r: 10, t: 10, b: 40 },
+            xaxis: { title: 'k (number of clusters)', tickmode: 'linear', dtick: xDtick },
+            yaxis: { title: 'Score' },
+            hovermode: 'closest'
+        };
+
+        // Apply axis mode with user override support
+        var defaultMode = (scores.length > 50) ? 'log' : 'normal';
+        var mode = defaultMode;
+        if (axisModeEl) {
+            // If the user changed the select, honor their choice
+            if (axisModeEl.__userOverride) {
+                mode = axisModeEl.value || defaultMode;
+            } else {
+                // Otherwise reflect our default in the UI
+                axisModeEl.value = defaultMode;
+            }
+        }
+        layout.xaxis.type = (mode === 'log' ? 'log' : 'linear');
+        if (mode === 'log') {
+            // Show ticks at length scales: 2, 10, 100, 1000, ... up to max x
+            var xmin = Math.min.apply(null, x);
+            var xmax = Math.max.apply(null, x);
+            var tickVals = [];
+            // Always include 2 if within range
+            if (xmin <= 2 && xmax >= 2) tickVals.push(2);
+            // Powers of 10 starting from 10 up to <= xmax
+            var pow = 1;
+            while (true) {
+                var val = Math.pow(10, pow);
+                if (val > xmax) break;
+                if (val >= xmin) tickVals.push(val);
+                pow += 1;
+            }
+            // Ensure tickmode uses provided values
+            layout.xaxis.tickmode = 'array';
+            layout.xaxis.tickvals = tickVals;
+            layout.xaxis.ticktext = tickVals.map(function(v){ return String(v); });
+        }
+
+        Plotly.newPlot(plotEl, [lineTrace, peakTrace], layout, {displayModeBar: false});
+
+        // Re-render on axis mode change
+        if (axisModeEl && !axisModeEl.__wired) {
+            axisModeEl.__wired = true;
+            axisModeEl.addEventListener('change', function(){
+                // Mark as user override so subsequent renders honor selection
+                axisModeEl.__userOverride = true;
+                // Re-render using the latest data, not the old closure
+                renderOptimalK();
+            });
+        }
+    }
+
     function handleFileSelect(evt) {
         var file = evt.target.files[0];
         if (!file) return;
+        showStatus("Tree is loading", "info");
         var reader = new FileReader();
         reader.onload = function(e) {
             var text = e.target.result || "";
             newickEl.value = text.trim();
-            showStatus("File loaded. Ready to run.", "info");
+            showStatus("Tree successfully loaded", "success");
         };
         reader.readAsText(file);
     }
@@ -370,10 +649,34 @@
         // Wire controls
         document.getElementById("file-input").addEventListener("change", handleFileSelect);
         document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
-        document.getElementById("btn-load-example").addEventListener("click", function(e){
-            e.preventDefault();
-            newickEl.value = EXAMPLE_NEWICK;
-            showStatus("Example tree loaded. Ready to run.", "info");
+        // Example tree loads automatically on start; no manual button needed
+
+        var resetBtn = document.getElementById("btn-extra-reset");
+        if (resetBtn) {
+            resetBtn.addEventListener("click", function(e){ e.preventDefault(); resetExtraParams(); });
+        }
+
+        // Help sidebar: load example tree button
+        var helpExampleBtn = document.getElementById('btn-help-load-example');
+        if (helpExampleBtn) {
+            helpExampleBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                showStatus("tree is loading", "info");
+                newickEl.value = EXAMPLE_NEWICK;
+                showStatus("tree was loaded", "success");
+                // Optionally trigger a run so users immediately see results
+                runPhytClust();
+            });
+        }
+
+        // Indicate loading when user types/pastes Newick, then loaded shortly after
+        var loadTimer = null;
+        newickEl.addEventListener('input', function(){
+            if (loadTimer) { clearTimeout(loadTimer); }
+            showStatus("tree is loading", "info");
+            loadTimer = setTimeout(function(){
+                showStatus("tree was loaded", "success");
+            }, 250);
         });
 
         // Toggle plus/minus icon on extra parameters collapse
@@ -387,6 +690,13 @@
         // Prefill example and auto-run once for convenience
         newickEl.value = EXAMPLE_NEWICK;
         runPhytClust();
+
+            // Ensure Plotly resizes properly when tab becomes visible
+            $('a[href="#viewer-optimal-k"]').on('shown.bs.tab', function(){
+                if (window.Plotly && document.getElementById('optimalk_plot')) {
+                    try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
+                }
+            });
     });
 </script>
 
