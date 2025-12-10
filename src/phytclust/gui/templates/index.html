@@ -204,7 +204,7 @@
             
             <div class="row" style="margin-bottom:8px;">
                 <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
-                    <button id="btn-copy-tree" class="btn btn-default btn-xs">Copy tree to clipboard</button>
+                    <button id="btn-copy-tree" class="btn btn-default">Copy tree to clipboard</button>
                     <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:0;">
                         <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
                         <select id="cluster-select" class="form-control input-sm" style="display:inline-block; width:auto;"></select>
@@ -221,21 +221,26 @@
 
         <!-- Optimal k Tab -->
         <div class="tab-pane" id="viewer-optimal-k">
-            <!-- <h4>Optimal number of clusters</h4> -->
-            <div class="controls" style="margin-bottom:8px;">
-                <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
-                <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
-                    <option value="log">Log</option>
-                    <option value="normal">Normal</option> 
-                </select>
-                <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+
+            <div class="row" style="margin-bottom:8px;">
+                <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
+                    <button id="btn-copy-maxk" class="btn btn-default">Copy optimal k plot to clipboard</button>
+                    <!-- <h4>Optimal number of clusters</h4> -->
+                    <div class="controls" style="display:block; margin-bottom:0;">
+                        <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
+                        <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                            <option value="log">Log</option>
+                            <option value="normal">Normal</option> 
+                        </select>
+                        <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+                    </div>
+                </div>
             </div>
-                <button id="btn-copy-maxk" class="btn btn-default btn-xs">
-                    Copy optimal k plot to clipboard
-                </button>
+            
             <div id="optimalk_plot" style="width:100%; height:420px;"></div>
             <div style="margin-bottom:8px;">
             </div>
+
 
         </div>
 
