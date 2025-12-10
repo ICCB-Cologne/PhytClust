@@ -812,32 +812,70 @@ function downloadTreePlotSVG() {
 }
 
 async function copyTreeToClipboard() {
-    const svg = document.querySelector("#tree_display svg");
+    const container = document.querySelector("#tree_display");
+    if (!container) {
+        showStatus("Tree container not available.", "danger");
+        return;
+    }
 
+    const svg = container.querySelector("svg");
     if (!svg) {
         showStatus("Tree plot not available.", "danger");
         return;
     }
 
+    // Clone SVG so we can modify it without affecting display
+    const clone = svg.cloneNode(true);
+
+    // Convert filled branch paths to stroked lines
+    clone.querySelectorAll("path").forEach(p => {
+        const d = p.getAttribute("d");
+        if (d && /Z\s*$/i.test(d)) {  // ends with Z = closed path
+            const color = p.getAttribute("fill") || "#000";
+            p.setAttribute("fill", "none");
+            p.setAttribute("stroke", color);
+            p.setAttribute("stroke-width", "1");
+        }
+    });
+
+    // Collect styles
+    let styles = "";
+    for (const sheet of document.styleSheets) {
+        try {
+            if (!sheet.cssRules) continue;
+            for (const rule of sheet.cssRules) {
+                if (rule.selectorText && rule.selectorText.indexOf(">") === -1) {
+                    styles += rule.cssText + "\n";
+                }
+            }
+        } catch (e) {}
+    }
+
+    // Insert <style> inside <defs>
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    clone.insertBefore(defs, clone.firstChild);
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.setAttribute("type", "text/css");
+    styleEl.textContent = styles;
+    defs.appendChild(styleEl);
+
+    // Serialize the modified SVG
+    const svgText = new XMLSerializer().serializeToString(clone);
+
     try {
-        const serializer = new XMLSerializer();
-        const svgText = serializer.serializeToString(svg);
-
-        const blob = new Blob([svgText], { type: "image/svg+xml" });
-
         await navigator.clipboard.write([
             new ClipboardItem({
-                "image/svg+xml": blob,
+                "image/svg+xml": new Blob([svgText], { type: "image/svg+xml" }),
                 "text/plain": new Blob([svgText], { type: "text/plain" })
             })
         ]);
-
         showStatus("Tree copied to clipboard as SVG.", "success");
     } catch (err) {
         console.error(err);
         showStatus("Clipboard copy failed. Browser may not support SVG clipboard.", "danger");
     }
 }
+
 
 
 
