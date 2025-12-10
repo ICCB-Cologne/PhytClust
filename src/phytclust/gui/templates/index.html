@@ -7,20 +7,12 @@
     <!-- Bootstrap CSS (for look-and-feel only) -->
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
-
-    <!-- Local phylotree styles -->
-    <link rel="stylesheet" href="/static/phylotree.css">
-
+    <!-- Plotly for the Optimal k interactive chart -->
+    <!-- <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script> -->
     <!-- D3 v6 (matches local phylotree usage) -->
     <script src="https://d3js.org/d3.v6.min.js"></script>
-    <!-- Underscore and Lodash are expected by the bundled phylotree UMD -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.7/underscore-min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
     <script>window._$1 = window._$1 || window._;</script>
-    <!-- Local phylotree build used by the app -->
-    <script src="/static/phylotree.js"></script>
-    <!-- Plotly for the Optimal k interactive chart -->
-    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+
 
     <style>
         body { padding: 0px; }
@@ -33,10 +25,6 @@
             overflow: auto;
             background: #fafafa;
         }
-
-        <button id="btn-copy-tree" class="btn btn-default btn-xs" style="margin-bottom:8px;">
-            Copy tree to clipboard
-        </button>
 
         #tree_display {
             width: 100%;
@@ -282,14 +270,6 @@
 
 <div class="header-bar" style="padding:10px 40px;">
     <div class="header-content">
-<!--        <img src="/static/phytclust_logo_colour.png"-->
-<!--             alt="PhytClust"-->
-<!--             class="logo">-->
-
-<!--        <div class="header-buttons">-->
-<!--            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>-->
-<!--            <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>-->
-<!--        </div>-->
             <div class="header-spacer"></div>  <!-- left invisible spacer -->
 
             <img src="/static/phytclust_logo_colour.png"
@@ -317,14 +297,6 @@
             <p class="text-muted" style="margin-bottom:16px; color:black; font-size:22px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
 
             <h4>Load tree</h4>
-
-<!--                <form class="form-inline" onsubmit="return false;">-->
-<!--                    <div class="form-group">-->
-<!--                        <label for="file-input">From file:</label>-->
-<!--                        <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">-->
-<!--                    </div>-->
-<!--                    <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>-->
-<!--                </form>-->
                 <form class="form-inline" onsubmit="return false;">
                     <div class="form-group" style="position: relative;">
                         <label for="file-input" class="btn btn-upload-custom">
@@ -468,7 +440,7 @@
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
-            
+
             <div class="row" style="margin-bottom:8px;">
                 <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
                     <button id="btn-copy-tree" class="btn btn-default">Copy tree to clipboard</button>
@@ -480,9 +452,76 @@
                 </div>
             </div>
 
-            <div class="tree-wrapper">
-                <div id="tree_display"></div>
-            </div>
+            <div class="tab-content" style="margin-top: 15px;">
+
+                <div class="controls" style="margin-bottom:8px;">
+
+                    <!-- Layout Selector -->
+                    <label for="layout-mode" style="margin-right:6px;">Layout:</label>
+                    <select id="layout-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                        <option value="cladogram">Cladogram (linear)</option>
+                        <option value="rectangular">Rectangular (vertical lines)</option>
+                        <option value="circular">Circular</option>
+                    </select>
+
+                    <!-- Palette Selector -->
+                    <label for="palette-select" style="margin-left:15px; margin-right:6px;">Palette:</label>
+                    <select id="palette-select" class="form-control input-sm" style="display:inline-block; width:auto;">
+                        <option value="default">Default</option>
+                        <option value="pastel">Pastel</option>
+                        <option value="vivid">Vivid</option>
+                        <option value="dark">Dark</option>
+                        <option value="custom">Custom…</option>
+                    </select>
+
+                    <label for="color-mode" style="margin-left:15px; margin-right:6px;">Colour:</label>
+                    <select id="color-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                        <option value="nodes">Nodes</option>
+                        <option value="bars">Side bars</option>
+                    </select>
+
+                    <label style="margin-left:15px;">
+                        <input type="checkbox" id="show-leaf-names" checked>
+                        Show terminal (leaf) names
+                    </label>
+
+                    <label style="margin-left:15px;">
+                        <input type="checkbox" id="show-internal-names">
+                        Show internal node names
+                    </label>
+
+                    <label style="margin-left:15px;">
+                        Node size:
+                        <input type="number" id="node-size" class="form-control input-sm" style="width:60px; display:inline-block;"
+                            min="1" max="10" value="2.5">
+                    </label>
+                    <label style="margin-left:15px;">
+                        Tree width:
+                        <input type="range" id="tree-width-scale" min="0.5" max="2.0" step="0.1" value="1.0" style="width:120px;">
+                    </label>
+
+                    <label style="margin-left:15px;">
+                        Tree height:
+                        <input type="range" id="tree-height-scale" min="0.5" max="2.0" step="0.1" value="1.0" style="width:120px;">
+                    </label>
+
+                    <label style="margin-left:10px;">
+                        Label size:
+                        <input type="number" id="label-size" class="form-control input-sm" style="width:60px; display:inline-block;"
+                            min="6" max="14" value="9">
+                    </label>
+
+                    <!-- Palette Preview -->
+                    <span id="palette-preview" style="display:inline-block; margin-left:8px; vertical-align:middle;"></span>
+
+                    <span class="small-note" style="margin-left:8px;">
+                        Click nodes to collapse/expand. Zoom &amp; pan with mouse.
+                    </span>
+                </div>
+                <div class="tree-wrapper">
+                    <div id="tree_display"></div>
+                </div>
+                </div>
         </div>
 
 
@@ -497,13 +536,13 @@
                         <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
                         <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
                             <option value="log">Log</option>
-                            <option value="normal">Normal</option> 
+                            <option value="normal">Normal</option>
                         </select>
                         <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
                     </div>
                 </div>
             </div>
-            
+
             <div id="optimalk_plot" style="width:100%; height:420px;"></div>
             <div style="margin-bottom:8px;">
             </div>
@@ -553,6 +592,7 @@
 <!-- Dependencies for Bootstrap tabs -->
 <script src="//code.jquery.com/jquery.js"></script>
 <script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script src="/static/tree_viz.js"></script>
 
 <script>
     document.getElementById("file-input").addEventListener("change", function() {
@@ -565,872 +605,178 @@
             fileNameSpan.innerHTML =
                 '<span style="color: #555;">No file chosen</span>';
         }
-    });
-    // Example tree (from your template)
-    var EXAMPLE_NEWICK = "(((A:5, B:3)C1:6, (C:3, D:7)D1:4)A13:22, (((E:7, F:13)E12:5, G:6)B23:10, H:60):35):0;";
-
-    var newickEl = document.getElementById("newick-input");
-    var resultEl = document.getElementById("result");
-    var statusEl = document.getElementById("status-message");
-    var treeHost = document.getElementById("tree_display");
-
-    const CLUSTER_COLORS = [
-        "#1f77b4", "#d62728", "#2ca02c", "#9467bd",
-        "#ff7f0e", "#8c564b", "#e377c2", "#17becf"
-    ];
-
-    let CURRENT_CLUSTERS = {};
-
-    function nodeStyler(selection, node) {
-        const isLeaf = !node.children || node.children.length === 0;
-        const name = node.data && node.data.name;
-
-        // --- ensure there is a circle ---
-        let circle = selection.select("circle");
-        if (circle.empty()) {
-            circle = selection.append("circle");
-        }
-
-        // --- size: adjust to your liking ---
-        const baseR = isLeaf ? 5 : 3;   // smaller circle sizes
-        circle.attr("r", baseR);
-
-        // --- color by cluster ---
-        const cid = name && CURRENT_CLUSTERS && CURRENT_CLUSTERS[name];
-        if (cid !== undefined) {
-            const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-            circle
-                .style("fill", color)
-                .style("stroke", "black")
-                .style("stroke-width", "1px");
-        } else {
-            circle
-                .style("fill", isLeaf ? "steelblue" : "#ccc")
-                .style("stroke", "black")
-                .style("stroke-width", "0.5px");
-        }
-
-        // --- shift labels to the right ---
-        const labelShift = baseR + 6;
-        selection.select("text")
-            .attr("dx", labelShift)
-            .style("font-weight", cid !== undefined ? "bold" : null)
-            .style("fill", cid !== undefined ? CLUSTER_COLORS[cid % CLUSTER_COLORS.length] : null);
-    }
-
-
-    var statusHideTimeout = null;
-    var isRunning = false;
-    var extraKEl = document.getElementById("extra-k");
-    var extraOutgroupEl = document.getElementById("extra-outgroup");
-    var extraTopNEl = document.getElementById("extra-topn");
-    var extraResolutionEl = document.getElementById("extra-resolution");
-    var extraBinsEl = document.getElementById("extra-bins");
-    var extraMaxKEl = document.getElementById("extra-maxk");
-    var extraMaxKLimitEl = document.getElementById("extra-maxklimit");
-    var extraLambdaEl = document.getElementById("extra-lambda");
-
-    function resetExtraParams() {
-        if (extraKEl) extraKEl.value = "";
-        if (extraOutgroupEl) extraOutgroupEl.value = "";
-        if (extraTopNEl) extraTopNEl.value = "";
-        if (extraResolutionEl) extraResolutionEl.checked = false;
-        if (extraBinsEl) extraBinsEl.value = "";
-        if (extraMaxKEl) extraMaxKEl.value = "";
-        if (extraMaxKLimitEl) extraMaxKLimitEl.value = "";
-        if (extraLambdaEl) extraLambdaEl.value = "";
-        showStatus("Extra parameters reset to defaults.", "info");
-    }
-    // Track latest response for Optimal k rendering to avoid stale closures
-    var latestOptimalKData = null;
-    function escapeRegExp(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    function isOutgroupInNewick(newick, outgroup) {
-        if (!outgroup) return true;
-        var name = escapeRegExp(outgroup);
-        // match quoted or unquoted names with token boundaries typical in Newick
-        var quoted = new RegExp("[\\(,]\\s*'" + name + "'\\s*(?:[:,\\)])");
-        var unquoted = new RegExp("[\\(,]\\s*" + name + "\\s*(?:[:,\\)])");
-        return quoted.test(newick) || unquoted.test(newick);
-    }
-
-    // Roughly estimate number of samples (leaves) as comma count + 1, ignoring commas inside quotes
-    function estimateLeafCount(newick) {
-        var inQuote = null;
-        var commas = 0;
-        for (var i = 0; i < newick.length; i++) {
-            var ch = newick[i];
-            if (inQuote) {
-                if (ch === inQuote) { inQuote = null; }
-                continue;
-            }
-            if (ch === '"' || ch === "'") { inQuote = ch; continue; }
-            if (ch === ',') { commas++; }
-        }
-        return Math.max(0, commas + 1);
-    }
-
-    function showStatus(message, type) {
-        var el = $("#status-message");
-        type = type || "info";
-        if (statusHideTimeout) { clearTimeout(statusHideTimeout); statusHideTimeout = null; }
-        el.removeClass();
-        el.addClass("alert alert-" + type);
-        el.text(message);
-        el.show();
-        // Auto-hide any success message after 5s
-        if (type === "success") {
-            statusHideTimeout = setTimeout(function(){ el.hide(); }, 5000);
-        }
-    }
-
-    function clearTree() {
-        treeHost.innerHTML = "";
-    }
-
-    async function runPhytClust() {
-        if (isRunning) { return; }
-        var newickText = (newickEl.value || "").trim();
-        if (!newickText) {
-            alert("Please upload a Newick tree file or paste a Newick string.");
-            return;
-        }
-        // Estimate number of samples (leaves)
-        var numSamples = estimateLeafCount(newickText);
-        // Determine mode based on optional k / resolution inputs
-        var kVal = null;
-        if (extraKEl) {
-            var kRaw = (extraKEl.value || "").trim();
-            if (kRaw) {
-                var parsed = parseInt(kRaw, 10);
-                if (!isNaN(parsed) && parsed >= 1) {
-                    kVal = parsed;
-                }
-            }
-        }
-
-        var payload;
-        var outgroupVal = null;
-        if (extraOutgroupEl) {
-            var ogRaw = (extraOutgroupEl.value || "").trim();
-            if (ogRaw) { outgroupVal = ogRaw; }
-        }
-        var topNVal = null;
-        if (extraTopNEl) {
-            var tnRaw = (extraTopNEl.value || "").trim();
-            if (tnRaw) { var tni = parseInt(tnRaw, 10); if (!isNaN(tni) && tni >= 1) topNVal = tni; }
-        }
-        var resolutionFlag = !!(extraResolutionEl && extraResolutionEl.checked);
-        var binsVal = null;
-        if (extraBinsEl) {
-            var bRaw = (extraBinsEl.value || "").trim();
-            if (bRaw) { var bi = parseInt(bRaw, 10); if (!isNaN(bi) && bi >= 1) binsVal = bi; }
-        }
-        var maxKVal = null;
-        if (extraMaxKEl) {
-            var mkRaw = (extraMaxKEl.value || "").trim();
-            if (mkRaw) {
-                var mki = parseInt(mkRaw, 10);
-                if (!isNaN(mki)) {
-                    if (mki < 4) { mki = 4; if (extraMaxKEl) extraMaxKEl.value = String(mki); }
-                    maxKVal = mki;
-                }
-            }
-        }
-        var maxKLimitVal = null;
-        if (extraMaxKLimitEl) {
-            var mklRaw = (extraMaxKLimitEl.value || "").trim();
-            if (mklRaw) {
-                var mkli = parseFloat(mklRaw);
-                if (!isNaN(mkli)) {
-                    var minLimit = (numSamples > 0) ? (4 / numSamples) : 0;
-                    if (mkli < minLimit) { mkli = minLimit; if (extraMaxKLimitEl) extraMaxKLimitEl.value = String(mkli); }
-                    maxKLimitVal = mkli;
-                }
-            }
-        }
-        var lambdaVal = null;
-        if (extraLambdaEl) {
-            var lRaw = (extraLambdaEl.value || "").trim();
-            if (lRaw) { var li = parseFloat(lRaw); if (!isNaN(li)) lambdaVal = li; }
-        }
-
-        // quick client-side validation for outgroup presence
-        if (outgroupVal && !isOutgroupInNewick(newickText, outgroupVal)) {
-            showStatus("Outgroup not found in Newick.", "danger");
-            return;
-        }
-        if (kVal !== null) {
-            payload = { newick: newickText, mode: "k", k: kVal };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust (fixed k-mode)…", "info");
-            resultEl.textContent = "Running PhytClust (k-mode)…";
-        } else if (resolutionFlag) {
-            payload = { newick: newickText, mode: "resolution", top_n: (topNVal || 1) };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (binsVal !== null) { payload.num_bins = binsVal; }
-            if (maxKVal !== null) { payload.max_k = maxKVal; }
-            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust (resolution mode)…", "info");
-            resultEl.textContent = "Running PhytClust (resolution mode)…";
-        } else {
-            payload = { newick: newickText, mode: "global", top_n: (topNVal || 1) };
-            if (outgroupVal !== null) { payload.outgroup = outgroupVal; }
-            if (maxKVal !== null) { payload.max_k = maxKVal; }
-            if (maxKLimitVal !== null) { payload.max_k_limit = maxKLimitVal; }
-            if (lambdaVal !== null) { payload.lambda_weight = lambdaVal; }
-            showStatus("Running PhytClust...", "info");
-            resultEl.textContent = "Running PhytClust...";
-        }
-        clearTree();
-
-        try {
-            isRunning = true;
-            // disable Save while running
-            var saveBtn = document.getElementById('btn-save');
-            if (saveBtn) { saveBtn.disabled = true; }
-            const res = await fetch("/api/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-
-            let data = null;
-            const raw = await res.text();
-            try { data = JSON.parse(raw); } catch (_) { /* non-JSON error body */ }
-
-            if (!res.ok) {
-                const msg = (data && data.detail) ? data.detail : (raw || "Request failed");
-                resultEl.textContent = (typeof raw === 'string' && raw.length < 2000) ? raw : (JSON.stringify(data || { error: msg }, null, 2));
-                showStatus("Error running PhytClust: " + msg, "danger");
-                return; // stop, avoid using undefined data below
-            }
-
-            // Ensure data is an object even if empty
-            if (!data || typeof data !== 'object') { data = {}; }
-            resultEl.textContent = JSON.stringify(data, null, 2);
-
-            try {
-                if (data.newick && data.clusters && data.clusters.length > 0) {
-                    // Handle multiple possible cluster assignments via slider
-                    (function(){
-                        var box = document.getElementById('cluster-select-controls');
-                        var selectEl = document.getElementById('cluster-select');
-                        var labelEl = document.getElementById('cluster-select-label');
-
-                        var total = data.clusters.length;
-                        if (total > 1 && box && selectEl && labelEl) {
-                            // Populate dropdown options using k from data.peaks when available
-                            box.style.display = 'block';
-                            selectEl.innerHTML = '';
-                            for (var i = 0; i < total; i++) {
-                                var opt = document.createElement('option');
-                                opt.value = String(i);
-                                var kLabel = null;
-                                if (Array.isArray(data.peaks) && i < data.peaks.length) {
-                                    var kVal = data.peaks[i];
-                                    if (typeof kVal === 'number' && isFinite(kVal)) {
-                                        kLabel = 'k = ' + kVal;
-                                    }
-                                }
-                                opt.textContent = kLabel || ('Set ' + (i + 1));
-                                selectEl.appendChild(opt);
-                            }
-                            selectEl.value = '0';
-                            labelEl.textContent = '1 / ' + total;
-
-                            // Initial draw for index 0
-                            drawTree(data.newick, data.clusters[0]);
-
-                            // Re-render on selection change
-                            selectEl.onchange = function(){
-                                var idx = parseInt(selectEl.value, 10) || 0;
-                                labelEl.textContent = (idx + 1) + ' / ' + total;
-                                var clustersMap = data.clusters[idx];
-                                drawTree(data.newick, clustersMap);
-                            };
-                        } else {
-                            // Hide dropdown for single or missing clusters
-                            if (box) { box.style.display = 'none'; }
-                            drawTree(data.newick, data.clusters[0]);
-                        }
-                    })();
-                    showStatus("PhytClust finished.", "success");
-                } else {
-                    drawTree(data.newick, null);
-                    showStatus("No clusters found (likely because there are not enough samples).", "danger");
-                }
-            } catch (e) {
-                console.error(e);
-                showStatus("Drawing the Tree failed with Error: " + e, "danger");
-                resultEl.textContent = "Error: " + e;
-            }
-
-            // Render Optimal k plot if scores are available
-            try {
-                if (data && data.scores) {
-                    // Remove any fixed-k message and temporary sizing before plotting
-                    var plotHostReady = document.getElementById('optimalk_plot');
-                    if (plotHostReady) {
-                        plotHostReady.innerHTML = '';
-                        plotHostReady.style.removeProperty('box-sizing');
-                    }
-                    latestOptimalKData = data;
-                    drawOptimalK(latestOptimalKData);
-                } else {
-                    // Clear plot if no scores
-                    var plotHost = document.getElementById('optimalk_plot');
-                    if (plotHost) {
-                        // Ensure full-width container before inserting message
-                        plotHost.style.width = '100%';
-                        plotHost.style.height = '420px';
-                        plotHost.style.boxSizing = 'border-box';
-                        var kDisplay = (typeof kVal === 'number' && kVal >= 1) ? kVal : 'user-defined fixed k';
-                        plotHost.innerHTML = '<div class="alert alert-info" style="width:100%; margin:0;">Optimal number of clusters plot is unavailable in fixed k mode. Using k = ' + kDisplay + ' from parameters.</div>';
-                    }
-                }
-            } catch (e) {
-                console.warn('Plotting optimal number of clusters failed with Error:', e);
-                showStatus("Plotting optimal number of clusters failed with Error: " + e, "danger");
-            }
-        } catch (e) {
-            showStatus("runPhytClust failed with Error: " + e, "danger");
-            resultEl.textContent = "Error: " + e;
-            console.error(e);
-        } finally {
-            isRunning = false;
-            var saveBtn2 = document.getElementById('btn-save');
-            if (saveBtn2) { saveBtn2.disabled = false; }
-        }
-    }
-
-    function colorNodesByCluster(clusters) {
-    if (!clusters) return;
-
-    d3.selectAll("#tree_display g.node").each(function () {
-        const g = d3.select(this);
-        const label = g.select("text").text();
-        if (!label) return;
-
-        const cid = clusters[label];
-        if (cid === undefined) return;
-
-        const color = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-
-        // color the node shape
-        g.selectAll("circle, ellipse, rect")
-            .style("fill", color)
-            .style("stroke", "black");
-
-        // make terminal circles even bigger:
-        if (g.classed("leaf")) {
-            g.select("circle")
-                .attr("r", 10);   // <-- terminal node size override
-        }
-
-        // color text
-        g.select("text")
-            .style("fill", color)
-            .style("font-weight", "bold");
-    });
-    }
-
-    function drawTree(newick, clusters) {
-        clearTree();
-
-        // expose clusters to nodeStyler
-        CURRENT_CLUSTERS = clusters || {};
-
-        var tree = new phylotree.phylotree(newick);
-
-        tree.render({
-            container: "#tree_display",
-            "left-right-spacing": "fit-to-size",
-            "top-bottom-spacing": "fit-to-size",
-            "node-styler": nodeStyler
-        });
-
-        var svg = tree.display.show();
-        treeHost.appendChild(svg);
-    }
-
-
-    function drawOptimalK(data) {
-        // Prefer most recent data if none passed
-        if (!data) { data = latestOptimalKData; }
-        var plotEl = document.getElementById('optimalk_plot');
-        if (!plotEl) return;
-        var axisModeEl = document.getElementById('axis-mode');
-
-        var scores = data.scores || [];
-        var peaks = data.peaks || [];
-        if (!Array.isArray(scores) || scores.length === 0) {
-            plotEl.innerHTML = '<div class="alert alert-warning">No scores available to plot.</div>';
-            return;
-        }
-
-        // Build x (k) starting at 2 and y (score) arrays
-        var x = [];
-        var y = [];
-        for (var i = 0; i < scores.length; i++) {
-            x.push(i + 2);
-            y.push(scores[i+1]);
-        }
-
-        // Base line trace
-        var lineTrace = {
-            x: x,
-            y: y,
-            mode: 'lines+markers',
-            name: 'Score',
-            line: { color: '#1f77b4' },
-            marker: { size: 12 }
-        };
-
-        // Peaks trace (if any)
-        var peakXs = [];
-        var peakYs = [];
-        if (Array.isArray(peaks)) {
-            for (var p = 0; p < peaks.length; p++) {
-                var kVal = peaks[p];
-                if (typeof kVal === 'number') {
-                    var idx = kVal - 2;
-                    if (idx >= 0 && idx < y.length) {
-                        peakXs.push(kVal);
-                        peakYs.push(y[idx]);
-                    }
-                }
-            }
-        }
-
-        var peakTrace = {
-            x: peakXs,
-            y: peakYs,
-            mode: 'markers',
-            name: 'Optimal k',
-            marker: { size: 20, color: '#d62728', symbol: 'star' }
-        };
-
-        // Limit x ticks to at most 10 for large trees (linear mode default)
-        var nPoints = x.length;
-        var xDtick = Math.max(1, Math.ceil(nPoints / 10));
-        var layout = {
-            margin: { l: 50, r: 10, t: 10, b: 40 },
-            xaxis: { title: 'k (number of clusters)', tickmode: 'linear', dtick: xDtick },
-            yaxis: { title: 'Score' },
-            hovermode: 'closest'
-        };
-
-        // Apply axis mode with user override support
-        var defaultMode = (scores.length > 50) ? 'log' : 'normal';
-        var mode = defaultMode;
-        if (axisModeEl) {
-            // If the user changed the select, honor their choice
-            if (axisModeEl.__userOverride) {
-                mode = axisModeEl.value || defaultMode;
-            } else {
-                // Otherwise reflect our default in the UI
-                axisModeEl.value = defaultMode;
-            }
-        }
-        layout.xaxis.type = (mode === 'log' ? 'log' : 'linear');
-        if (mode === 'log') {
-            // Show ticks at length scales: 2, 10, 100, 1000, ... up to max x
-            var xmin = Math.min.apply(null, x);
-            var xmax = Math.max.apply(null, x);
-            var tickVals = [];
-            // Always include 2 if within range
-            if (xmin <= 2 && xmax >= 2) tickVals.push(2);
-            // Powers of 10 starting from 10 up to <= xmax
-            var pow = 1;
-            while (true) {
-                var val = Math.pow(10, pow);
-                if (val > xmax) break;
-                if (val >= xmin) tickVals.push(val);
-                pow += 1;
-            }
-            // Ensure tickmode uses provided values
-            layout.xaxis.tickmode = 'array';
-            layout.xaxis.tickvals = tickVals;
-            layout.xaxis.ticktext = tickVals.map(function(v){ return String(v); });
-        }
-
-        Plotly.newPlot(plotEl, [lineTrace, peakTrace], layout, {displayModeBar: false});
-
-        // Re-render on axis mode change
-        if (axisModeEl && !axisModeEl.__wired) {
-            axisModeEl.__wired = true;
-            axisModeEl.addEventListener('change', function(){
-                // Mark as user override so subsequent renders honor selection
-                axisModeEl.__userOverride = true;
-                // Re-render using the latest data, not the old closure
-                drawOptimalK();
-            });
-        }
-    }
-
-    function handleFileSelect(evt) {
-        var file = evt.target.files[0];
-        if (!file) return;
-        showStatus("Tree is loading", "info");
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            var text = e.target.result || "";
-            newickEl.value = text.trim();
-            showStatus("Tree successfully loaded", "success");
-        };
-        reader.readAsText(file);
-    }
-
-    // Functions to save tsv and plots
-
+    })
+    /* ============================================================
+       Utility: Download TSV from server (/api/export_tsv)
+       ============================================================ */
     async function downloadTSV() {
-    try {
-        const jsonText = resultEl.textContent;
-        const data = JSON.parse(jsonText);
+        const fname = prompt("Filename:", "phytclust_results.tsv") || "phytclust_results.tsv";
 
-        if (!data || !data.clusters) {
-            showStatus("No data available for TSV export.", "danger");
+        const res = await fetch("/api/export_tsv", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                filename: fname,
+                top_n: 1,
+                outlier: true,
+                output_all: false
+            })
+        });
+
+        if (!res.ok) {
+            alert("Failed to export TSV.");
             return;
         }
 
-        const rows = ["cluster\tleaf"];
-        data.clusters.forEach((cluster, i) => {
-            if (Array.isArray(cluster)) {
-                cluster.forEach(name => {
-                    rows.push(`cluster_${i+1}\t${name}`);
-                });
-            }
-        });
+        const text = await res.text();
 
-        const tsv = rows.join("\n");
-        const blob = new Blob([tsv], { type: "text/tab-separated-values" });
+        const blob = new Blob([text], { type: "text/tab-separated-values" });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement("a");
         a.href = url;
-        a.download = "phytclust_results.tsv";
+        a.download = fname;
         a.click();
 
         URL.revokeObjectURL(url);
-        showStatus("TSV downloaded.", "success");
-    } catch (err) {
-        showStatus("TSV export failed.", "danger");
-    }
-}
-
-function downloadOptimalKPlot() {
-    const plotEl = document.getElementById("optimalk_plot");
-    if (!plotEl || !window.Plotly) {
-        showStatus("Optimal k plot not available.", "danger");
-        return;
     }
 
-    Plotly.downloadImage(plotEl, {
-        format: "png",
-        filename: "phytclust_max_k_plot",
-        height: 600,
-        width: 1000
-    });
 
-    showStatus("Optimal k plot download started.", "success");
-}
-
-function downloadTreePlotSVG() {
-    const container = document.querySelector("#tree_display");
-    const svg = container ? container.querySelector("svg") : null;
-
-    if (!svg) {
-        showStatus("Tree plot not available.", "danger");
-        return;
-    }
-
-    const prefix = {
-        xmlns: "http://www.w3.org/2000/xmlns/",
-        xlink: "http://www.w3.org/1999/xlink",
-        svg: "http://www.w3.org/2000/svg"
-    };
-
-    // ---- Collect all CSS styles and inline them ----
-    function getStyles() {
-        let styles = "";
-
-        function processStylesheet(ss) {
-            try {
-                if (ss.cssRules) {
-                    for (let i = 0; i < ss.cssRules.length; i++) {
-                        const rule = ss.cssRules[i];
-
-                        if (rule.type === 3 && rule.styleSheet) {
-                            // @import
-                            processStylesheet(rule.styleSheet);
-                        } else if (rule.selectorText) {
-                            // Skip child selectors that crash Illustrator
-                            if (rule.selectorText.indexOf(">") === -1) {
-                                styles += "\n" + rule.cssText;
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                // ignore CORS-restricted stylesheets
-            }
+    /* ============================================================
+       Utility: Save TREE SVG
+       ============================================================ */
+    function downloadTreePlotSVG() {
+        const svg = document.querySelector("#tree_display svg");
+        if (!svg) {
+            alert("No tree plot to save.");
+            return;
         }
 
-        for (let i = 0; i < document.styleSheets.length; i++) {
-            processStylesheet(document.styleSheets[i]);
+        const serializer = new XMLSerializer();
+        const src = serializer.serializeToString(svg);
+
+        const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tree_plot.svg";
+        a.click();
+
+        URL.revokeObjectURL(url);
+    }
+
+
+    /* ============================================================
+       Utility: Save Optimal-k SVG
+       (your D3 version — NOT Plotly)
+       ============================================================ */
+    function downloadOptimalKPlot() {
+        const svg = document.querySelector("#optimalk_plot svg");
+        if (!svg) {
+            alert("No optimal-k plot to save.");
+            return;
         }
 
-        return styles;
+        const serializer = new XMLSerializer();
+        const src = serializer.serializeToString(svg);
+
+        const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "optimal_k.svg";
+        a.click();
+
+        URL.revokeObjectURL(url);
     }
 
-    // ---- Clone SVG so we don't modify the visible one ----
-    const clone = svg.cloneNode(true);
-    clone.setAttribute("version", "1.1");
 
-    if (!clone.getAttributeNS(prefix.xmlns, "xmlns")) {
-        clone.setAttributeNS(prefix.xmlns, "xmlns", prefix.svg);
-    }
-    if (!clone.getAttributeNS(prefix.xmlns, "xmlns:xlink")) {
-        clone.setAttributeNS(prefix.xmlns, "xmlns:xlink", prefix.xlink);
-    }
+    /* ============================================================
+       Clipboard: Copy Tree SVG
+       ============================================================ */
+    async function copyTreeToClipboard() {
+        const svg = document.querySelector("#tree_display svg");
+        if (!svg) return alert("No tree to copy.");
 
-    // ---- Inline collected styles into SVG ----
-    const styleEl = document.createElementNS(prefix.svg, "style");
-    styleEl.setAttribute("type", "text/css");
-    styleEl.textContent = getStyles();
+        const serializer = new XMLSerializer();
+        const src = serializer.serializeToString(svg);
+        const blob = new Blob([src], { type: "image/svg+xml" });
+        const item = new ClipboardItem({ "image/svg+xml": blob });
 
-    const firstChild = clone.firstChild;
-    clone.insertBefore(styleEl, firstChild);
-
-    // ---- Serialize SVG ----
-    const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(clone);
-
-    // ---- Download SVG file ----
-    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "phytclust_tree.svg";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    URL.revokeObjectURL(url);
-
-    showStatus("Tree plot exported as SVG.", "success");
-}
-async function copyOptimalKPlotToClipboard() {
-    const plotEl = document.getElementById("optimalk_plot");
-    if (!plotEl || !window.Plotly) {
-        showStatus("Optimal k plot not available.", "danger");
-        return;
-    }
-
-    try {
-        // Convert Plotly plot to PNG data URL
-        const dataUrl = await Plotly.toImage(plotEl, {
-            format: "png",
-            height: 600,
-            width: 1000
-        });
-
-        // Convert data URL to Blob
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-
-        // Copy to clipboard
-        await navigator.clipboard.write([
-            new ClipboardItem({ "image/png": blob })
-        ]);
-
-        showStatus("Optimal k plot copied to clipboard as PNG.", "success");
-    } catch (err) {
-        console.error(err);
-        showStatus("Clipboard copy failed. Browser may not support PNG clipboard.", "danger");
-    }
-}
-
-async function copyTreeToClipboard() {
-    const container = document.querySelector("#tree_display");
-    if (!container) {
-        showStatus("Tree container not available.", "danger");
-        return;
-    }
-
-    const svg = container.querySelector("svg");
-    if (!svg) {
-        showStatus("Tree plot not available.", "danger");
-        return;
-    }
-
-    // Clone SVG so we can modify it without affecting display
-    const clone = svg.cloneNode(true);
-
-    // Convert filled branch paths to stroked lines
-    clone.querySelectorAll("path").forEach(p => {
-        const d = p.getAttribute("d");
-        if (d && /Z\s*$/i.test(d)) {  // ends with Z = closed path
-            const color = p.getAttribute("fill") || "#000";
-            p.setAttribute("fill", "none");
-            p.setAttribute("stroke", color);
-            p.setAttribute("stroke-width", "1");
-        }
-    });
-
-    // Collect styles
-    let styles = "";
-    for (const sheet of document.styleSheets) {
         try {
-            if (!sheet.cssRules) continue;
-            for (const rule of sheet.cssRules) {
-                if (rule.selectorText && rule.selectorText.indexOf(">") === -1) {
-                    styles += rule.cssText + "\n";
-                }
-            }
-        } catch (e) {}
+            await navigator.clipboard.write([item]);
+            alert("Tree copied to clipboard!");
+        } catch (err) {
+            console.error(err);
+            alert("Clipboard copy failed.");
+        }
     }
 
-    // Insert <style> inside <defs>
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    clone.insertBefore(defs, clone.firstChild);
-    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
-    styleEl.setAttribute("type", "text/css");
-    styleEl.textContent = styles;
-    defs.appendChild(styleEl);
 
-    // Serialize the modified SVG
-    const svgText = new XMLSerializer().serializeToString(clone);
+    /* ============================================================
+       Clipboard: Copy Optimal-k SVG
+       ============================================================ */
+    async function copyOptimalKPlotToClipboard() {
+        const svg = document.querySelector("#optimalk_plot svg");
+        if (!svg) return alert("No optimal-k plot to copy.");
 
-    try {
-        await navigator.clipboard.write([
-            new ClipboardItem({
-                "image/svg+xml": new Blob([svgText], { type: "image/svg+xml" }),
-                "text/plain": new Blob([svgText], { type: "text/plain" })
-            })
-        ]);
-        showStatus("Tree copied to clipboard as SVG.", "success");
-    } catch (err) {
-        console.error(err);
-        showStatus("Clipboard copy failed. Browser may not support SVG clipboard.", "danger");
+        const serializer = new XMLSerializer();
+        const src = serializer.serializeToString(svg);
+        const blob = new Blob([src], { type: "image/svg+xml" });
+        const item = new ClipboardItem({ "image/svg+xml": blob });
+
+        try {
+            await navigator.clipboard.write([item]);
+            alert("Optimal-k plot copied to clipboard!");
+        } catch (err) {
+            console.error(err);
+            alert("Clipboard copy failed.");
+        }
     }
-}
 
 
+    /* ============================================================
+       UI Wiring
+       ============================================================ */
+    $(function () {
 
-
-
-    // On DOM ready
-    $(function() {
-        // Help sidebar toggle
-        document.getElementById('btn-help').addEventListener('click', function(){
-            var sb = document.getElementById('help-sidebar');
-            if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
-            else { sb.style.display = 'none'; }
-        });
-        document.getElementById('btn-help-close').addEventListener('click', function(){
-            document.getElementById('help-sidebar').style.display = 'none';
-        });
-        $("#app-loading").hide();
-        showStatus("Application loaded. Example tree is prefilled.", "info");
-
-        // Wire controls
-        document.getElementById("file-input").addEventListener("change", handleFileSelect);
-        document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
-       // Dropdown save actions
-        document.querySelectorAll(".dropdown-menu a[data-save-type]").forEach(function(el){
-            el.addEventListener("click", function(e){
+        /* ---------- Save dropdown ---------- */
+        document.querySelectorAll(".dropdown-menu a[data-save-type]").forEach(function (el) {
+            el.addEventListener("click", function (e) {
                 e.preventDefault();
-                if (isRunning) { 
-                    showStatus("Cannot save while running.", "warning"); 
-                    return; 
-                }
+                const type = this.dataset.saveType;
 
-                const type = this.getAttribute("data-save-type");
-
-                if (type === "tsv") {
+                if (type === "tsv") return downloadTSV();
+                if (type === "tree_plot") return downloadTreePlotSVG();
+                if (type === "k_plot") return downloadOptimalKPlot();
+                if (type === "tsv_plots") {
                     downloadTSV();
-                }
-                else if (type === "tsv_plots") {
-                    downloadTSV();
-                    setTimeout(downloadTreePlot, 300);
-                    setTimeout(downloadOptimalKPlot, 600);
-                }
-                else if (type === "tree_plot") {
-                     downloadTreePlotSVG();
-                }
-                else if (type === "k_plot") {
+                    downloadTreePlotSVG();
                     downloadOptimalKPlot();
                 }
             });
         });
 
-        });
-        // Example tree loads automatically on start; no manual button needed
-
-        var resetBtn = document.getElementById("btn-extra-reset");
-        if (resetBtn) {
-            resetBtn.addEventListener("click", function(e){ e.preventDefault(); resetExtraParams(); });
-        }
-
-        // Help sidebar: load example tree button
-        var helpExampleBtn = document.getElementById('btn-help-load-example');
-        if (helpExampleBtn) {
-            helpExampleBtn.addEventListener('click', function(e){
-                e.preventDefault();
-                showStatus("tree is loading", "info");
-                newickEl.value = EXAMPLE_NEWICK;
-                showStatus("tree was loaded", "success");
-                // Optionally trigger a run so users immediately see results
-                runPhytClust();
-            });
-        }
-
-        // Indicate loading when user types/pastes Newick, then loaded shortly after
-        var loadTimer = null;
-        newickEl.addEventListener('input', function(){
-            if (loadTimer) { clearTimeout(loadTimer); }
-            showStatus("tree is loading", "info");
-            loadTimer = setTimeout(function(){
-                showStatus("tree was loaded", "success");
-            }, 250);
-        });
-
-        // Toggle plus/minus icon on extra parameters collapse
-        $('#extra-params').on('shown.bs.collapse', function () {
-            $('#extra-params-icon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
-        });
-        $('#extra-params').on('hidden.bs.collapse', function () {
-            $('#extra-params-icon').removeClass('glyphicon-minus').addClass('glyphicon-plus');
-        });
-
-        // Prefill example and auto-run once for convenience
-        newickEl.value = EXAMPLE_NEWICK;
-        runPhytClust();
-
-            // Ensure Plotly resizes properly when tab becomes visible
-            $('a[href="#viewer-optimal-k"]').on('shown.bs.tab', function(){
-                if (window.Plotly && document.getElementById('optimalk_plot')) {
-                    try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
-                }
-            });
-
-        document
-            .getElementById("btn-copy-tree")
-            .addEventListener("click", function (e) {
+        /* ---------- Copy buttons ---------- */
+        const btnTree = document.getElementById("btn-copy-tree");
+        if (btnTree) {
+            btnTree.addEventListener("click", function (e) {
                 e.preventDefault();
                 copyTreeToClipboard();
             });
+        }
 
-        document.getElementById("btn-copy-maxk").addEventListener("click", copyOptimalKPlotToClipboard);
+        const btnK = document.getElementById("btn-copy-maxk");
+        if (btnK) {
+            btnK.addEventListener("click", (e) => {
+                e.preventDefault();
+                copyOptimalKPlotToClipboard();
+            });
+        }
 
-
+    });
 </script>
 
     <!-- FOOTER -->
