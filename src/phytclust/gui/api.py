@@ -25,8 +25,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Keep the last PhytClust instance and result in memory (simple session)
 LAST_PC: Optional[PhytClust] = None
 LAST_RESULT: Optional[Dict[str, Any]] = None
-LOG = logging.getLogger("phytclust.gui.api")
-
+LAST_NEWICK: Optional[str] = None
 
 # ------------------------------------------------------
 # Serve index.html at root URL
@@ -84,6 +83,9 @@ def _serialize_clusters(raw_clusters: Any) -> List[Dict[str, int]]:
 # ------------------------------------------------------
 @app.post("/api/run")
 def run_phytclust(req: PhytclustRequest):
+    global LAST_PC, LAST_RESULT, LAST_NEWICK
+    notes = []
+
     if not req.newick.strip():
         raise HTTPException(status_code=400, detail="Empty Newick string.")
 
@@ -92,11 +94,15 @@ def run_phytclust(req: PhytclustRequest):
         raise HTTPException(
             status_code=400, detail="mode must be 'k', 'global', or 'resolution'."
         )
-
-    try:
-        pc = PhytClust(tree=req.newick, outgroup=req.outgroup)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse Newick: {e}")
+    
+    if LAST_NEWICK == req.newick and LAST_PC is not None:
+        pc = LAST_PC
+        notes.append("Reusing previous PhytClust instance.")
+    else:
+        try:
+            pc = PhytClust(tree=req.newick, outgroup=req.outgroup)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not parse Newick: {e}")
 
     try:
         if mode == "k":
@@ -148,26 +154,22 @@ def run_phytclust(req: PhytclustRequest):
         except Exception:
             pass
 
-    # LOG.info("pc summary: %s", str(pc))
-    # LOG.info("bin_ranges_current: %s", pc.get("bin_ranges_current", None))
-    
-    # Log pc.get("bin_ranges_current", None) here!
     payload = {
         "mode": result.get("mode"),
         "k": result.get("k"),
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
         "outgroup": result.get("outgroup"),
-        # "bin_ranges_current": str(pc.get("bin_ranges_current", None)),
+        "notes": notes,
         "newick": req.newick,
         "scores": scores,
         "clusters": clusters_json,
     }
 
     # store last instance and result for use by /api/save
-    global LAST_PC, LAST_RESULT
     LAST_PC = pc
     LAST_RESULT = payload
+    LAST_NEWICK = req.newick
     return payload
 
 
