@@ -78,10 +78,11 @@ def calculate_scores(pc, plot: bool = False) -> None:
             cmap = _cm(pc, pc.k)
         results.append(_single_cluster_score(pc, clusters=cmap))
 
-    elif pc.clusters:
-        results.extend(
-            _single_cluster_score(pc, clusters=cm) for cm in pc.clusters.values()
-        )
+    # Remove this because it causes weird bugs
+    # elif pc.clusters:
+    #     results.extend(
+    #         _single_cluster_score(pc, clusters=cm) for cm in pc.clusters.values()
+    #     )
 
     else:
         if not pc.max_k or pc.max_k <= 0:
@@ -192,6 +193,8 @@ def find_score_peaks(
 
     k_start = k_start if k_start is not None else 1
     k_end = k_end if k_end is not None else len(scores)
+    if len(scores) < 2:
+        raise ValueError(f"At least two scores are required to find peaks. scores = {scores}")
     if not (0 <= k_start < len(scores)):
         raise ValueError(f"k_start ({k_start}) must be between 0 and {len(scores)-1}.")
     if not (k_start < k_end <= len(scores)):

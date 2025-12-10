@@ -152,21 +152,24 @@ class PhytClust:
         self.clusters: Dict[int, IntMap] = {}
         self._last_result: Optional[Dict[str, Any]] = None
 
+        prepare_tree(self)
+
     def _hash_tree(self) -> int:
         """tree fingerprint, used to detect modifications."""
         try:
-            return hash(self.tree.format("newick"))
+            cur_hash = hash(self.tree.format("newick"))
         except Exception:
-            return hash(repr(self.tree))
+            cur_hash = hash(repr(self.tree))
+        return cur_hash
 
     def _ensure_dp(self) -> None:
         current = self._hash_tree()
 
-        if self._dp_ready and self._tree_hash == current:
+        if self._dp_ready and (self._tree_hash == current): 
+            logger.debug('DP exists, not recalculating')
             return
 
         validate_args(self)
-        prepare_tree(self)
         compute_dp_table(self)
 
         self._dp_ready = True
