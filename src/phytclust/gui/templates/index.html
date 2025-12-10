@@ -140,7 +140,17 @@
 
             <div style="margin-top: 10px;">
                 <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
-                <button id="btn-save" class="btn btn-primary btn-sm">Save</button>
+                <div class="btn-group" style="margin-right:6px;">
+    <button id="btn-save" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown">
+        Save <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu">
+        <li><a href="#" data-save-type="tsv">TSV</a></li>
+        <li><a href="#" data-save-type="tsv_plots">all</a></li>
+        <li><a href="#" data-save-type="tree_plot">Tree plot</a></li>
+        <li><a href="#" data-save-type="k_plot">Maximum k plot</a></li>
+    </ul>
+</div>
                 <div class="form-inline" style="margin-top:8px;">
                     <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
                     <input type="text" id="output-dir" class="form-control input-sm" placeholder="results" style="width:220px;">
@@ -511,6 +521,7 @@
         clearTree();
         // Use existing phylotree API (as before)
         var tree = new phylotree.phylotree(newick);
+
         tree.render({
             container: "#tree_display",
             "left-right-spacing": "fit-to-size",
@@ -647,6 +658,125 @@
         reader.readAsText(file);
     }
 
+    // Functions to save tsv and plots
+
+    async function downloadTSV() {
+    try {
+        const jsonText = resultEl.textContent;
+        const data = JSON.parse(jsonText);
+
+        if (!data || !data.clusters) {
+            showStatus("No data available for TSV export.", "danger");
+            return;
+        }
+
+        const rows = ["cluster\tleaf"];
+        data.clusters.forEach((cluster, i) => {
+            if (Array.isArray(cluster)) {
+                cluster.forEach(name => {
+                    rows.push(`cluster_${i+1}\t${name}`);
+                });
+            }
+        });
+
+        const tsv = rows.join("\n");
+        const blob = new Blob([tsv], { type: "text/tab-separated-values" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "phytclust_results.tsv";
+        a.click();
+
+        URL.revokeObjectURL(url);
+        showStatus("TSV downloaded.", "success");
+    } catch (err) {
+        showStatus("TSV export failed.", "danger");
+    }
+}
+
+function downloadOptimalKPlot() {
+    const plotEl = document.getElementById("optimalk_plot");
+    if (!plotEl || !window.Plotly) {
+        showStatus("Maximum k plot not available.", "danger");
+        return;
+    }
+
+    Plotly.downloadImage(plotEl, {
+        format: "png",
+        filename: "phytclust_max_k_plot",
+        height: 600,
+        width: 1000
+    });
+
+    showStatus("Maximum k plot download started.", "success");
+}
+
+function downloadTreePlotSVG() {
+    const svg = document.querySelector("#tree_display svg");
+    if (!svg) {
+        showStatus("Tree plot not available.", "danger");
+        return;
+    }
+
+    try {
+        // Clone the SVG so we don't modify the on-screen version
+        const clone = svg.cloneNode(true);
+
+        // Ensure SVG namespaces exist
+        if (!clone.getAttribute("xmlns")) {
+            clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        }
+        if (!clone.getAttribute("xmlns:xlink")) {
+            clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+        }
+
+        // Convert filled branch paths to stroked lines in the export copy
+        clone.querySelectorAll("path").forEach(p => {
+            const d = p.getAttribute("d");
+            if (d && /Z\s*$/i.test(d)) {
+                const color = p.getAttribute("fill") || "#000";
+                p.setAttribute("fill", "none");
+                p.setAttribute("stroke", color);
+                p.setAttribute("stroke-width", "1");
+            }
+        });
+
+        // Serialize the modified SVG
+        const serializer = new XMLSerializer();
+        let svgStr = serializer.serializeToString(clone);
+
+        // Ensure xmlns is present in serialized string
+        if (!svgStr.match(/^<svg[^>]+xmlns=/)) {
+            svgStr = svgStr.replace(
+                /^<svg/,
+                '<svg xmlns="http://www.w3.org/2000/svg"'
+            );
+        }
+
+        // Create blob and download
+        const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "phytclust_tree.svg";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        URL.revokeObjectURL(url);
+        showStatus("Tree plot exported as SVG.", "success");
+
+    } catch (err) {
+        console.error(err);
+        showStatus("Tree export failed: " + err, "danger");
+    }
+}
+
+
+
+
     // On DOM ready
     $(function() {
         // Help sidebar toggle
@@ -664,94 +794,34 @@
         // Wire controls
         document.getElementById("file-input").addEventListener("change", handleFileSelect);
         document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
-        document.getElementById("btn-save").addEventListener("click", async function(e){
-            e.preventDefault();
-            if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
-            var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
-            if (!fname) { fname = "phytclust_results.tsv"; }
+       // Dropdown save actions
+        document.querySelectorAll(".dropdown-menu a[data-save-type]").forEach(function(el){
+            el.addEventListener("click", function(e){
+                e.preventDefault();
+                if (isRunning) { 
+                    showStatus("Cannot save while running.", "warning"); 
+                    return; 
+                }
 
-            // Prefer client-side save using File System Access API if available
-            if (window.showDirectoryPicker) {
-                try {
-                    const dirHandle = await window.showDirectoryPicker();
-                    const res = await fetch('/api/export_tsv', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    if (!res.ok) {
-                        const errData = await res.json().catch(() => ({}));
-                        const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
-                        showStatus(msg, 'danger');
-                        return;
-                    }
-                    const text = await res.text();
-                    const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                    showStatus('Saved ' + fname + ' to selected directory', 'success');
-                } catch (err) {
-                    // Fallback to server-side save if user cancels picker or API not permitted
-                    if (err && err.name === 'AbortError') { return; }
-                    // fallback: server-side save using provided output directory field
-                    try {
-                        var dirInput = document.getElementById('output-dir');
-                        var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
-                        const res2 = await fetch('/api/save', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                results_dir: dir,
-                                filename: fname,
-                                top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                                outlier: true,
-                                output_all: false
-                            })
-                        });
-                        const data2 = await res2.json();
-                        if (!res2.ok) {
-                            var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
-                            showStatus(msg2, 'danger');
-                        } else {
-                            showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
-                        }
-                    } catch (err2) {
-                        showStatus('Save error: ' + err2, 'danger');
-                    }
+                const type = this.getAttribute("data-save-type");
+
+                if (type === "tsv") {
+                    downloadTSV();
                 }
-            } else {
-                // Legacy fallback: server-side save to specified directory
-                try {
-                    var dirInputF = document.getElementById('output-dir');
-                    var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
-                    const res3 = await fetch('/api/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            results_dir: dirF,
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    const data3 = await res3.json();
-                    if (!res3.ok) {
-                        var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
-                        showStatus(msg3, 'danger');
-                    } else {
-                        showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
-                    }
-                } catch (err3) {
-                    showStatus('Save error: ' + err3, 'danger');
+                else if (type === "tsv_plots") {
+                    downloadTSV();
+                    setTimeout(downloadTreePlot, 300);
+                    setTimeout(downloadOptimalKPlot, 600);
                 }
-            }
+                else if (type === "tree_plot") {
+                     downloadTreePlotSVG();
+                }
+                else if (type === "k_plot") {
+                    downloadOptimalKPlot();
+                }
+            });
+        });
+
         });
         // Example tree loads automatically on start; no manual button needed
 
@@ -801,7 +871,6 @@
                     try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
                 }
             });
-    });
 </script>
 
 </body>
