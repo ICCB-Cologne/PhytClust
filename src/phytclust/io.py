@@ -5,8 +5,6 @@ import pandas as pd
 import json
 from datetime import datetime
 
-from phytclust.algo.core import PhytClust
-
 from .algo.dp import cluster_map
 
 logger = logging.getLogger("Save results")
@@ -107,6 +105,7 @@ def load_full(
     results_dir: str,
     filename: str = "phyclust_results.csv",
 ) -> None:
+    from phytclust.algo.core import PhytClust
     
     in_path = os.path.join(results_dir, filename)
     with open(in_path, "r") as fh:
