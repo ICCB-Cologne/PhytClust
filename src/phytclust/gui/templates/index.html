@@ -713,65 +713,90 @@ function downloadOptimalKPlot() {
 }
 
 function downloadTreePlotSVG() {
-    const svg = document.querySelector("#tree_display svg");
+    const container = document.querySelector("#tree_display");
+    const svg = container ? container.querySelector("svg") : null;
+
     if (!svg) {
         showStatus("Tree plot not available.", "danger");
         return;
     }
 
-    try {
-        // Clone the SVG so we don't modify the on-screen version
-        const clone = svg.cloneNode(true);
+    const prefix = {
+        xmlns: "http://www.w3.org/2000/xmlns/",
+        xlink: "http://www.w3.org/1999/xlink",
+        svg: "http://www.w3.org/2000/svg"
+    };
 
-        // Ensure SVG namespaces exist
-        if (!clone.getAttribute("xmlns")) {
-            clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-        }
-        if (!clone.getAttribute("xmlns:xlink")) {
-            clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-        }
+    // ---- Collect all CSS styles and inline them ----
+    function getStyles() {
+        let styles = "";
 
-        // Convert filled branch paths to stroked lines in the export copy
-        clone.querySelectorAll("path").forEach(p => {
-            const d = p.getAttribute("d");
-            if (d && /Z\s*$/i.test(d)) {
-                const color = p.getAttribute("fill") || "#000";
-                p.setAttribute("fill", "none");
-                p.setAttribute("stroke", color);
-                p.setAttribute("stroke-width", "1");
+        function processStylesheet(ss) {
+            try {
+                if (ss.cssRules) {
+                    for (let i = 0; i < ss.cssRules.length; i++) {
+                        const rule = ss.cssRules[i];
+
+                        if (rule.type === 3 && rule.styleSheet) {
+                            // @import
+                            processStylesheet(rule.styleSheet);
+                        } else if (rule.selectorText) {
+                            // Skip child selectors that crash Illustrator
+                            if (rule.selectorText.indexOf(">") === -1) {
+                                styles += "\n" + rule.cssText;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore CORS-restricted stylesheets
             }
-        });
-
-        // Serialize the modified SVG
-        const serializer = new XMLSerializer();
-        let svgStr = serializer.serializeToString(clone);
-
-        // Ensure xmlns is present in serialized string
-        if (!svgStr.match(/^<svg[^>]+xmlns=/)) {
-            svgStr = svgStr.replace(
-                /^<svg/,
-                '<svg xmlns="http://www.w3.org/2000/svg"'
-            );
         }
 
-        // Create blob and download
-        const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
+        for (let i = 0; i < document.styleSheets.length; i++) {
+            processStylesheet(document.styleSheets[i]);
+        }
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "phytclust_tree.svg";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        URL.revokeObjectURL(url);
-        showStatus("Tree plot exported as SVG.", "success");
-
-    } catch (err) {
-        console.error(err);
-        showStatus("Tree export failed: " + err, "danger");
+        return styles;
     }
+
+    // ---- Clone SVG so we don't modify the visible one ----
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("version", "1.1");
+
+    if (!clone.getAttributeNS(prefix.xmlns, "xmlns")) {
+        clone.setAttributeNS(prefix.xmlns, "xmlns", prefix.svg);
+    }
+    if (!clone.getAttributeNS(prefix.xmlns, "xmlns:xlink")) {
+        clone.setAttributeNS(prefix.xmlns, "xmlns:xlink", prefix.xlink);
+    }
+
+    // ---- Inline collected styles into SVG ----
+    const styleEl = document.createElementNS(prefix.svg, "style");
+    styleEl.setAttribute("type", "text/css");
+    styleEl.textContent = getStyles();
+
+    const firstChild = clone.firstChild;
+    clone.insertBefore(styleEl, firstChild);
+
+    // ---- Serialize SVG ----
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(clone);
+
+    // ---- Download SVG file ----
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "phytclust_tree.svg";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+
+    showStatus("Tree plot exported as SVG.", "success");
 }
 
 
