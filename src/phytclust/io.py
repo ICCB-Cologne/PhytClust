@@ -2,12 +2,15 @@ import os
 import logging
 from typing import Any, Optional
 import pandas as pd
+import json
+from datetime import datetime
 
-from ..algo.dp import cluster_map
+from phytclust.algo.core import PhytClust
+
+from .algo.dp import cluster_map
 
 logger = logging.getLogger("Save results")
 logger.setLevel(logging.INFO)
-print(logger)
 
 
 def save_clusters(
@@ -70,3 +73,46 @@ def save_clusters(
             for rank, k_val in enumerate(pc.peaks_by_rank, 1):
                 fh.write(f"Rank {rank}: {k_val} clusters\n")
         logger.info("Wrote peaks_by_rank.txt")
+
+
+def save_full(
+    pc,
+    results_dir: str,
+    filename: str = "phyclust_results.csv",
+) -> None:
+    
+    if pc._last_result is None:
+        logger.info("No last result to save.")
+        return
+    
+    results = {
+        "k": pc._last_result.get("k"),
+        "ks": pc._last_result.get("ks"),
+        "outgroup": pc._last_result.get("outgroup"),
+        "newick": pc.tree.format("newick"),
+        "scores": list(pc.scores),
+        "clusters": list(pc.clusters),
+        "date": datetime.now().isoformat(),
+    }
+    
+    out_path = os.path.join(results_dir, filename)
+    with open(out_path, "w") as fh:
+        json.dump(results, fh, indent=4)
+    logger.info(f"Wrote full results to {out_path}")
+    
+
+
+def load_full(
+    pc,
+    results_dir: str,
+    filename: str = "phyclust_results.csv",
+) -> None:
+    
+    in_path = os.path.join(results_dir, filename)
+    with open(in_path, "r") as fh:
+        results = json.load(fh)
+    pc = PhytClust()
+    pc._last_result = results
+    logger.info(f"Wrote full results to {in_path}")
+
+    return pc

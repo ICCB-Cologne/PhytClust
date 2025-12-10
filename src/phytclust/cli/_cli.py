@@ -458,13 +458,13 @@ def main(argv: list[str] | None = None) -> None:
             with phase(args.time or args.progress, "write tsv"):
                 pc.save(
                     results_dir=args.out_dir,
-                    filename=args.tsv_name,
+                    filename_clusters=args.tsv_name,
                     outlier=not args.no_outlier,
                     output_all=args.save_all_k,
                     **save_cfg,
                 )
         except Exception as exc:
-            logger.error("Failed to write tsv: %s", exc)
+            logger.error("Failed to write output: %s", exc)
             sys.exit(1)
 
     if args.time:

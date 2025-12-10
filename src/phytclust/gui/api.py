@@ -199,7 +199,7 @@ def save_results(req: SaveRequest):
         LAST_PC.save(
             results_dir=req.results_dir,
             top_n=req.top_n,
-            filename=req.filename,
+            filename_clusters=req.filename,
             outlier=req.outlier,
             output_all=req.output_all,
         )
@@ -226,7 +226,7 @@ def export_tsv(req: ExportTSVRequest):
             LAST_PC.save(
                 results_dir=tmpdir,
                 top_n=req.top_n,
-                filename=req.filename,
+                filename_clusters=req.filename,
                 outlier=req.outlier,
                 output_all=req.output_all,
             )

@@ -1,3 +1,4 @@
+import os
 import logging
 from dataclasses import dataclass, field
 from math import ceil
@@ -18,7 +19,7 @@ from ..algo.dp import (
 )
 from ..algo.scoring import calculate_scores, find_score_peaks
 from ..viz.cluster_plot import plot_clusters
-from ..io.save_results import save_clusters
+from ..io import save_clusters, save_full
 
 logger = logging.getLogger("PhytClust")
 logger.setLevel(logging.INFO)
@@ -446,17 +447,24 @@ class PhytClust:
         self,
         results_dir: str,
         top_n: int = 1,
-        filename: str = "phytclust_results.tsv",
+        filename_clusters: str = "phytclust_clusters.tsv",
+        filename_results: str = "phytclust_results.json",
         outlier: bool = True,
         n: Optional[int] = None,
         output_all: bool = False,
             ) -> None:
+        os.makedirs(results_dir, exist_ok=True)
         save_clusters(
             self,
             results_dir=results_dir,
             top_n=top_n,
-            filename=filename,
+            filename=filename_clusters,
             outlier=outlier,
             n=n,
             output_all=output_all,
+        )
+        save_full(
+            self,
+            results_dir=results_dir,
+            filename=filename_results,
         )
