@@ -34,6 +34,10 @@
             background: #fafafa;
         }
 
+        <button id="btn-copy-tree" class="btn btn-default btn-xs" style="margin-bottom:8px;">
+            Copy tree to clipboard
+        </button>
+
         #tree_display {
             width: 100%;
             height: 600px;
@@ -141,7 +145,17 @@
 
             <div style="margin-top: 10px;">
                 <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
-                <button id="btn-save" class="btn btn-primary btn-sm">Save</button>
+                <div class="btn-group" style="margin-right:6px;">
+    <button id="btn-save" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown">
+        Save <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu">
+        <li><a href="#" data-save-type="tsv">TSV</a></li>
+        <li><a href="#" data-save-type="tsv_plots">all</a></li>
+        <li><a href="#" data-save-type="tree_plot">Tree plot</a></li>
+        <li><a href="#" data-save-type="k_plot">Optimal k plot</a></li>
+    </ul>
+</div>
                 <div class="form-inline" style="margin-top:8px;">
                     <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
                     <input type="text" id="output-dir" class="form-control input-sm" placeholder="results" style="width:220px;">
@@ -187,15 +201,23 @@
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
-            <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:8px;">
-                <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
-                <select id="cluster-select" class="form-control input-sm" style="display:inline-block; width:auto;"></select>
-                <span id="cluster-select-label" class="small-note" style="margin-left:8px;">1 / 1</span>
+            
+            <div class="row" style="margin-bottom:8px;">
+                <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
+                    <button id="btn-copy-tree" class="btn btn-default btn-xs">Copy tree to clipboard</button>
+                    <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:0;">
+                        <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
+                        <select id="cluster-select" class="form-control input-sm" style="display:inline-block; width:auto;"></select>
+                        <span id="cluster-select-label" class="small-note" style="margin-left:8px;">1 / 1</span>
+                    </div>
+                </div>
             </div>
+
             <div class="tree-wrapper">
                 <div id="tree_display"></div>
             </div>
         </div>
+
 
         <!-- Optimal k Tab -->
         <div class="tab-pane" id="viewer-optimal-k">
@@ -204,11 +226,17 @@
                 <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
                 <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
                     <option value="log">Log</option>
-                    <option value="normal">Normal</option>
+                    <option value="normal">Normal</option> 
                 </select>
                 <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
             </div>
+                <button id="btn-copy-maxk" class="btn btn-default btn-xs">
+                    Copy optimal k plot to clipboard
+                </button>
             <div id="optimalk_plot" style="width:100%; height:420px;"></div>
+            <div style="margin-bottom:8px;">
+            </div>
+
         </div>
 
         <!-- Help Sidebar (off-canvas style) -->
@@ -774,6 +802,246 @@
         reader.readAsText(file);
     }
 
+    // Functions to save tsv and plots
+
+    async function downloadTSV() {
+    try {
+        const jsonText = resultEl.textContent;
+        const data = JSON.parse(jsonText);
+
+        if (!data || !data.clusters) {
+            showStatus("No data available for TSV export.", "danger");
+            return;
+        }
+
+        const rows = ["cluster\tleaf"];
+        data.clusters.forEach((cluster, i) => {
+            if (Array.isArray(cluster)) {
+                cluster.forEach(name => {
+                    rows.push(`cluster_${i+1}\t${name}`);
+                });
+            }
+        });
+
+        const tsv = rows.join("\n");
+        const blob = new Blob([tsv], { type: "text/tab-separated-values" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "phytclust_results.tsv";
+        a.click();
+
+        URL.revokeObjectURL(url);
+        showStatus("TSV downloaded.", "success");
+    } catch (err) {
+        showStatus("TSV export failed.", "danger");
+    }
+}
+
+function downloadOptimalKPlot() {
+    const plotEl = document.getElementById("optimalk_plot");
+    if (!plotEl || !window.Plotly) {
+        showStatus("Optimal k plot not available.", "danger");
+        return;
+    }
+
+    Plotly.downloadImage(plotEl, {
+        format: "png",
+        filename: "phytclust_max_k_plot",
+        height: 600,
+        width: 1000
+    });
+
+    showStatus("Optimal k plot download started.", "success");
+}
+
+function downloadTreePlotSVG() {
+    const container = document.querySelector("#tree_display");
+    const svg = container ? container.querySelector("svg") : null;
+
+    if (!svg) {
+        showStatus("Tree plot not available.", "danger");
+        return;
+    }
+
+    const prefix = {
+        xmlns: "http://www.w3.org/2000/xmlns/",
+        xlink: "http://www.w3.org/1999/xlink",
+        svg: "http://www.w3.org/2000/svg"
+    };
+
+    // ---- Collect all CSS styles and inline them ----
+    function getStyles() {
+        let styles = "";
+
+        function processStylesheet(ss) {
+            try {
+                if (ss.cssRules) {
+                    for (let i = 0; i < ss.cssRules.length; i++) {
+                        const rule = ss.cssRules[i];
+
+                        if (rule.type === 3 && rule.styleSheet) {
+                            // @import
+                            processStylesheet(rule.styleSheet);
+                        } else if (rule.selectorText) {
+                            // Skip child selectors that crash Illustrator
+                            if (rule.selectorText.indexOf(">") === -1) {
+                                styles += "\n" + rule.cssText;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore CORS-restricted stylesheets
+            }
+        }
+
+        for (let i = 0; i < document.styleSheets.length; i++) {
+            processStylesheet(document.styleSheets[i]);
+        }
+
+        return styles;
+    }
+
+    // ---- Clone SVG so we don't modify the visible one ----
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("version", "1.1");
+
+    if (!clone.getAttributeNS(prefix.xmlns, "xmlns")) {
+        clone.setAttributeNS(prefix.xmlns, "xmlns", prefix.svg);
+    }
+    if (!clone.getAttributeNS(prefix.xmlns, "xmlns:xlink")) {
+        clone.setAttributeNS(prefix.xmlns, "xmlns:xlink", prefix.xlink);
+    }
+
+    // ---- Inline collected styles into SVG ----
+    const styleEl = document.createElementNS(prefix.svg, "style");
+    styleEl.setAttribute("type", "text/css");
+    styleEl.textContent = getStyles();
+
+    const firstChild = clone.firstChild;
+    clone.insertBefore(styleEl, firstChild);
+
+    // ---- Serialize SVG ----
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(clone);
+
+    // ---- Download SVG file ----
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "phytclust_tree.svg";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+
+    showStatus("Tree plot exported as SVG.", "success");
+}
+async function copyOptimalKPlotToClipboard() {
+    const plotEl = document.getElementById("optimalk_plot");
+    if (!plotEl || !window.Plotly) {
+        showStatus("Optimal k plot not available.", "danger");
+        return;
+    }
+
+    try {
+        // Convert Plotly plot to PNG data URL
+        const dataUrl = await Plotly.toImage(plotEl, {
+            format: "png",
+            height: 600,
+            width: 1000
+        });
+
+        // Convert data URL to Blob
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+
+        // Copy to clipboard
+        await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob })
+        ]);
+
+        showStatus("Optimal k plot copied to clipboard as PNG.", "success");
+    } catch (err) {
+        console.error(err);
+        showStatus("Clipboard copy failed. Browser may not support PNG clipboard.", "danger");
+    }
+}
+
+async function copyTreeToClipboard() {
+    const container = document.querySelector("#tree_display");
+    if (!container) {
+        showStatus("Tree container not available.", "danger");
+        return;
+    }
+
+    const svg = container.querySelector("svg");
+    if (!svg) {
+        showStatus("Tree plot not available.", "danger");
+        return;
+    }
+
+    // Clone SVG so we can modify it without affecting display
+    const clone = svg.cloneNode(true);
+
+    // Convert filled branch paths to stroked lines
+    clone.querySelectorAll("path").forEach(p => {
+        const d = p.getAttribute("d");
+        if (d && /Z\s*$/i.test(d)) {  // ends with Z = closed path
+            const color = p.getAttribute("fill") || "#000";
+            p.setAttribute("fill", "none");
+            p.setAttribute("stroke", color);
+            p.setAttribute("stroke-width", "1");
+        }
+    });
+
+    // Collect styles
+    let styles = "";
+    for (const sheet of document.styleSheets) {
+        try {
+            if (!sheet.cssRules) continue;
+            for (const rule of sheet.cssRules) {
+                if (rule.selectorText && rule.selectorText.indexOf(">") === -1) {
+                    styles += rule.cssText + "\n";
+                }
+            }
+        } catch (e) {}
+    }
+
+    // Insert <style> inside <defs>
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    clone.insertBefore(defs, clone.firstChild);
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.setAttribute("type", "text/css");
+    styleEl.textContent = styles;
+    defs.appendChild(styleEl);
+
+    // Serialize the modified SVG
+    const svgText = new XMLSerializer().serializeToString(clone);
+
+    try {
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                "image/svg+xml": new Blob([svgText], { type: "image/svg+xml" }),
+                "text/plain": new Blob([svgText], { type: "text/plain" })
+            })
+        ]);
+        showStatus("Tree copied to clipboard as SVG.", "success");
+    } catch (err) {
+        console.error(err);
+        showStatus("Clipboard copy failed. Browser may not support SVG clipboard.", "danger");
+    }
+}
+
+
+
+
+
     // On DOM ready
     $(function() {
         // Help sidebar toggle
@@ -791,94 +1059,34 @@
         // Wire controls
         document.getElementById("file-input").addEventListener("change", handleFileSelect);
         document.getElementById("btn-run").addEventListener("click", function(e){ e.preventDefault(); runPhytClust(); });
-        document.getElementById("btn-save").addEventListener("click", async function(e){
-            e.preventDefault();
-            if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
-            var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
-            if (!fname) { fname = "phytclust_results.tsv"; }
+       // Dropdown save actions
+        document.querySelectorAll(".dropdown-menu a[data-save-type]").forEach(function(el){
+            el.addEventListener("click", function(e){
+                e.preventDefault();
+                if (isRunning) { 
+                    showStatus("Cannot save while running.", "warning"); 
+                    return; 
+                }
 
-            // Prefer client-side save using File System Access API if available
-            if (window.showDirectoryPicker) {
-                try {
-                    const dirHandle = await window.showDirectoryPicker();
-                    const res = await fetch('/api/export_tsv', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    if (!res.ok) {
-                        const errData = await res.json().catch(() => ({}));
-                        const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
-                        showStatus(msg, 'danger');
-                        return;
-                    }
-                    const text = await res.text();
-                    const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                    showStatus('Saved ' + fname + ' to selected directory', 'success');
-                } catch (err) {
-                    // Fallback to server-side save if user cancels picker or API not permitted
-                    if (err && err.name === 'AbortError') { return; }
-                    // fallback: server-side save using provided output directory field
-                    try {
-                        var dirInput = document.getElementById('output-dir');
-                        var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
-                        const res2 = await fetch('/api/save', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                results_dir: dir,
-                                filename: fname,
-                                top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                                outlier: true,
-                                output_all: false
-                            })
-                        });
-                        const data2 = await res2.json();
-                        if (!res2.ok) {
-                            var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
-                            showStatus(msg2, 'danger');
-                        } else {
-                            showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
-                        }
-                    } catch (err2) {
-                        showStatus('Save error: ' + err2, 'danger');
-                    }
+                const type = this.getAttribute("data-save-type");
+
+                if (type === "tsv") {
+                    downloadTSV();
                 }
-            } else {
-                // Legacy fallback: server-side save to specified directory
-                try {
-                    var dirInputF = document.getElementById('output-dir');
-                    var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
-                    const res3 = await fetch('/api/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            results_dir: dirF,
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    const data3 = await res3.json();
-                    if (!res3.ok) {
-                        var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
-                        showStatus(msg3, 'danger');
-                    } else {
-                        showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
-                    }
-                } catch (err3) {
-                    showStatus('Save error: ' + err3, 'danger');
+                else if (type === "tsv_plots") {
+                    downloadTSV();
+                    setTimeout(downloadTreePlot, 300);
+                    setTimeout(downloadOptimalKPlot, 600);
                 }
-            }
+                else if (type === "tree_plot") {
+                     downloadTreePlotSVG();
+                }
+                else if (type === "k_plot") {
+                    downloadOptimalKPlot();
+                }
+            });
+        });
+
         });
         // Example tree loads automatically on start; no manual button needed
 
@@ -928,7 +1136,17 @@
                     try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
                 }
             });
-    });
+
+        document
+            .getElementById("btn-copy-tree")
+            .addEventListener("click", function (e) {
+                e.preventDefault();
+                copyTreeToClipboard();
+            });
+
+        document.getElementById("btn-copy-maxk").addEventListener("click", copyOptimalKPlotToClipboard);
+
+
 </script>
 
 </body>
