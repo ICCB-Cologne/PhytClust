@@ -34,6 +34,10 @@
             background: #fafafa;
         }
 
+        <button id="btn-copy-tree" class="btn btn-default btn-xs" style="margin-bottom:8px;">
+            Copy tree to clipboard
+        </button>
+
         #tree_display {
             width: 100%;
             height: 600px;
@@ -148,7 +152,7 @@
         <li><a href="#" data-save-type="tsv">TSV</a></li>
         <li><a href="#" data-save-type="tsv_plots">all</a></li>
         <li><a href="#" data-save-type="tree_plot">Tree plot</a></li>
-        <li><a href="#" data-save-type="k_plot">Maximum k plot</a></li>
+        <li><a href="#" data-save-type="k_plot">Optimal k plot</a></li>
     </ul>
 </div>
                 <div class="form-inline" style="margin-top:8px;">
@@ -197,10 +201,18 @@
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
+
+            <div style="margin-bottom:8px;">
+                <button id="btn-copy-tree" class="btn btn-default btn-xs">
+                    Copy tree to clipboard
+                </button>
+            </div>
+
             <div class="tree-wrapper">
                 <div id="tree_display"></div>
             </div>
         </div>
+
 
         <!-- Optimal k Tab -->
         <div class="tab-pane" id="viewer-optimal-k">
@@ -799,6 +811,34 @@ function downloadTreePlotSVG() {
     showStatus("Tree plot exported as SVG.", "success");
 }
 
+async function copyTreeToClipboard() {
+    const svg = document.querySelector("#tree_display svg");
+
+    if (!svg) {
+        showStatus("Tree plot not available.", "danger");
+        return;
+    }
+
+    try {
+        const serializer = new XMLSerializer();
+        const svgText = serializer.serializeToString(svg);
+
+        const blob = new Blob([svgText], { type: "image/svg+xml" });
+
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                "image/svg+xml": blob,
+                "text/plain": new Blob([svgText], { type: "text/plain" })
+            })
+        ]);
+
+        showStatus("Tree copied to clipboard as SVG.", "success");
+    } catch (err) {
+        console.error(err);
+        showStatus("Clipboard copy failed. Browser may not support SVG clipboard.", "danger");
+    }
+}
+
 
 
 
@@ -896,6 +936,14 @@ function downloadTreePlotSVG() {
                     try { window.Plotly.Plots.resize(document.getElementById('optimalk_plot')); } catch(_) {}
                 }
             });
+
+        document
+            .getElementById("btn-copy-tree")
+            .addEventListener("click", function (e) {
+                e.preventDefault();
+                copyTreeToClipboard();
+            });
+
 </script>
 
 </body>
