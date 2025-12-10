@@ -54,22 +54,88 @@
             margin-bottom: 20px;
         }
 
+        /*.header-content {*/
+        /*    display: flex;*/
+        /*    justify-content: center;   !* center the image horizontally *!*/
+        /*    align-items: center;       !* vertical alignment *!*/
+        /*    position: relative;*/
+        /*}*/
+
+        /*.header-buttons {*/
+        /*    position: absolute;*/
+        /*    right: 0;                  !* keep buttons on far right *!*/
+        /*}*/
+
+        /*second*/
+        /*.header-content {*/
+        /*    display: flex;*/
+        /*    align-items: center;*/
+        /*    justify-content: space-between;  !* logo left, buttons right *!*/
+        /*    flex-wrap: wrap;                 !* allow wrapping to next row *!*/
+        /*}*/
+
+        /*!* remove absolute positioning so they can wrap *!*/
+        /*.header-buttons {*/
+        /*    position: static;*/
+        /*    display: flex;*/
+        /*    gap: 8px;                        !* space between About / Help *!*/
+        /*}*/
+        /*@media (max-width: 600px) {*/
+        /*    .header-buttons {*/
+        /*        width: 100%;*/
+        /*        justify-content: center;  !* center buttons on their own row *!*/
+        /*        margin-top: 10px;*/
+        /*    }*/
+        /*}*/
+
+        /*third*/
         .header-content {
             display: flex;
-            justify-content: center;   /* center the image horizontally */
-            align-items: center;       /* vertical alignment */
-            position: relative;
+            align-items: center;
+            justify-content: center;   /* center the logo */
+            flex-wrap: wrap;           /* allow wrapping */
+            gap: 10px;
         }
 
-        .header-buttons {
-            position: absolute;
-            right: 0;                  /* keep buttons on far right */
+        /* invisible spacer to balance layout */
+        .header-spacer {
+            flex: 1;
         }
 
         .logo {
             max-width: 100%;
             height: auto;
             max-height: 90px;   /* optional: controls maximum size */
+        }
+
+        /* buttons stay on the right but can wrap */
+        .header-buttons {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;  /* push buttons right */
+            gap: 8px;
+        }
+        /*@media (max-width: 700px) {*/
+        /*    .header-buttons {*/
+        /*        justify-content: center;*/
+        /*        margin-top: 10px;*/
+        /*    }*/
+        /*}*/
+        @media (max-width: 768px) {   /* choose breakpoint you like */
+            .header-spacer {
+                display: none;        /* remove the left spacer */
+            }
+
+            .header-content {
+                justify-content: center;  /* center what’s left */
+            }
+
+            .header-buttons {
+                flex: 0 0 auto;       /* no stretching */
+                width: 100%;          /* own full row */
+                justify-content: center;
+                margin-top: 10px;
+            }
         }
 
         .app-footer {
@@ -109,6 +175,26 @@
 
         .app-footer .row {
             margin: 0;
+        }
+        #file-input {
+            opacity: 0;           /* hide the real button */
+            width: 150px;         /* must overlap the custom button */
+            height: 34px;
+            position: absolute;
+            cursor: pointer;
+        }
+        .btn-upload-custom {
+            background-color: #486387;
+            color: #ffffff;
+            padding: 6px 12px;
+            border: 1px solid #486387;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-upload-custom:hover {
+            background-color: #A3B1C2;
+            border-color: #486387;
         }
 
         #btn-about {
@@ -236,14 +322,24 @@
 
 <div class="header-bar" style="padding:10px 40px;">
     <div class="header-content">
-        <img src="/static/phytclust_logo_colour.png"
-             alt="PhytClust"
-             class="logo">
+<!--        <img src="/static/phytclust_logo_colour.png"-->
+<!--             alt="PhytClust"-->
+<!--             class="logo">-->
 
-        <div class="header-buttons">
-            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>
-            <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>
-        </div>
+<!--        <div class="header-buttons">-->
+<!--            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>-->
+<!--            <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>-->
+<!--        </div>-->
+            <div class="header-spacer"></div>  <!-- left invisible spacer -->
+
+            <img src="/static/phytclust_logo_colour.png"
+                 alt="PhytClust"
+                 class="logo">
+
+            <div class="header-buttons">
+                <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>
+                <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>
+            </div>
     </div>
 </div>
 
@@ -262,13 +358,30 @@
 
             <h4>Load tree</h4>
 
-            <form class="form-inline" onsubmit="return false;">
-                <div class="form-group">
-                    <label for="file-input">From file:</label>
-                    <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">
-                </div>
-                <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>
-            </form>
+<!--                <form class="form-inline" onsubmit="return false;">-->
+<!--                    <div class="form-group">-->
+<!--                        <label for="file-input">From file:</label>-->
+<!--                        <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt" class="form-control input-sm">-->
+<!--                    </div>-->
+<!--                    <span class="small-note">&nbsp;(.new /.nwk / .newick / .txt in Newick format)</span>-->
+<!--                </form>-->
+                <form class="form-inline" onsubmit="return false;">
+                    <div class="form-group" style="position: relative;">
+                        <label for="file-input" class="btn btn-upload-custom">
+                            Choose file
+                        </label>
+                        <input type="file" id="file-input"
+                               accept=".new,.nwk,.newick,.txt">
+                        <span class="small-note">&nbsp;(.new / .nwk / .newick / .txt in Newick format)</span>
+
+                        <div id="file-name"
+                             style="margin-top:8px; font-size:16px; color:#555;">
+                            No file chosen
+                        </div>
+<!--                        <span id="file-name" style="margin-left:10px; color:#555;">No file chosen</span>-->
+<!--                        <span class="small-note">&nbsp;(.new / .nwk / .newick / .txt in Newick format)</span>-->
+                    </div>
+                </form>
 
             <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
             <textarea id="newick-input" class="form-control" rows="2" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
@@ -482,6 +595,17 @@
 <script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 
 <script>
+    document.getElementById("file-input").addEventListener("change", function() {
+        const fileNameSpan = document.getElementById("file-name");
+        if (this.files && this.files.length > 0) {
+            fileNameSpan.innerHTML =
+                '<span style="color: #555;">Chosen file:</span> ' +
+                '<span style="color: #000;">' + this.files[0].name + '</span>';
+        } else {
+            fileNameSpan.innerHTML =
+                '<span style="color: #555;">No file chosen</span>';
+        }
+    });
     // Example tree (from your template)
     var EXAMPLE_NEWICK = "(((A:5, B:3)C1:6, (C:3, D:7)D1:4)A13:22, (((E:7, F:13)E12:5, G:6)B23:10, H:60):35):0;";
 
@@ -1355,7 +1479,9 @@ async function copyTreeToClipboard() {
 
             <!-- Left: footer image -->
             <div class="footer-left">
+                <a href="https://iccb-cologne.org/home" target="_blank">
                 <img src="/static/ICCB_logo.png" alt="Footer Logo">
+                </a>
             </div>
 
 <!--            &lt;!&ndash; Center: hidden link inside an image &ndash;&gt;-->
