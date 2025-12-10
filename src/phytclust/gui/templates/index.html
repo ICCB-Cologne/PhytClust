@@ -221,11 +221,17 @@
                 <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
                 <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
                     <option value="log">Log</option>
-                    <option value="normal">Normal</option>
+                    <option value="normal">Normal</option> 
                 </select>
                 <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
             </div>
+                <button id="btn-copy-maxk" class="btn btn-default btn-xs">
+                    Copy optimal k plot to clipboard
+                </button>
             <div id="optimalk_plot" style="width:100%; height:420px;"></div>
+            <div style="margin-bottom:8px;">
+            </div>
+
         </div>
 
         <!-- Help Sidebar (off-canvas style) -->
@@ -710,7 +716,7 @@
 function downloadOptimalKPlot() {
     const plotEl = document.getElementById("optimalk_plot");
     if (!plotEl || !window.Plotly) {
-        showStatus("Maximum k plot not available.", "danger");
+        showStatus("Optimal k plot not available.", "danger");
         return;
     }
 
@@ -721,7 +727,7 @@ function downloadOptimalKPlot() {
         width: 1000
     });
 
-    showStatus("Maximum k plot download started.", "success");
+    showStatus("Optimal k plot download started.", "success");
 }
 
 function downloadTreePlotSVG() {
@@ -809,6 +815,36 @@ function downloadTreePlotSVG() {
     URL.revokeObjectURL(url);
 
     showStatus("Tree plot exported as SVG.", "success");
+}
+async function copyOptimalKPlotToClipboard() {
+    const plotEl = document.getElementById("optimalk_plot");
+    if (!plotEl || !window.Plotly) {
+        showStatus("Optimal k plot not available.", "danger");
+        return;
+    }
+
+    try {
+        // Convert Plotly plot to PNG data URL
+        const dataUrl = await Plotly.toImage(plotEl, {
+            format: "png",
+            height: 600,
+            width: 1000
+        });
+
+        // Convert data URL to Blob
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+
+        // Copy to clipboard
+        await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob })
+        ]);
+
+        showStatus("Optimal k plot copied to clipboard as PNG.", "success");
+    } catch (err) {
+        console.error(err);
+        showStatus("Clipboard copy failed. Browser may not support PNG clipboard.", "danger");
+    }
 }
 
 async function copyTreeToClipboard() {
@@ -981,6 +1017,9 @@ async function copyTreeToClipboard() {
                 e.preventDefault();
                 copyTreeToClipboard();
             });
+
+        document.getElementById("btn-copy-maxk").addEventListener("click", copyOptimalKPlotToClipboard);
+
 
 </script>
 
