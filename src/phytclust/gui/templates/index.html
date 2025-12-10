@@ -178,7 +178,7 @@
 
     <!-- Tabs -->
     <ul class="nav nav-tabs" role="tablist">
-        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Tree</a></li>
+        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Clustering</a></li>
         <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
         <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
         <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
@@ -188,6 +188,11 @@
 
         <!-- Viewer Tab -->
         <div class="tab-pane active" id="viewer">
+            <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:8px;">
+                <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
+                <select id="cluster-select" class="form-control input-sm" style="display:inline-block; width:auto;"></select>
+                <span id="cluster-select-label" class="small-note" style="margin-left:8px;">1 / 1</span>
+            </div>
             <div class="tree-wrapper">
                 <div id="tree_display"></div>
             </div>
@@ -506,7 +511,49 @@
             }
 
             if (data.newick && data.clusters && data.clusters.length > 0) {
-                drawTree(data.newick, data.clusters[0]);
+                // Handle multiple possible cluster assignments via slider
+                (function(){
+                    var box = document.getElementById('cluster-select-controls');
+                    var selectEl = document.getElementById('cluster-select');
+                    var labelEl = document.getElementById('cluster-select-label');
+
+                    var total = data.clusters.length;
+                    if (total > 1 && box && selectEl && labelEl) {
+                        // Populate dropdown options using k from data.peaks when available
+                        box.style.display = 'block';
+                        selectEl.innerHTML = '';
+                        for (var i = 0; i < total; i++) {
+                            var opt = document.createElement('option');
+                            opt.value = String(i);
+                            var kLabel = null;
+                            if (Array.isArray(data.peaks) && i < data.peaks.length) {
+                                var kVal = data.peaks[i];
+                                if (typeof kVal === 'number' && isFinite(kVal)) {
+                                    kLabel = 'k = ' + kVal;
+                                }
+                            }
+                            opt.textContent = kLabel || ('Set ' + (i + 1));
+                            selectEl.appendChild(opt);
+                        }
+                        selectEl.value = '0';
+                        labelEl.textContent = '1 / ' + total;
+
+                        // Initial draw for index 0
+                        drawTree(data.newick, data.clusters[0]);
+
+                        // Re-render on selection change
+                        selectEl.onchange = function(){
+                            var idx = parseInt(selectEl.value, 10) || 0;
+                            labelEl.textContent = (idx + 1) + ' / ' + total;
+                            var clustersMap = data.clusters[idx];
+                            drawTree(data.newick, clustersMap);
+                        };
+                    } else {
+                        // Hide dropdown for single or missing clusters
+                        if (box) { box.style.display = 'none'; }
+                        drawTree(data.newick, data.clusters[0]);
+                    }
+                })();
                 showStatus("PhytClust finished.", "success");
             } else {
                 drawTree(data.newick, null);
