@@ -23,7 +23,7 @@
     <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
     <style>
-        body { padding: 20px; }
+        body { padding: 0px; }
 
         .tree-wrapper {
             border: 1px solid #ddd;
@@ -47,26 +47,207 @@
         .small-note { font-size: 11px; color: #777; }
         .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
 
+        .header-bar {
+            background: #F2F2F2;
+            border-bottom: 1px solid #000;
+            padding: 15px 10px 10px;
+            margin-bottom: 20px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: center;   /* center the image horizontally */
+            align-items: center;       /* vertical alignment */
+            position: relative;
+        }
+
+        .header-buttons {
+            position: absolute;
+            right: 0;                  /* keep buttons on far right */
+        }
+
+        .logo {
+            max-width: 100%;
+            height: auto;
+            max-height: 90px;   /* optional: controls maximum size */
+        }
+
+        .app-footer {
+            background: #F2F2F2;
+            border-top: 1px solid #000; /* thin black line */
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            padding: 15px 20px;   /* inner padding */
+        }
+
+
+        /*.footer-left img,*/
+        .footer-left img {
+            max-height: 60px; /* adjust to desired size */
+            width: auto;
+            margin-right: 20px;
+        }
+
+        /*.footer-center img {*/
+        /*    height: 40px;         !* adjust image sizes *!*/
+        /*    cursor: pointer;*/
+        /*}*/
+
+        .footer-right p {
+            margin: 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .app-footer .row {
+            margin: 0;
+        }
+
+        #btn-about {
+            background-color: #684186 !important;
+            color: #ffffff !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-about:hover {
+            background-color: #B49FC2 !important;
+            color: #F2F2F2 !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-close {
+            background-color: #684186 !important;
+            color: #ffffff !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-close:hover {
+            background-color: #B49FC2 !important;
+            color: #F2F2F2 !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-help {
+            background-color: #3F4086 !important;
+            color: #ffffff !important;
+            border: 1px solid #3F4086 !important;
+        }
+
+        #btn-help:hover {
+            background-color: #9E9EC2 !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-help-close {
+            background-color: #3F4086 !important;
+            color: #ffffff !important;
+            border: 1px solid #3F4086 !important;
+        }
+
+        #btn-help-close:hover {
+            background-color: #9E9EC2 !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-help-load-example {
+            background-color: #3F4086 !important;
+            color: #ffffff !important;
+            border: 1px solid #3F4086 !important;
+        }
+
+        #btn-help-load-example:hover {
+            background-color: #9E9EC2 !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #684186 !important;
+        }
+
+        #btn-extra-reset {
+            background-color: #CBBA5D !important;
+            color: #ffffff !important;
+            border: 1px solid #CBBA5D !important;
+        }
+
+        #btn-extra-reset:hover {
+            background-color: #E5DCAE !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #CBBA5D !important;
+        }
+
+        #btn-run {
+            background-color: #4D7B74 !important;
+            color: #ffffff !important;
+            border: 1px solid #4D7B74 !important;
+        }
+
+        #btn-run:hover {
+            background-color: #A6BCB9 !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #4D7B74 !important;
+        }
+
+        #btn-save {
+            background-color: #869065 !important;
+            color: #ffffff !important;
+            border: 1px solid #869065 !important;
+        }
+        #btn-save:hover {
+            background-color: #C3C8B3 !important;  /* light purple on hover */
+            color: #F2F2F2 !important;
+            border: 1px solid #869065 !important;
+        }
+        #status-message.alert-success {
+            background-color: #CE9A5F !important;  /* your custom background */
+            background-image: none !important;     /* kill any gradient/image */
+            border-color: #CE9A5F !important;      /* match border */
+            color: #ffffff !important;             /* text color */
+        }
+
+
+        .nav-tabs > li.active > a,
+        .nav-tabs > li.active > a:focus,
+        .nav-tabs > li.active > a:hover {
+            color: #A3B1C2 !important;
+        }
     </style>
 </head>
 <body>
 
-<div class="container-fluid">
-    <!-- Header: logo top-left, helper text below -->
-    <div class="row">
-        <div class="col-xs-8">
-            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
-            <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
-        </div>
-        <div class="col-xs-4" style="text-align:right;">
-            <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px;">About</button>
-            <button id="btn-help" class="btn btn-info" style="margin-top:8px;">Help</button>
+<div class="header-bar" style="padding:10px 40px;">
+    <div class="header-content">
+        <img src="/static/phytclust_logo_colour.png"
+             alt="PhytClust"
+             class="logo">
+
+        <div class="header-buttons">
+            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>
+            <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>
         </div>
     </div>
+</div>
+
+
+
+
+<div class="container-fluid" style="padding:40px">
+
+
+
 
     <!-- Loader and parameters stacked below header -->
     <div class="row">
         <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
+            <p class="text-muted" style="margin-bottom:16px; color:black; font-size:22px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
+
             <h4>Load tree</h4>
 
             <form class="form-inline" onsubmit="return false;">
@@ -82,8 +263,8 @@
 
             <!-- Extra parameters toggle -->
             <div style="margin-top: 10px;">
-                <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle">
-                    <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true"></span>
+                <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle" style="color: #486387;">
+                    <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true" style="color: #486387;"></span>
                     &nbsp;Extra parameters
                 </a>
             </div>
@@ -137,16 +318,17 @@
                         </div>
                         <hr>
                         <div>
-                            <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button" title="Reset Extra parameters to defaults">Reset to defaults</button>
+<!--                            <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button" title="Reset Extra parameters to defaults">Reset to defaults</button>-->
+                            <button id="btn-extra-reset" class="btn" type="button" title="Reset Extra parameters to defaults" style="background-color:#CBBA5D; color:#ffffff;">Reset to defaults</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div style="margin-top: 10px;">
-                <button id="btn-run" class="btn btn-success btn-sm">Run PhytClust</button>
+                <button id="btn-run" class="btn btn-sm" style="background-color:#4D7B74; color:#ffffff;">Run PhytClust</button>
                 <div class="btn-group" style="margin-right:6px;">
-    <button id="btn-save" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown">
+    <button id="btn-save" class="btn btn-sm dropdown-toggle" data-toggle="dropdown" style=" background-color:#869065; color:#ffffff;">
         Save <span class="caret"></span>
     </button>
     <ul class="dropdown-menu">
@@ -169,7 +351,7 @@
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+<!--                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>-->
                     <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
                 </div>
                 <div class="modal-body">
@@ -178,7 +360,7 @@
                     </p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                    <button id="btn-close" type="button" class="btn" data-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -192,9 +374,9 @@
 
     <!-- Tabs -->
     <ul class="nav nav-tabs" role="tablist">
-        <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Clustering</a></li>
-        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
-        <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
+        <li class="active"><a href="#viewer" role="tab" data-toggle="tab" style="color: #486387;">Clustering</a></li>
+        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab" style="color: #486387;">Optimal number of clusters</a></li>
+        <li><a href="#debug" role="tab" data-toggle="tab" style="color: #486387;">JSON</a></li>
     </ul>
 
     <div class="tab-content" style="margin-top: 15px;">
@@ -248,7 +430,8 @@
         <div id="help-sidebar" style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
             <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
                 <h4 class="modal-title" id="aboutModalLabel">Help</h4>
-                <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>
+<!--                <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>-->
+                <button id="btn-help-close" class="btn">Close</button>
             </div>
             <div class="help-section" style="padding:12px;">
                 <h4>Input format</h4>
@@ -267,7 +450,8 @@
                 <h4>Example</h4>
                 <p>
                     Use our small built-in tree to try PhytClust quickly.
-                    <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>
+<!--                    <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>-->
+                    <button id="btn-help-load-example" class="btn">Load example tree</button>
                 </p>
             </div>
         </div>
@@ -1153,6 +1337,33 @@ async function copyTreeToClipboard() {
 
 
 </script>
+
+    <!-- FOOTER -->
+    <footer class="app-footer">
+        <div class="footer-inner">
+
+            <!-- Left: footer image -->
+            <div class="footer-left">
+                <img src="/static/ICCB_logo.png" alt="Footer Logo">
+            </div>
+
+<!--            &lt;!&ndash; Center: hidden link inside an image &ndash;&gt;-->
+<!--            <div class="footer-center">-->
+<!--                <a href="https://bitbucket.org/schwarzlab/phytclust/src/master/" target="_blank">-->
+<!--                    <img src="/static/bitbucket_link.png" alt="Secret Link">-->
+<!--                </a>-->
+<!--            </div>-->
+
+            <!-- Right: footer text -->
+<!--            <div class="footer-right">-->
+            <div class="footer-center">
+                <p>Please cite this repository if you use the algorithm in your work:<br>
+                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, PhytClust, (2025)<br>
+                    Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust/"> https://bitbucket.org/schwarzlab/phytclust/</a> </p>
+            </div>
+
+        </div>
+    </footer>
 
 </body>
 </html>
