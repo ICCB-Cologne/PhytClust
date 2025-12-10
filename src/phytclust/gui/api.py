@@ -95,7 +95,7 @@ def run_phytclust(req: PhytclustRequest):
             status_code=400, detail="mode must be 'k', 'global', or 'resolution'."
         )
     
-    if LAST_NEWICK == req.newick and LAST_PC is not None:
+    if LAST_NEWICK is not None and LAST_PC is not None and str(LAST_NEWICK) == str(req.newick):
         pc = LAST_PC
         notes.append("Reusing previous PhytClust instance.")
     else:
@@ -160,18 +160,16 @@ def run_phytclust(req: PhytclustRequest):
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
         "outgroup": result.get("outgroup"),
-        "notes": notes,
+        "notes": [str(n) for n in notes if n is not None],
         "newick": req.newick,
         "scores": scores,
         "clusters": clusters_json,
     }
 
-    # store last instance and result for use by /api/save
     LAST_PC = pc
-    LAST_RESULT = payload
     LAST_NEWICK = req.newick
+    LAST_RESULT = payload
     return payload
-
 
 # ------------------------------------------------------
 # Save endpoint

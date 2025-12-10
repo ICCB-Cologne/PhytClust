@@ -486,62 +486,76 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
-            resultEl.textContent = JSON.stringify(data, null, 2);
+
+            let data = null;
+            const raw = await res.text();
+            try { data = JSON.parse(raw); } catch (_) { /* non-JSON error body */ }
 
             if (!res.ok) {
-                showStatus("Error running PhytClust", "danger");
+                const msg = (data && data.detail) ? data.detail : (raw || "Request failed");
+                resultEl.textContent = (typeof raw === 'string' && raw.length < 2000) ? raw : (JSON.stringify(data || { error: msg }, null, 2));
+                showStatus("Error running PhytClust: " + msg, "danger");
+                return; // stop, avoid using undefined data below
             }
 
+            // Ensure data is an object even if empty
+            if (!data || typeof data !== 'object') { data = {}; }
+            resultEl.textContent = JSON.stringify(data, null, 2);
 
-            if (data.newick && data.clusters && data.clusters.length > 0) {
-                // Handle multiple possible cluster assignments via slider
-                (function(){
-                    var box = document.getElementById('cluster-select-controls');
-                    var selectEl = document.getElementById('cluster-select');
-                    var labelEl = document.getElementById('cluster-select-label');
+            try {
+                if (data.newick && data.clusters && data.clusters.length > 0) {
+                    // Handle multiple possible cluster assignments via slider
+                    (function(){
+                        var box = document.getElementById('cluster-select-controls');
+                        var selectEl = document.getElementById('cluster-select');
+                        var labelEl = document.getElementById('cluster-select-label');
 
-                    var total = data.clusters.length;
-                    if (total > 1 && box && selectEl && labelEl) {
-                        // Populate dropdown options using k from data.peaks when available
-                        box.style.display = 'block';
-                        selectEl.innerHTML = '';
-                        for (var i = 0; i < total; i++) {
-                            var opt = document.createElement('option');
-                            opt.value = String(i);
-                            var kLabel = null;
-                            if (Array.isArray(data.peaks) && i < data.peaks.length) {
-                                var kVal = data.peaks[i];
-                                if (typeof kVal === 'number' && isFinite(kVal)) {
-                                    kLabel = 'k = ' + kVal;
+                        var total = data.clusters.length;
+                        if (total > 1 && box && selectEl && labelEl) {
+                            // Populate dropdown options using k from data.peaks when available
+                            box.style.display = 'block';
+                            selectEl.innerHTML = '';
+                            for (var i = 0; i < total; i++) {
+                                var opt = document.createElement('option');
+                                opt.value = String(i);
+                                var kLabel = null;
+                                if (Array.isArray(data.peaks) && i < data.peaks.length) {
+                                    var kVal = data.peaks[i];
+                                    if (typeof kVal === 'number' && isFinite(kVal)) {
+                                        kLabel = 'k = ' + kVal;
+                                    }
                                 }
+                                opt.textContent = kLabel || ('Set ' + (i + 1));
+                                selectEl.appendChild(opt);
                             }
-                            opt.textContent = kLabel || ('Set ' + (i + 1));
-                            selectEl.appendChild(opt);
+                            selectEl.value = '0';
+                            labelEl.textContent = '1 / ' + total;
+
+                            // Initial draw for index 0
+                            drawTree(data.newick, data.clusters[0]);
+
+                            // Re-render on selection change
+                            selectEl.onchange = function(){
+                                var idx = parseInt(selectEl.value, 10) || 0;
+                                labelEl.textContent = (idx + 1) + ' / ' + total;
+                                var clustersMap = data.clusters[idx];
+                                drawTree(data.newick, clustersMap);
+                            };
+                        } else {
+                            // Hide dropdown for single or missing clusters
+                            if (box) { box.style.display = 'none'; }
+                            drawTree(data.newick, data.clusters[0]);
                         }
-                        selectEl.value = '0';
-                        labelEl.textContent = '1 / ' + total;
-
-                        // Initial draw for index 0
-                        drawTree(data.newick, data.clusters[0]);
-
-                        // Re-render on selection change
-                        selectEl.onchange = function(){
-                            var idx = parseInt(selectEl.value, 10) || 0;
-                            labelEl.textContent = (idx + 1) + ' / ' + total;
-                            var clustersMap = data.clusters[idx];
-                            drawTree(data.newick, clustersMap);
-                        };
-                    } else {
-                        // Hide dropdown for single or missing clusters
-                        if (box) { box.style.display = 'none'; }
-                        drawTree(data.newick, data.clusters[0]);
-                    }
-                })();
-                showStatus("PhytClust finished.", "success");
-            } else {
-                drawTree(data.newick, null);
-                showStatus("No clusters found (likely because there are not enough samples).", "danger");
+                    })();
+                    showStatus("PhytClust finished.", "success");
+                } else {
+                    drawTree(data.newick, null);
+                    showStatus("No clusters found (likely because there are not enough samples).", "danger");
+                }
+            } catch (e) {
+                console.error(e);
+                showStatus("Drawing the Tree failed with Error: " + e, "danger");
+                resultEl.textContent = "Error: " + e;
             }
 
             // Render Optimal k plot if scores are available
@@ -567,13 +581,14 @@
                         plotHost.innerHTML = '<div class="alert alert-info" style="width:100%; margin:0;">Optimal number of clusters plot is unavailable in fixed k mode. Using k = ' + kDisplay + ' from parameters.</div>';
                     }
                 }
-            } catch (plotErr) {
-                console.warn('Plot rendering error:', plotErr);
+            } catch (e) {
+                console.warn('Plotting optimal number of clusters failed with Error:', e);
+                showStatus("Plotting optimal number of clusters failed with Error: " + e, "danger");
             }
         } catch (e) {
-            console.error(e);
-            showStatus("PhytClust failed with Error: " + e, "danger");
+            showStatus("runPhytClust failed with Error: " + e, "danger");
             resultEl.textContent = "Error: " + e;
+            console.error(e);
         } finally {
             isRunning = false;
             var saveBtn2 = document.getElementById('btn-save');
