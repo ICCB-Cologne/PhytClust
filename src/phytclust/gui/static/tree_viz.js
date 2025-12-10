@@ -842,29 +842,27 @@ function drawOptimalK(data) {
         return;
     }
 
-    // Build x/y arrays (k from 2..)
-    var x = [];
-    var y = [];
-    for (var i = 0; i < scores.length; i++) {
-        var kVal = i + 2;
-        x.push(kVal);
-        y.push(scores[i + 1]);
-    }
+    plotEl.innerHTML = ""; // Clear before drawing
 
-    var peakPoints = [];
-    if (Array.isArray(peaks)) {
-        for (var p = 0; p < peaks.length; p++) {
-            var k = peaks[p];
-            if (typeof k === "number") {
-                var idx = k - 2;
-                if (idx >= 0 && idx < y.length) {
-                    peakPoints.push({ k: k, score: y[idx] });
-                }
+    // Build data points array
+    var dataPoints = [];
+    for (let i = 0; i < scores.length - 1; i++) {
+        let k = i + 2;
+        dataPoints.push({
+            k: k,
+            score: scores[i + 1]
+        });
+    }
+    // Peak points
+    var peakPoints = peaks
+        .map(k => {
+            var idx = k - 2;
+            if (idx >= 0 && idx < dataPoints.length) {
+                return { k, score: dataPoints[idx].score };
             }
-        }
-    }
-
-    plotEl.innerHTML = "";
+            return null;
+        })
+        .filter(d => d);
 
     var width = plotEl.clientWidth || 700;
     var height = plotEl.clientHeight || 420;
@@ -878,64 +876,28 @@ function drawOptimalK(data) {
         .attr("height", height);
 
     var g = svg.append("g")
-        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+        .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    var axisModeEl = document.getElementById('axis-mode');
-    var defaultMode = (scores.length > 50) ? 'log' : 'normal';
-    var mode = defaultMode;
-
-    if (axisModeEl) {
-        if (!axisModeEl.__initialized) {
-            axisModeEl.value = defaultMode;
-            axisModeEl.__initialized = true;
-        }
-        if (axisModeEl.__userOverride) {
-            mode = axisModeEl.value || defaultMode;
-        } else {
-            mode = defaultMode;
-        }
-    }
-
-    var xExtent = d3.extent(x);
-    var yExtent = d3.extent(y);
-
-    var xScale;
-    if (mode === "log") {
-        // Avoid zero; k>=2 so ok
-        xScale = d3.scaleLog()
-            .domain([Math.max(1.5, xExtent[0]), xExtent[1]])
-            .range([0, innerWidth]);
-    } else {
-        xScale = d3.scaleLinear()
-            .domain(xExtent)
-            .range([0, innerWidth]);
-    }
+    // X scale: band scale for discrete k-values
+    var xScale = d3.scaleBand()
+        .domain(dataPoints.map(d => d.k))
+        .range([0, innerWidth])
+        .padding(0.2);
 
     var yScale = d3.scaleLinear()
-        .domain([yExtent[0], yExtent[1]])
+        .domain([d3.min(dataPoints, d => d.score), d3.max(dataPoints, d => d.score)])
         .nice()
         .range([innerHeight, 0]);
 
-    var line = d3.line()
-        .x(function (d, i) { return xScale(x[i]); })
-        .y(function (d) { return yScale(d); });
-
     // Axes
-    var xAxis = d3.axisBottom(xScale);
-    if (mode === "log") {
-        xAxis.ticks(6, d3.format("~g"));
-    } else {
-        xAxis.ticks(10).tickFormat(d3.format("d"));
-    }
-
+    var xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));
     var yAxis = d3.axisLeft(yScale).ticks(6);
 
     g.append("g")
-        .attr("transform", "translate(0," + innerHeight + ")")
+        .attr("transform", `translate(0,${innerHeight})`)
         .call(xAxis);
 
-    g.append("g")
-        .call(yAxis);
+    g.append("g").call(yAxis);
 
     // Axis labels
     g.append("text")
@@ -953,9 +915,13 @@ function drawOptimalK(data) {
         .attr("font-size", 12)
         .text("Score");
 
-    // Line
+    // Line generator using center of each band
+    var line = d3.line()
+        .x(d => xScale(d.k) + xScale.bandwidth() / 2)
+        .y(d => yScale(d.score));
+
     g.append("path")
-        .datum(y)
+        .datum(dataPoints)
         .attr("fill", "none")
         .attr("stroke", "#1f77b4")
         .attr("stroke-width", 2)
@@ -963,57 +929,34 @@ function drawOptimalK(data) {
 
     // Points
     g.selectAll(".score-point")
-        .data(y)
+        .data(dataPoints)
         .enter().append("circle")
         .attr("class", "score-point")
-        .attr("cx", function (d, i) { return xScale(x[i]); })
-        .attr("cy", function (d) { return yScale(d); })
+        .attr("cx", d => xScale(d.k) + xScale.bandwidth() / 2)
+        .attr("cy", d => yScale(d.score))
         .attr("r", 4)
         .attr("fill", "#1f77b4")
-        .on("mouseover", function (event, d) {
-            var i = y.indexOf(d);
-            var k = x[i];
-            d3Tooltip
-                .style("opacity", 1)
-                .html("k = " + k + "<br/>score = " + d.toFixed(4));
-        })
-        .on("mousemove", function (event) {
-            d3Tooltip
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY + 10) + "px");
-        })
-        .on("mouseout", function () {
-            d3Tooltip.style("opacity", 0);
-        });
+        .on("mouseover", (event, d) => d3Tooltip.style("opacity",1).html(`k = ${d.k}<br/>score = ${d.score.toFixed(4)}`))
+        .on("mousemove", event => d3Tooltip.style("left",(event.pageX+10)+"px").style("top",(event.pageY+10)+"px"))
+        .on("mouseout", () => d3Tooltip.style("opacity",0));
 
-    // Peak markers (stars)
+    // Peak markers
     g.selectAll(".peak-point")
         .data(peakPoints)
         .enter().append("path")
         .attr("class", "peak-point")
-        .attr("transform", function (d) {
-            return "translate(" + xScale(d.k) + "," + yScale(d.score) + ")";
-        })
+        .attr("transform", d => `translate(${xScale(d.k) + xScale.bandwidth()/2},${yScale(d.score)})`)
         .attr("d", d3.symbol().type(d3.symbolStar).size(120))
         .attr("fill", "#d62728")
-        .on("mouseover", function (event, d) {
-            d3Tooltip
-                .style("opacity", 1)
-                .html("<strong>Optimal k</strong><br/>k = " + d.k + "<br/>score = " + d.score.toFixed(4));
-        })
-        .on("mousemove", function (event) {
-            d3Tooltip
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY + 10) + "px");
-        })
-        .on("mouseout", function () {
-            d3Tooltip.style("opacity", 0);
-        });
+        .on("mouseover", (event, d) => d3Tooltip.style("opacity",1).html(`<strong>Optimal k</strong><br/>k = ${d.k}<br/>score = ${d.score.toFixed(4)}`))
+        .on("mousemove", event => d3Tooltip.style("left",(event.pageX+10)+"px").style("top",(event.pageY+10)+"px"))
+        .on("mouseout", () => d3Tooltip.style("opacity",0));
 
     // Legend
     var legend = g.append("g")
-        .attr("transform", "translate(" + (innerWidth - 120) + ",10)");
+        .attr("transform", `translate(${innerWidth - 120},10)`);
 
+    // Score line legend
     legend.append("line")
         .attr("x1", 0)
         .attr("y1", 0)
@@ -1028,6 +971,7 @@ function drawOptimalK(data) {
         .attr("font-size", 11)
         .text("Score");
 
+    // Peak star legend
     legend.append("path")
         .attr("transform", "translate(10,20)")
         .attr("d", d3.symbol().type(d3.symbolStar).size(120))
@@ -1038,15 +982,8 @@ function drawOptimalK(data) {
         .attr("y", 24)
         .attr("font-size", 11)
         .text("Optimal k");
-
-    if (axisModeEl && !axisModeEl.__wired) {
-        axisModeEl.__wired = true;
-        axisModeEl.addEventListener('change', function () {
-            axisModeEl.__userOverride = true;
-            drawOptimalK();
-        });
-    }
 }
+
 
 function handleFileSelect(evt) {
     var file = evt.target.files[0];
