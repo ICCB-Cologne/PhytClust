@@ -181,7 +181,6 @@
         <li class="active"><a href="#viewer" role="tab" data-toggle="tab">Clustering</a></li>
         <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab">Optimal number of clusters</a></li>
         <li><a href="#debug" role="tab" data-toggle="tab">JSON</a></li>
-        <li><a href="#log" role="tab" data-toggle="tab">Log</a></li>
     </ul>
 
     <div class="tab-content" style="margin-top: 15px;">
@@ -238,12 +237,6 @@
                     <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>
                 </p>
             </div>
-        </div>
-
-        <!-- Log Tab -->
-        <div class="tab-pane" id="log">
-            <h4>Execution Log</h4>
-            <pre id="log-output" class="result-box">(logs will appear here)</pre>
         </div>
 
         <!-- JSON Tab -->
@@ -500,15 +493,6 @@
                 showStatus("Error running PhytClust", "danger");
             }
 
-            // Update log tab if available
-            var logEl = document.getElementById("log-output");
-            if (logEl) {
-                if (data && data.log) {
-                    logEl.textContent = data.log;
-                } else {
-                    logEl.textContent = "(no logs)";
-                }
-            }
 
             if (data.newick && data.clusters && data.clusters.length > 0) {
                 // Handle multiple possible cluster assignments via slider
@@ -590,10 +574,6 @@
             console.error(e);
             showStatus("PhytClust failed with Error: " + e, "danger");
             resultEl.textContent = "Error: " + e;
-            var logEl = document.getElementById("log-output");
-            if (logEl) {
-                logEl.textContent = "(error encountered; no logs captured)";
-            }
         } finally {
             isRunning = false;
             var saveBtn2 = document.getElementById('btn-save');
