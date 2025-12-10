@@ -50,6 +50,24 @@
             margin-bottom: 20px;
         }
 
+        .header-content {
+            display: flex;
+            justify-content: center;   /* center the image horizontally */
+            align-items: center;       /* vertical alignment */
+            position: relative;
+        }
+
+        .header-buttons {
+            position: absolute;
+            right: 0;                  /* keep buttons on far right */
+        }
+
+        .logo {
+            max-width: 100%;
+            height: auto;
+            max-height: 90px;   /* optional: controls maximum size */
+        }
+
         .app-footer {
             background: #F2F2F2;
             border-top: 1px solid #000; /* thin black line */
@@ -188,20 +206,38 @@
 <body>
 
 <!-- Header: logo top-left, helper text below -->
-<div class="header-bar">
-    <div class="row" style="padding-left:40px">
-        <div class="col-xs-8">
-            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />
-            <p class="text-muted" style="margin-bottom:16px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
-        </div>
-        <div class="col-xs-4" style="text-align:right;">
-<!--            <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px; background-color:#684186; color:#684186;">About</button>-->
-            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px; background-color:#684186;color:#ffffff;">About</button>
-<!--            <button id="btn-help" class="btn btn-info" style="margin-top:8px; background-color:#a8a8a8; color:#ffffff;">Help</button>-->
-            <button id="btn-help" class="btn" style="margin-top:8px; background-color:#3F4086; color:#ffffff;">Help</button>
+<!--<div class="header-bar">-->
+<!--    <div class="row" style="padding-left:40px; text-align:center;">-->
+<!--        <div class="col-xs-8" style="text-align:center;">-->
+<!--            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" style="max-height:90px; height:auto; width:auto; display:block; margin-bottom:8px;" />-->
+<!--&lt;!&ndash;            <p class="text-muted" style="margin-bottom:16px; color:black">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>&ndash;&gt;-->
+<!--        </div>-->
+<!--        <div class="col-xs-4" style="text-align:right;">-->
+<!--&lt;!&ndash;            <button id="btn-about" class="btn btn-default" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px; background-color:#684186; color:#684186;">About</button>&ndash;&gt;-->
+<!--            <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="margin-top:8px; background-color:#684186;color:#ffffff;">About</button>-->
+<!--&lt;!&ndash;            <button id="btn-help" class="btn btn-info" style="margin-top:8px; background-color:#a8a8a8; color:#ffffff;">Help</button>&ndash;&gt;-->
+<!--            <button id="btn-help" class="btn" style="margin-top:8px; background-color:#3F4086; color:#ffffff;">Help</button>-->
+<!--        </div>-->
+<!--    </div>-->
+<!--</div>-->
+
+<div class="header-bar" style="padding:10px 40px;">
+    <div class="header-content">
+        <img src="/static/phytclust_logo_colour.png"
+             alt="PhytClust"
+             class="logo">
+
+        <div class="header-buttons">
+            <button id="btn-about" class="btn"
+                    style="background-color:#684186; color:#ffffff;">About</button>
+            <button id="btn-help" class="btn"
+                    style="background-color:#3F4086; color:#ffffff;">Help</button>
         </div>
     </div>
 </div>
+
+
+
 
 <div class="container-fluid" style="padding:40px">
 
@@ -211,6 +247,8 @@
     <!-- Loader and parameters stacked below header -->
     <div class="row">
         <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
+            <p class="text-muted" style="margin-bottom:16px; color:black; font-size:22px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
+
             <h4>Load tree</h4>
 
             <form class="form-inline" onsubmit="return false;">
