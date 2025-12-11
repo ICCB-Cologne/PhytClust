@@ -435,6 +435,7 @@ function computeLayouts() {
     });
 }
 
+window.PHYTCLUST_ORIGINAL_TREE_SVG = null;
 
 function drawTree() {
     clearTree();
@@ -826,7 +827,18 @@ function drawTree() {
                 .text("Branch length");
         }
     }
+        var svgNode = document.querySelector("#tree_display svg");
+    if (svgNode) {
+        var serializer = new XMLSerializer();
+        window.PHYTCLUST_ORIGINAL_TREE_SVG =
+            serializer.serializeToString(svgNode);
+    } else {
+        window.PHYTCLUST_ORIGINAL_TREE_SVG = null;
+    }
+
 }
+
+window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = null;
 
 // ---- D3 Optimal-k plot ----
 function drawOptimalK(data) {
@@ -1046,6 +1058,14 @@ function drawOptimalK(data) {
             drawOptimalK();
         });
     }
+    var okSvgNode = document.querySelector("#optimalk_plot svg");
+    if (okSvgNode) {
+        var serializer = new XMLSerializer();
+        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG =
+            serializer.serializeToString(okSvgNode);
+    } else {
+        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = null;
+    }
 }
 
 function handleFileSelect(evt) {
@@ -1079,91 +1099,91 @@ $(function () {
     document.getElementById("file-input").addEventListener("change", handleFileSelect);
     document.getElementById("btn-run").addEventListener("click", function (e) { e.preventDefault(); runPhytClust(); });
 
-    document.getElementById("btn-save").addEventListener("click", async function (e) {
-        e.preventDefault();
-        if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
-        var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
-        if (!fname) { fname = "phytclust_results.tsv"; }
-
-        if (window.showDirectoryPicker) {
-            try {
-                const dirHandle = await window.showDirectoryPicker();
-                const res = await fetch('/api/export_tsv', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        filename: fname,
-                        top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                        outlier: true,
-                        output_all: false
-                    })
-                });
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
-                    showStatus(msg, 'danger');
-                    return;
-                }
-                const text = await res.text();
-                const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(text);
-                await writable.close();
-                showStatus('Saved ' + fname + ' to selected directory', 'success');
-            } catch (err) {
-                if (err && err.name === 'AbortError') { return; }
-                try {
-                    var dirInput = document.getElementById('output-dir');
-                    var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
-                    const res2 = await fetch('/api/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            results_dir: dir,
-                            filename: fname,
-                            top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                            outlier: true,
-                            output_all: false
-                        })
-                    });
-                    const data2 = await res2.json();
-                    if (!res2.ok) {
-                        var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
-                        showStatus(msg2, 'danger');
-                    } else {
-                        showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
-                    }
-                } catch (err2) {
-                    showStatus('Save error: ' + err2, 'danger');
-                }
-            }
-        } else {
-            try {
-                var dirInputF = document.getElementById('output-dir');
-                var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
-                const res3 = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        results_dir: dirF,
-                        filename: fname,
-                        top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-                        outlier: true,
-                        output_all: false
-                    })
-                });
-                const data3 = await res3.json();
-                if (!res3.ok) {
-                    var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
-                    showStatus(msg3, 'danger');
-                } else {
-                    showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
-                }
-            } catch (err3) {
-                showStatus('Save error: ' + err3, 'danger');
-            }
-        }
-    });
+    // document.getElementById("btn-save").addEventListener("click", async function (e) {
+    //     e.preventDefault();
+    //     if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
+    //     var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
+    //     if (!fname) { fname = "phytclust_results.tsv"; }
+    //
+    //     if (window.showDirectoryPicker) {
+    //         try {
+    //             const dirHandle = await window.showDirectoryPicker();
+    //             const res = await fetch('/api/export_tsv', {
+    //                 method: 'POST',
+    //                 headers: { 'Content-Type': 'application/json' },
+    //                 body: JSON.stringify({
+    //                     filename: fname,
+    //                     top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+    //                     outlier: true,
+    //                     output_all: false
+    //                 })
+    //             });
+    //             if (!res.ok) {
+    //                 const errData = await res.json().catch(() => ({}));
+    //                 const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
+    //                 showStatus(msg, 'danger');
+    //                 return;
+    //             }
+    //             const text = await res.text();
+    //             const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
+    //             const writable = await fileHandle.createWritable();
+    //             await writable.write(text);
+    //             await writable.close();
+    //             showStatus('Saved ' + fname + ' to selected directory', 'success');
+    //         } catch (err) {
+    //             if (err && err.name === 'AbortError') { return; }
+    //             try {
+    //                 var dirInput = document.getElementById('output-dir');
+    //                 var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
+    //                 const res2 = await fetch('/api/save', {
+    //                     method: 'POST',
+    //                     headers: { 'Content-Type': 'application/json' },
+    //                     body: JSON.stringify({
+    //                         results_dir: dir,
+    //                         filename: fname,
+    //                         top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+    //                         outlier: true,
+    //                         output_all: false
+    //                     })
+    //                 });
+    //                 const data2 = await res2.json();
+    //                 if (!res2.ok) {
+    //                     var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
+    //                     showStatus(msg2, 'danger');
+    //                 } else {
+    //                     showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
+    //                 }
+    //             } catch (err2) {
+    //                 showStatus('Save error: ' + err2, 'danger');
+    //             }
+    //         }
+    //     } else {
+    //         try {
+    //             var dirInputF = document.getElementById('output-dir');
+    //             var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
+    //             const res3 = await fetch('/api/save', {
+    //                 method: 'POST',
+    //                 headers: { 'Content-Type': 'application/json' },
+    //                 body: JSON.stringify({
+    //                     results_dir: dirF,
+    //                     filename: fname,
+    //                     top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
+    //                     outlier: true,
+    //                     output_all: false
+    //                 })
+    //             });
+    //             const data3 = await res3.json();
+    //             if (!res3.ok) {
+    //                 var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
+    //                 showStatus(msg3, 'danger');
+    //             } else {
+    //                 showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
+    //             }
+    //         } catch (err3) {
+    //             showStatus('Save error: ' + err3, 'danger');
+    //         }
+    //     }
+    // });
 
     var resetBtn = document.getElementById("btn-extra-reset");
     if (resetBtn) {

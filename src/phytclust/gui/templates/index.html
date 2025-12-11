@@ -646,14 +646,30 @@
        Utility: Save TREE SVG
        ============================================================ */
     function downloadTreePlotSVG() {
-        const svg = document.querySelector("#tree_display svg");
-        if (!svg) {
+        // const svg = document.querySelector("#tree_display svg");
+        // if (!svg) {
+        //     alert("No tree plot to save.");
+        //     return;
+        // }
+        //
+        // const serializer = new XMLSerializer();
+        // const src = serializer.serializeToString(svg);
+        //
+        // const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
+        // const url = URL.createObjectURL(blob);
+        //
+        // const a = document.createElement("a");
+        // a.href = url;
+        // a.download = "tree_plot.svg";
+        // a.click();
+        //
+        // URL.revokeObjectURL(url);
+        const src = window.PHYTCLUST_ORIGINAL_TREE_SVG;
+
+        if (!src) {
             alert("No tree plot to save.");
             return;
         }
-
-        const serializer = new XMLSerializer();
-        const src = serializer.serializeToString(svg);
 
         const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -672,14 +688,30 @@
        (your D3 version — NOT Plotly)
        ============================================================ */
     function downloadOptimalKPlot() {
-        const svg = document.querySelector("#optimalk_plot svg");
-        if (!svg) {
+        // const svg = document.querySelector("#optimalk_plot svg");
+        // if (!svg) {
+        //     alert("No optimal-k plot to save.");
+        //     return;
+        // }
+        //
+        // const serializer = new XMLSerializer();
+        // const src = serializer.serializeToString(svg);
+        //
+        // const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
+        // const url = URL.createObjectURL(blob);
+        //
+        // const a = document.createElement("a");
+        // a.href = url;
+        // a.download = "optimal_k.svg";
+        // a.click();
+        //
+        // URL.revokeObjectURL(url);
+        const src = window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG;
+
+        if (!src) {
             alert("No optimal-k plot to save.");
             return;
         }
-
-        const serializer = new XMLSerializer();
-        const src = serializer.serializeToString(svg);
 
         const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
         const url = URL.createObjectURL(blob);
