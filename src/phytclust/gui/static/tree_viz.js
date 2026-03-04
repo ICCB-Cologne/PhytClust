@@ -7,8 +7,22 @@ var resultEl = document.getElementById("result");
 var statusEl = document.getElementById("status-message");
 var treeHost = document.getElementById("tree_display");
 
-let TREE_WIDTH_SCALE = 1.0;
-let TREE_HEIGHT_SCALE = 1.0;
+const state = {
+  isRunning: false,
+  latestOptimalKData: null,
+  newickRawTree: null,
+  currentClusters: {},
+  clusterColors: [],
+  layoutMode: "rectangular",
+  colorMode: "bars",
+  showLeafNames: true,
+  showInternalNames: false,
+  leafNodeRadius: 3.0,
+  internalNodeRadius: 1.8,
+  labelFontSize: 9,
+  treeWidthScale: 1.0,
+  treeHeightScale: 1.0
+};
 
 const BASE_COLORS = [
         "#b84b4b",
@@ -29,6 +43,9 @@ const BASE_COLORS = [
 
     let LABEL_FONT_SIZE = 9;
 
+    // Add missing globals used by drawTree() + slider handlers
+    let TREE_WIDTH_SCALE = 1.0;
+    let TREE_HEIGHT_SCALE = 1.0;
 
     let CLUSTER_COLORS = [];
     let CURRENT_CLUSTERS = {};
@@ -36,7 +53,7 @@ const BASE_COLORS = [
     let CURRENT_LAYOUT_MODE = 'rectangular';
     let COLOR_MODE = 'bars';
 
-
+    const LABEL_PAD = 6; // constant visual gap between node edge and label
 
 var statusHideTimeout = null;
 var isRunning = false;
@@ -51,7 +68,6 @@ var extraLambdaEl = document.getElementById("extra-lambda");
 
 var latestOptimalKData = null;
 
-// Simple global tooltip shared by tree + plot
 var d3Tooltip = d3.select("body").append("div")
     .attr("class", "d3-tooltip");
 
@@ -95,16 +111,24 @@ function estimateLeafCount(newick) {
     return Math.max(0, commas + 1);
 }
 
+// Bootstrap 5 / no-jQuery status helper (replace the whole function with this)
 function showStatus(message, type) {
-    var el = $("#status-message");
     type = type || "info";
+
+    var el = document.getElementById("status-message");
+    if (!el) return;
+
     if (statusHideTimeout) { clearTimeout(statusHideTimeout); statusHideTimeout = null; }
-    el.removeClass();
-    el.addClass("alert alert-" + type);
-    el.text(message);
-    el.show();
+
+    el.className = "";
+    el.classList.add("alert", "alert-" + type);
+    el.textContent = message;
+    el.style.display = "block";
+
     if (type === "success") {
-        statusHideTimeout = setTimeout(function () { el.hide(); }, 5000);
+        statusHideTimeout = setTimeout(function () {
+            el.style.display = "none";
+        }, 5000);
     }
 }
 
@@ -145,6 +169,12 @@ function parseNewick(newick) {
         }
     }
     return current;
+}
+
+function getVisibleChildren(node) {
+    // If this node is collapsed, treat it as a leaf in the rendered hierarchy
+    if (node && node._collapsed) return null;
+    return node && node.children && node.children.length ? node.children : null;
 }
 
 async function runPhytClust() {
@@ -247,17 +277,11 @@ async function runPhytClust() {
         isRunning = true;
         var saveBtn = document.getElementById('btn-save');
         if (saveBtn) { saveBtn.disabled = true; }
-        const res = await fetch("/api/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
+        const t0 = performance.now();
+        const data = await apiPostJson("/api/run", payload);
+        const dt = (performance.now() - t0) / 1000;
+        showStatus(`PhytClust finished in ${dt.toFixed(2)}s`, "success");
         resultEl.textContent = JSON.stringify(data, null, 2);
-
-        if (!res.ok) {
-            showStatus("Error running PhytClust", "danger");
-        }
 
         var logEl = document.getElementById("log-output");
         if (logEl) {
@@ -269,11 +293,9 @@ async function runPhytClust() {
         }
 
         if (data.newick) {
-            // Parse tree
             NEWICK_RAW_TREE = parseNewick(data.newick);
             accumulateBranchLength(NEWICK_RAW_TREE);
             computeLayouts();
-            // Extract cluster map (may be empty)
             const clusterMap = (data.clusters && data.clusters.length > 0)
                 ? data.clusters[0]
                 : {};
@@ -398,9 +420,9 @@ function accumulateBranchLength(node, length = 0) {
 function computeLayouts() {
     if (!NEWICK_RAW_TREE) return;
 
-    // Build SINGLE hierarchy once – all coordinates attach to these objects
-    HIER_CART = d3.hierarchy(NEWICK_RAW_TREE, d => d.children);
-    HIER_CIRC = d3.hierarchy(NEWICK_RAW_TREE, d => d.children);
+    // Build hierarchy while respecting collapsed nodes
+    HIER_CART = d3.hierarchy(NEWICK_RAW_TREE, getVisibleChildren);
+    HIER_CIRC = d3.hierarchy(NEWICK_RAW_TREE, getVisibleChildren);
 
     var width  = treeHost.clientWidth  || 800;
     var height = treeHost.clientHeight || 500;
@@ -410,7 +432,6 @@ function computeLayouts() {
     var innerH = height - margin.top - margin.bottom;
     var radius = Math.min(innerW, innerH) / 2;
 
-    // max branch length
     var maxBl = d3.max(HIER_CART.descendants(), d => d.data._bl || 0) || 1;
 
     var blToX = d3.scaleLinear().domain([0, maxBl]).range([0, innerW]);
@@ -435,11 +456,51 @@ function computeLayouts() {
     });
 }
 
+let LAST_TREE_SVG = null;
+let LAST_TREE_ZOOM = null;
+
+// Clear collapse flags in the backing Newick tree (data)
+function clearAllCollapsedFlags(node) {
+    if (!node) return;
+    if (node._collapsed) delete node._collapsed;
+    if (node.children && node.children.length) {
+        for (const c of node.children) clearAllCollapsedFlags(c);
+    }
+}
+
+// Collect leaf names under a *data* node (respects original structure, not visible d3 children)
+function collectLeafNamesData(node, out) {
+    if (!node) return;
+    const kids = node.children && node.children.length ? node.children : null;
+    if (!kids) {
+        if (node.name) out.push(node.name);
+        return;
+    }
+    for (const c of kids) collectLeafNamesData(c, out);
+}
+
+// If a subtree is uniform-cluster, return that cluster id; else null ("mixed"/unknown)
+function representativeClusterIdFromData(dataNode) {
+    if (!dataNode || !CURRENT_CLUSTERS) return null;
+
+    const leaves = [];
+    collectLeafNamesData(dataNode, leaves);
+    if (!leaves.length) return null;
+
+    let cid = null;
+    for (const nm of leaves) {
+        const v = CURRENT_CLUSTERS[nm];
+        if (v == null) return null;
+        if (cid == null) cid = v;
+        else if (cid !== v) return null;
+    }
+    return cid;
+}
+
 function drawTree() {
     clearTree();
     if (!NEWICK_RAW_TREE) return;
 
-    // Recompute Cartesian layout for current container size
     computeLayouts();
 
     const layoutMode = CURRENT_LAYOUT_MODE || "rectangular";
@@ -469,68 +530,95 @@ function drawTree() {
         });
 
     svg.call(zoom);
+    LAST_TREE_SVG = svg;
+    LAST_TREE_ZOOM = zoom;
+
+    function hasOriginalChildren(d) {
+        return !!(d && d.data && Array.isArray(d.data.children) && d.data.children.length > 0);
+    }
+
+    function canCollapse(d) {
+        // collapse is only meaningful if the original data node has children
+        return hasOriginalChildren(d);
+    }
+
+    // A "visible leaf" is a node with no visible children in the hierarchy (which includes collapsed internal nodes)
+    function isVisibleLeaf(d) {
+        return !(d && d.children && d.children.length);
+    }
 
     function nodeRadius(d) {
-        const isLeaf = !d.children || !d.children.length;
-        return isLeaf ? LEAF_NODE_RADIUS : INTERNAL_NODE_RADIUS;
+        return hasOriginalChildren(d) ? INTERNAL_NODE_RADIUS : LEAF_NODE_RADIUS;
     }
 
     function nodeFill(d) {
         const name = d.data && d.data.name;
 
-        // Internal / collapsed nodes: always black
-        if (
-            !name ||
-            (d.children && d.children.length) ||
-            (d.data.children && d.data.children.length && d.data._collapsed)
-        ) {
-            return "black";
+        // In bar mode, circles are black (bars carry color)
+        if (colorMode === "bars") return "black";
+
+        // Leaves: color by cluster
+        if (name && !hasOriginalChildren(d)) {
+            const cid = CURRENT_CLUSTERS ? CURRENT_CLUSTERS[name] : null;
+            if (cid == null || !CLUSTER_COLORS.length) return "black";
+            return CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
         }
 
-        if (colorMode === "bars") {
-            return "black"; // colour handled by side-bars
-        }
+        // Internal/collapsed nodes: inherit if subtree is uniform
+        const rep = representativeClusterIdFromData(d.data);
+        if (rep != null && CLUSTER_COLORS.length) return CLUSTER_COLORS[rep % CLUSTER_COLORS.length];
 
-        const cid = CURRENT_CLUSTERS ? CURRENT_CLUSTERS[name] : null;
-        if (cid == null || !CLUSTER_COLORS.length) return "black";
-        return CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
+        return "black";
     }
 
-    // ----------------------------------------------------------------
-    //  CIRCULAR: radial PHYLOGRAM (radius = cumulative branch length)
-    // ----------------------------------------------------------------
+    // -----------------------------
+    // CIRCULAR
+    // -----------------------------
     if (layoutMode === "circular") {
-        // Build hierarchy from raw Newick object
         const root = HIER_CIRC;
 
-        // Max cumulative branch length
-        const maxBL = d3.max(root.descendants(), d => d.data._bl || 0) || 1;
-
-        // Use most of the available radius, leave a bit of padding
-        const maxRadius = Math.min(width, height) / 2 - 20;
+        const maxRadiusPx = Math.min(width, height) / 2 - 30;
+        const maxR = d3.max(root.descendants(), d => d._radius || 0) || 1;
 
         const rScale = d3.scaleLinear()
-            .domain([0, maxBL])
-            .range([0, maxRadius]);
+            .domain([0, maxR])
+            .range([0, maxRadiusPx]);
 
-        // Use d3.tree() only to get ANGLES (x = angle). We ignore its y (=depth).
-        d3.tree().size([2 * Math.PI, 1])(root);
-
-        root.descendants().forEach(d => {
-            d._angle  = d.x;                      // from layout
-            d._radius = rScale(d.data._bl || 0);  // from true branch length
-        });
-
-        function radialPoint(d) {
-            const angle = d._angle - Math.PI / 2;   // rotate so root is at top
-            const r     = d._radius;
+        function polarToXY(angle, radius) {
+            const a = angle - Math.PI / 2;
+            const rr = rScale(radius);
             return [
-                (r * Math.cos(angle)) * TREE_WIDTH_SCALE,
-                (r * Math.sin(angle)) * TREE_HEIGHT_SCALE
+                (rr * Math.cos(a)) * TREE_WIDTH_SCALE,
+                (rr * Math.sin(a)) * TREE_HEIGHT_SCALE
             ];
         }
 
-        // LINKS
+        function nodeXY(d) {
+            return polarToXY(d._angle || 0, d._radius || 0);
+        }
+
+        function radialElbowPath(link) {
+            const s = link.source;
+            const t = link.target;
+
+            const sa = s._angle || 0;
+            const sr = s._radius || 0;
+            const ta = t._angle || 0;
+            const tr = t._radius || 0;
+
+            const p0 = polarToXY(sa, sr);
+            const p1 = polarToXY(sa, tr);
+            const p2 = polarToXY(ta, tr);
+
+            const delta = (ta - sa);
+            const sweep = delta >= 0 ? 1 : 0;
+            const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
+            const arcR = rScale(tr);
+
+            return `M${p0[0]},${p0[1]}L${p1[0]},${p1[1]}A${arcR},${arcR} 0 ${largeArc},${sweep} ${p2[0]},${p2[1]}`;
+        }
+
+        // Links
         g.append("g")
             .selectAll(".tree-link")
             .data(root.links())
@@ -538,15 +626,12 @@ function drawTree() {
             .append("path")
             .attr("class", "tree-link")
             .attr("fill", "none")
-            .attr("stroke", "black")
-            .attr("stroke-width", 1.2)
-            .attr("d", d => {
-                const s = radialPoint(d.source);
-                const t = radialPoint(d.target);
-                return `M${s[0]},${s[1]}L${t[0]},${t[1]}`;
-            });
+            .attr("stroke", "#111")
+            .attr("stroke-opacity", 0.9)
+            .attr("stroke-width", 1.1)
+            .attr("d", radialElbowPath);
 
-        // NODES
+        // Nodes
         const node = g.append("g")
             .selectAll(".tree-node")
             .data(root.descendants())
@@ -554,144 +639,125 @@ function drawTree() {
             .append("g")
             .attr("class", "tree-node")
             .attr("transform", d => {
-                const p = radialPoint(d);
+                const p = nodeXY(d);
                 return `translate(${p[0]},${p[1]})`;
             });
 
         node.append("circle")
             .attr("r", nodeRadius)
             .attr("fill", nodeFill)
-            .style("cursor", d =>
-                (d.data.children && d.data.children.length) ? "pointer" : "default"
-            )
+             .style("cursor", d => canCollapse(d) ? "pointer" : "default")
             .on("click", function (event, d) {
-                if (d.data.children && d.data.children.length) {
-                    d.data._collapsed = !d.data._collapsed;
-                    drawTree();
-                }
-            })
-            .on("mouseover", function (event, d) {
-                const name = d.data.name || "(internal)";
-                const cid  = (CURRENT_CLUSTERS && d.data.name)
-                    ? CURRENT_CLUSTERS[d.data.name]
-                    : null;
-                const clusterStr = (cid == null ? "none" : cid.toString());
-                const bl = (typeof d.data.length === "number")
-                    ? d.data.length.toFixed(4)
-                    : "n/a";
-
-                d3Tooltip
-                    .style("opacity", 1)
-                    .html(
-                        "<strong>" + name + "</strong><br/>" +
-                        "Depth: " + d.depth + "<br/>" +
-                        "Branch length: " + bl + "<br/>" +
-                        "Cluster: " + clusterStr
-                    );
-            })
-            .on("mousemove", function (event) {
-                d3Tooltip
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY + 10) + "px");
-            })
-            .on("mouseout", function () {
-                d3Tooltip.style("opacity", 0);
+                if (!canCollapse(d)) return;
+                d.data._collapsed = !d.data._collapsed;
+                drawTree(); // recomputeLayouts() will rebuild hierarchy with getVisibleChildren()
             });
 
+        // Labels: always pushed outward, flipped on left half so text reads outward
         node.append("text")
-            .attr("dy", 3)
-            .attr("x", d =>
-                (d.children && d.children.length) ? -8 : 8
-            )
-            .style("text-anchor", d =>
-                (d.children && d.children.length) ? "end" : "start"
-            )
-            .style("font-size", LABEL_FONT_SIZE + "px")
+            .attr("dy", "0.32em")
+            .attr("font-size", LABEL_FONT_SIZE + "px")
+            .attr("transform", function (d) {
+                const a = (d._angle || 0);
+
+                // radial direction (outward)
+                let deg = (a * 180 / Math.PI) - 90;
+
+                // If on left half, flip text to keep it readable but still outward
+                const left = (deg > 90 || deg < -90);
+
+                // For radial text, we rotate by (deg + 90) so baseline points outward (along radius)
+                // Then translate outward by node radius + pad
+                const radialDeg = deg + 90;
+
+                const r = nodeRadius(d) + LABEL_PAD;
+
+                // On left side, rotate an extra 180 so text isn't upside down
+                const flip = left ? 180 : 0;
+
+                return `rotate(${radialDeg}) translate(${r},0) rotate(${flip})`;
+            })
+            .style("text-anchor", function (d) {
+                const deg = ((d._angle || 0) * 180 / Math.PI) - 90;
+                const left = (deg > 90 || deg < -90);
+                return left ? "end" : "start";
+            })
             .text(d => {
-                const isLeaf = !d.children || d.children.length === 0;
-                if (isLeaf && SHOW_LEAF_NAMES) return d.data.name || "";
-                if (!isLeaf && SHOW_INTERNAL_NAMES) return d.data.name || "";
+                // show label for visible leaves, plus internal names if enabled
+                if (isVisibleLeaf(d) && SHOW_LEAF_NAMES) return d.data.name || "";
+                if (!isVisibleLeaf(d) && SHOW_INTERNAL_NAMES) return d.data.name || "";
                 return "";
             });
-        //---------------------------------------------
-        //  RADIAL CLUSTER BANDS ("curved bars")
-        //  Only show in COLOR_MODE === "bars"
-        //---------------------------------------------
-        if (colorMode === "bars") {
 
-            const leaves = root.leaves().sort((a, b) => a._angle - b._angle);
+        // Circular "side bars" (ring) when colorMode=bars
+        if (colorMode === "bars" && CURRENT_CLUSTERS && CLUSTER_COLORS.length) {
+            // Use visible leaves (including collapsed internal nodes as leaves)
+            const visLeaves = root.descendants()
+                .filter(d => isVisibleLeaf(d))
+                .sort((a, b) => (a._angle || 0) - (b._angle || 0));
 
-            const clusterRanges = new Map();
+            if (visLeaves.length >= 2) {
+                const angles = visLeaves.map(d => d._angle || 0);
 
-            leaves.forEach((leaf, idx) => {
-                const cid = CURRENT_CLUSTERS[leaf.data.name];
-                if (cid == null) return;
-                if (!clusterRanges.has(cid)) clusterRanges.set(cid, { first: idx, last: idx });
-                else clusterRanges.get(cid).last = idx;
-            });
+                // Boundaries tile the circle (midpoints). Make them wrap correctly.
+                const boundaries = new Array(visLeaves.length + 1);
+                for (let i = 1; i < visLeaves.length; i++) {
+                    boundaries[i] = (angles[i - 1] + angles[i]) / 2;
+                }
+                // extrapolate ends
+                boundaries[0] = angles[0] - (boundaries[1] - angles[0]);
+                boundaries[visLeaves.length] = angles[visLeaves.length - 1] + (angles[visLeaves.length - 1] - boundaries[visLeaves.length - 1]);
 
-            const bandInnerR = maxRadius * 1.05;
-            const bandOuterR = bandInnerR + maxRadius * 0.05;
+                function visibleLeafClusterId(d) {
+                    // If it's an original leaf, use its cluster
+                    const nm = d.data && d.data.name;
+                    const isOrigLeaf = nm && !(d.data.children && d.data.children.length);
+                    if (isOrigLeaf) return CURRENT_CLUSTERS[nm];
 
-            const arc = d3.arc()
-                .innerRadius(bandInnerR)
-                .outerRadius(bandOuterR);
+                    // collapsed internal node: inherit if uniform
+                    return representativeClusterIdFromData(d.data);
+                }
 
-            const angles = leaves.map(l => l._angle);
+                const ringInner = maxRadiusPx + 10;
+                const ringOuter = ringInner + 14;
 
-            clusterRanges.forEach((range, cid) => {
-                const first = leaves[range.first];
-                const last  = leaves[range.last];
+                const arc = d3.arc().innerRadius(ringInner).outerRadius(ringOuter);
 
-                function mid(a,b){ return (a + b) / 2 };
+                // Contiguous runs by cluster id (null -> skip)
+                let runStart = 0;
+                let runCid = visibleLeafClusterId(visLeaves[0]);
 
-                let startAngle = (range.first === 0)
-                    ? first._angle - (angles[1] - angles[0]) / 2
-                    : mid(angles[range.first - 1], first._angle);
-
-                let endAngle = (range.last === leaves.length - 1)
-                    ? last._angle + (angles[range.last] - angles[range.last - 1]) / 2
-                    : mid(last._angle, angles[range.last + 1]);
-
-                const col = CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-
-                g.append("path")
-                    .attr("d", arc.startAngle(startAngle).endAngle(endAngle))
-                    .attr("fill", col)
-                    .attr("opacity", 0.6);
-
-                const midAngle = (startAngle + endAngle) / 2;
-
-                g.append("text")
-                    .attr("transform", `
-                        rotate(${midAngle * 180 / Math.PI - 90})
-                        translate(${bandOuterR + 12},0)
-                    `)
-                    .attr("text-anchor", "middle")
-                    .attr("alignment-baseline", "middle")
-                    .attr("font-size", 10)
-                    .text("C" + cid);
-            });
-
+                for (let i = 1; i <= visLeaves.length; i++) {
+                    const cid = (i < visLeaves.length) ? visibleLeafClusterId(visLeaves[i]) : Symbol("END");
+                    if (cid !== runCid) {
+                        if (runCid != null) {
+                            const col = CLUSTER_COLORS[runCid % CLUSTER_COLORS.length];
+                            g.append("path")
+                                .attr("d", arc.startAngle(boundaries[runStart]).endAngle(boundaries[i]))
+                                .attr("fill", col)
+                                .attr("opacity", 0.75);
+                        }
+                        runStart = i;
+                        runCid = (i < visLeaves.length) ? cid : null;
+                    }
+                }
+            }
         }
 
         return;
     }
 
-    // ----------------------------------------------------------------
-    //  CLADOGRAM / RECTANGULAR (Cartesian)
-    // ----------------------------------------------------------------
+    // -----------------------------
+    // CARTESIAN (rectangular/cladogram)
+    // -----------------------------
     const root = HIER_CART;
     const allNodes = root.descendants();
-
     const maxYCart = d3.max(allNodes, d => d._y || 0) || 0;
 
     const labelWidth  = 24;
-    const labelHeight = 10;
-    // Column where cluster colour bars start (already in scaled coords)
     const labelColumnX = (maxYCart * TREE_WIDTH_SCALE) + 40;
 
-    // LINKS
+    // Links
     g.append("g")
         .selectAll(".tree-link")
         .data(root.links())
@@ -708,16 +774,14 @@ function drawTree() {
                     "V" + (d.target._x * TREE_HEIGHT_SCALE) +
                     "H" + (d.target._y * TREE_WIDTH_SCALE)
                 );
-            } else {
-                // simple diagonal cladogram
-                return (
-                    "M" + (d.source._y * TREE_WIDTH_SCALE) + "," + (d.source._x * TREE_HEIGHT_SCALE) +
-                    "L" + (d.target._y * TREE_WIDTH_SCALE) + "," + (d.target._x * TREE_HEIGHT_SCALE)
-                );
             }
+            return (
+                "M" + (d.source._y * TREE_WIDTH_SCALE) + "," + (d.source._x * TREE_HEIGHT_SCALE) +
+                "L" + (d.target._y * TREE_WIDTH_SCALE) + "," + (d.target._x * TREE_HEIGHT_SCALE)
+            );
         });
 
-    // NODES
+    // Nodes
     const node = g.append("g")
         .selectAll(".tree-node")
         .data(root.descendants())
@@ -733,47 +797,18 @@ function drawTree() {
     node.append("circle")
         .attr("r", nodeRadius)
         .attr("fill", nodeFill)
-        .style("cursor", function (d) {
-            return (d.data.children && d.data.children.length) ? "pointer" : "default";
-        })
+        .style("cursor", d => canCollapse(d) ? "pointer" : "default")
         .on("click", function (event, d) {
-            if (d.data.children && d.data.children.length) {
-                d.data._collapsed = !d.data._collapsed;
-                drawTree();
-            }
-        })
-        .on("mouseover", function (event, d) {
-            const name = d.data.name || "(internal)";
-            const cid  = (CURRENT_CLUSTERS && d.data.name)
-                ? CURRENT_CLUSTERS[d.data.name]
-                : null;
-            const clusterStr = (cid == null ? "none" : cid.toString());
-            const bl = (typeof d.data.length === "number")
-                ? d.data.length.toFixed(4)
-                : "n/a";
-
-            d3Tooltip
-                .style("opacity", 1)
-                .html(
-                    "<strong>" + name + "</strong><br/>" +
-                    "Depth: " + d.depth + "<br/>" +
-                    "Branch length: " + bl + "<br/>" +
-                    "Cluster: " + clusterStr
-                );
-        })
-        .on("mousemove", function (event) {
-            d3Tooltip
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY + 10) + "px");
-        })
-        .on("mouseout", function () {
-            d3Tooltip.style("opacity", 0);
+            if (!canCollapse(d)) return;
+            d.data._collapsed = !d.data._collapsed;
+            drawTree(); // recomputeLayouts() will rebuild hierarchy with getVisibleChildren()
         });
 
     node.append("text")
         .attr("dy", 3)
         .attr("x", function (d) {
-            return (d.children && d.children.length) ? -8 : 8;
+            const r = nodeRadius(d);
+            return (d.children && d.children.length) ? -(r + LABEL_PAD) : (r + LABEL_PAD);
         })
         .style("text-anchor", function (d) {
             return (d.children && d.children.length) ? "end" : "start";
@@ -786,121 +821,97 @@ function drawTree() {
             return "";
         });
 
-    // ----------------------------------------------------------------
-    //  CLUSTER SIDE BARS (only in Cartesian + colorMode === "bars")
-    // ----------------------------------------------------------------
+    // Cluster side bars (cartesian only) — contiguous runs that TOUCH (no gaps)
     if (colorMode === "bars") {
         const leafNodes = allNodes
             .filter(d => !d.children || !d.children.length)
-            .sort((a, b) => a._x - b._x);
+            .sort((a, b) => (a._x || 0) - (b._x || 0));
 
-        const labelsG = g.append("g").attr("class", "cluster-bars");
+        const barX = labelColumnX;
+        const barW = 24;
 
-        // average vertical spacing between leaves
-        const spacings = [];
-        for (let i = 0; i < leafNodes.length - 1; i++) {
-            const y1 = leafNodes[i]._x || 0;
-            const y2 = leafNodes[i + 1]._x || 0;
-            spacings.push(y2 - y1);
+        // Estimate band boundaries based on midpoints between adjacent leaves
+        // so bars perfectly tile the vertical axis without gaps.
+        const ys = leafNodes.map(d => (d._x || 0) * TREE_HEIGHT_SCALE);
+
+        // Edge case: 0/1 leaves
+        if (leafNodes.length === 1) {
+            const nm = leafNodes[0].data && leafNodes[0].data.name;
+            const cid = nm && CURRENT_CLUSTERS ? CURRENT_CLUSTERS[nm] : null;
+            if (cid != null && CLUSTER_COLORS.length) {
+                const y = ys[0];
+                barsG = g.append("g").attr("class", "cluster-bars");
+                barsG.append("rect")
+                    .attr("x", barX)
+                    .attr("y", y - 6)
+                    .attr("width", barW)
+                    .attr("height", 12)
+                    .attr("fill", CLUSTER_COLORS[cid % CLUSTER_COLORS.length])
+                    .attr("opacity", 0.7);
+            }
+        } else if (leafNodes.length > 1) {
+            // boundaries[i] is the top edge of leaf i's "cell"
+            const boundaries = new Array(leafNodes.length + 1);
+
+            // interior boundaries are midpoints
+            for (let i = 1; i < leafNodes.length; i++) {
+                boundaries[i] = (ys[i - 1] + ys[i]) / 2;
+            }
+
+            // extrapolate first/last boundary using nearest spacing
+            boundaries[0] = ys[0] - (boundaries[1] - ys[0]);
+            boundaries[leafNodes.length] = ys[leafNodes.length - 1] + (ys[leafNodes.length - 1] - boundaries[leafNodes.length - 1]);
+
+            const barsG = g.append("g").attr("class", "cluster-bars");
+
+            // Build contiguous runs by cluster id
+            let runStart = 0;
+            let runCid = null;
+
+            function leafCid(i) {
+                const nm = leafNodes[i].data && leafNodes[i].data.name;
+                if (!nm) return null;
+                return (CURRENT_CLUSTERS ? CURRENT_CLUSTERS[nm] : null);
+            }
+
+            runCid = leafCid(0);
+
+            for (let i = 1; i <= leafNodes.length; i++) {
+                const cid = (i < leafNodes.length) ? leafCid(i) : Symbol("END");
+
+                const changed = (cid !== runCid);
+                if (changed) {
+                    if (runCid != null && CLUSTER_COLORS.length) {
+                        const y0 = boundaries[runStart];
+                        const y1 = boundaries[i];
+                        const col = CLUSTER_COLORS[runCid % CLUSTER_COLORS.length];
+
+                        barsG.append("rect")
+                            .attr("x", barX)
+                            .attr("y", y0)
+                            .attr("width", barW)
+                            .attr("height", Math.max(1, y1 - y0))
+                            .attr("fill", col)
+                            .attr("opacity", 0.7);
+                    }
+                    runStart = i;
+                    runCid = (i < leafNodes.length) ? cid : null;
+                }
+            }
         }
-        const meanSpacing = spacings.length
-            ? spacings.reduce((a, b) => a + b, 0) / spacings.length
-            : 12;
-
-        // cluster id -> { firstIndex, lastIndex }
-        const clusterInfo = new Map();
-        leafNodes.forEach((d, idx) => {
-            const cid = CURRENT_CLUSTERS ? CURRENT_CLUSTERS[d.data.name] : null;
-            if (cid == null) return;
-            if (!clusterInfo.has(cid)) {
-                clusterInfo.set(cid, { firstIndex: idx, lastIndex: idx });
-            } else {
-                clusterInfo.get(cid).lastIndex = idx;
-            }
-        });
-
-        const usedLabelYs = [];
-        function findNonOverlappingY(y0) {
-            let y = y0;
-            const minGap = 10;
-            let safety = 0;
-            while (usedLabelYs.some(u => Math.abs(u - y) < minGap) && safety < 50) {
-                y += minGap;
-                safety++;
-            }
-            usedLabelYs.push(y);
-            return y;
-        }
-
-        clusterInfo.forEach((info, cid) => {
-            const first = leafNodes[info.firstIndex];
-            const last  = leafNodes[info.lastIndex];
-
-            const yFirst = first._x || 0;
-            const yLast  = last._x || 0;
-
-            let top;
-            if (info.firstIndex === 0) {
-                top = yFirst - meanSpacing / 2;
-            } else {
-                const prevLeaf = leafNodes[info.firstIndex - 1];
-                const yPrev = prevLeaf._x || 0;
-                top = (yPrev + yFirst) / 2;
-            }
-
-            let bottom;
-            if (info.lastIndex === leafNodes.length - 1) {
-                bottom = yLast + meanSpacing / 2;
-            } else {
-                const nextLeaf = leafNodes[info.lastIndex + 1];
-                const yNext = nextLeaf._x || 0;
-                bottom = (yLast + yNext) / 2;
-            }
-
-            const labelY = findNonOverlappingY((top + bottom) / 2);
-
-            const color = (cid == null || !CLUSTER_COLORS.length)
-                ? "lightgrey"
-                : CLUSTER_COLORS[cid % CLUSTER_COLORS.length];
-
-            // bar
-            labelsG.append("rect")
-                .attr("x", labelColumnX)
-                .attr("y", top * TREE_HEIGHT_SCALE)
-                .attr("width", labelWidth)
-                .attr("height", (bottom - top) * TREE_HEIGHT_SCALE)
-                .attr("fill", color);
-
-            const totalLeaves = leafNodes.length;
-            const clusterSize = info.lastIndex - info.firstIndex + 1;
-
-            if (clusterSize / totalLeaves >= 0.10) {
-                labelsG.append("text")
-                    .attr("x", labelColumnX + labelWidth + 4)
-                    .attr("y", labelY * TREE_HEIGHT_SCALE)
-                    .attr("dominant-baseline", "middle")
-                    .attr("font-size", 10)
-                    .text("C" + cid);
-            }
-        });
     }
 
-    // ----------------------------------------------------------------
-    //  BRANCH-LENGTH AXIS (Cartesian only)
-    // ----------------------------------------------------------------
+    // branch-length axis
     const maxX = d3.max(allNodes, d => d._x || 0) || 0;
     const maxY = d3.max(allNodes, d => d._y || 0) || 0;
     const maxBl = d3.max(allNodes, d => d.data._bl || 0) || 1;
 
-    // y position just below the lowest leaf
     const axisY = (maxX * TREE_HEIGHT_SCALE) + 20;
-
     const blScale = d3.scaleLinear()
         .domain([0, maxBl])
         .range([0, maxY * TREE_WIDTH_SCALE]);
 
     g.selectAll(".branch-length-axis").remove();
-
     const axisG = g.append("g")
         .attr("class", "branch-length-axis")
         .attr("transform", `translate(0, ${axisY})`)
@@ -916,6 +927,25 @@ function drawTree() {
     svg.attr("height", Math.max(height, axisY + 50 + margin.bottom));
 }
 
+// Clean apiPostJson (your current copy got spliced into other code)
+async function apiPostJson(url, payload) {
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+
+    if (!res.ok) {
+        const msg = (data && data.detail) ? data.detail : `Request failed (${res.status})`;
+        throw new Error(msg);
+    }
+    return data;
+}
+
 // ---- D3 Optimal-k plot ----
 function drawOptimalK(data) {
     if (!data) data = latestOptimalKData;
@@ -927,10 +957,11 @@ function drawOptimalK(data) {
 
     if (!Array.isArray(scores) || scores.length === 0) {
         plotEl.innerHTML = '<div class="alert alert-warning">No scores available to plot.</div>';
+        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = null;
         return;
     }
 
-    plotEl.innerHTML = ""; // clear previous
+    plotEl.innerHTML = "";
 
     // Build data points
     var dataPoints = [];
@@ -1072,27 +1103,20 @@ function drawOptimalK(data) {
     legend.append("path").attr("transform","translate(10,20)").attr("d",d3.symbol().type(d3.symbolStar).size(120)).attr("fill","#d62728");
     legend.append("text").attr("x",26).attr("y",24).attr("font-size",11).text("Optimal k");
 
-    // Wire up axis mode change
+    // Wire up axis mode change ONCE
     if (axisModeEl && !axisModeEl.__wired) {
         axisModeEl.__wired = true;
-        axisModeEl.addEventListener('change', function() {
+        axisModeEl.addEventListener('change', function () {
             axisModeEl.__userOverride = true;
             drawOptimalK(data);
         });
     }
-    var okSvgNode = document.querySelector("#optimalk_plot svg");
+
+    // Save latest SVG snapshot for export
+    const okSvgNode = document.querySelector("#optimalk_plot svg");
     if (okSvgNode) {
-        var serializer = new XMLSerializer();
-        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG =
-            serializer.serializeToString(okSvgNode);
-    } else {
-        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = null;
-    }
-    var okSvgNode = document.querySelector("#optimalk_plot svg");
-    if (okSvgNode) {
-        var serializer = new XMLSerializer();
-        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG =
-            serializer.serializeToString(okSvgNode);
+        const serializer = new XMLSerializer();
+        window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = serializer.serializeToString(okSvgNode);
     } else {
         window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG = null;
     }
@@ -1101,6 +1125,15 @@ function drawOptimalK(data) {
 function handleFileSelect(evt) {
     var file = evt.target.files[0];
     if (!file) return;
+
+    // Update UI label (mirrors what index.html used to do)
+    var fileNameSpan = document.getElementById("file-name");
+    if (fileNameSpan) {
+        fileNameSpan.innerHTML =
+            '<span style="color: #555;">Chosen file:</span> ' +
+            '<span style="color: #000;">' + file.name + '</span>';
+    }
+
     showStatus("Tree is loading", "info");
     var reader = new FileReader();
     reader.onload = function (e) {
@@ -1111,118 +1144,46 @@ function handleFileSelect(evt) {
     reader.readAsText(file);
 }
 
-// On DOM ready
-$(function () {
+// On DOM ready (Bootstrap 5 / no jQuery)
+document.addEventListener("DOMContentLoaded", function () {
     // Help sidebar toggle
-    document.getElementById('btn-help').addEventListener('click', function () {
-        var sb = document.getElementById('help-sidebar');
-        if (sb.style.display === 'none' || sb.style.display === '') { sb.style.display = 'block'; }
-        else { sb.style.display = 'none'; }
-    });
-    document.getElementById('btn-help-close').addEventListener('click', function () {
-        document.getElementById('help-sidebar').style.display = 'none';
-    });
-    $("#app-loading").hide();
+    const btnHelp = document.getElementById("btn-help");
+    if (btnHelp) {
+        btnHelp.addEventListener("click", function () {
+            const sb = document.getElementById("help-sidebar");
+            if (!sb) return;
+            if (sb.style.display === "none" || sb.style.display === "") sb.style.display = "block";
+            else sb.style.display = "none";
+        });
+    }
+
+    const btnHelpClose = document.getElementById("btn-help-close");
+    if (btnHelpClose) {
+        btnHelpClose.addEventListener("click", function () {
+            const sb = document.getElementById("help-sidebar");
+            if (sb) sb.style.display = "none";
+        });
+    }
+
+    // Hide loader (no jQuery)
+    const appLoading = document.getElementById("app-loading");
+    if (appLoading) appLoading.style.display = "none";
+
     showStatus("Application loaded. Example tree is prefilled.", "info");
 
     // Wire controls
-    document.getElementById("file-input").addEventListener("change", handleFileSelect);
-    document.getElementById("btn-run").addEventListener("click", function (e) { e.preventDefault(); runPhytClust(); });
+    const fileInput = document.getElementById("file-input");
+    if (fileInput) fileInput.addEventListener("change", handleFileSelect);
 
-    // document.getElementById("btn-save").addEventListener("click", async function (e) {
-    //     e.preventDefault();
-    //     if (isRunning) { showStatus('Cannot save while PhytClust is running.', 'warning'); return; }
-    //     var fname = prompt("Enter filename (tsv):", "phytclust_results.tsv");
-    //     if (!fname) { fname = "phytclust_results.tsv"; }
-    //
-    //     if (window.showDirectoryPicker) {
-    //         try {
-    //             const dirHandle = await window.showDirectoryPicker();
-    //             const res = await fetch('/api/export_tsv', {
-    //                 method: 'POST',
-    //                 headers: { 'Content-Type': 'application/json' },
-    //                 body: JSON.stringify({
-    //                     filename: fname,
-    //                     top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-    //                     outlier: true,
-    //                     output_all: false
-    //                 })
-    //             });
-    //             if (!res.ok) {
-    //                 const errData = await res.json().catch(() => ({}));
-    //                 const msg = (errData && errData.detail) ? errData.detail : 'Export failed';
-    //                 showStatus(msg, 'danger');
-    //                 return;
-    //             }
-    //             const text = await res.text();
-    //             const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
-    //             const writable = await fileHandle.createWritable();
-    //             await writable.write(text);
-    //             await writable.close();
-    //             showStatus('Saved ' + fname + ' to selected directory', 'success');
-    //         } catch (err) {
-    //             if (err && err.name === 'AbortError') { return; }
-    //             try {
-    //                 var dirInput = document.getElementById('output-dir');
-    //                 var dir = dirInput && dirInput.value ? dirInput.value.trim() : 'results';
-    //                 const res2 = await fetch('/api/save', {
-    //                     method: 'POST',
-    //                     headers: { 'Content-Type': 'application/json' },
-    //                     body: JSON.stringify({
-    //                         results_dir: dir,
-    //                         filename: fname,
-    //                         top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-    //                         outlier: true,
-    //                         output_all: false
-    //                     })
-    //                 });
-    //                 const data2 = await res2.json();
-    //                 if (!res2.ok) {
-    //                     var msg2 = (data2 && data2.detail) ? data2.detail : 'Save failed';
-    //                     showStatus(msg2, 'danger');
-    //                 } else {
-    //                     showStatus('Saved to ' + data2.results_dir + '/' + data2.filename, 'success');
-    //                 }
-    //             } catch (err2) {
-    //                 showStatus('Save error: ' + err2, 'danger');
-    //             }
-    //         }
-    //     } else {
-    //         try {
-    //             var dirInputF = document.getElementById('output-dir');
-    //             var dirF = dirInputF && dirInputF.value ? dirInputF.value.trim() : 'results';
-    //             const res3 = await fetch('/api/save', {
-    //                 method: 'POST',
-    //                 headers: { 'Content-Type': 'application/json' },
-    //                 body: JSON.stringify({
-    //                     results_dir: dirF,
-    //                     filename: fname,
-    //                     top_n: (extraTopNEl && extraTopNEl.value ? parseInt(extraTopNEl.value, 10) || 1 : 1),
-    //                     outlier: true,
-    //                     output_all: false
-    //                 })
-    //             });
-    //             const data3 = await res3.json();
-    //             if (!res3.ok) {
-    //                 var msg3 = (data3 && data3.detail) ? data3.detail : 'Save failed';
-    //                 showStatus(msg3, 'danger');
-    //             } else {
-    //                 showStatus('Saved to ' + data3.results_dir + '/' + data3.filename, 'success');
-    //             }
-    //         } catch (err3) {
-    //             showStatus('Save error: ' + err3, 'danger');
-    //         }
-    //     }
-    // });
+    const btnRun = document.getElementById("btn-run");
+    if (btnRun) btnRun.addEventListener("click", function (e) { e.preventDefault(); runPhytClust(); });
 
-    var resetBtn = document.getElementById("btn-extra-reset");
-    if (resetBtn) {
-        resetBtn.addEventListener("click", function (e) { e.preventDefault(); resetExtraParams(); });
-    }
+    const resetBtn = document.getElementById("btn-extra-reset");
+    if (resetBtn) resetBtn.addEventListener("click", function (e) { e.preventDefault(); resetExtraParams(); });
 
-    var helpExampleBtn = document.getElementById('btn-help-load-example');
+    const helpExampleBtn = document.getElementById("btn-help-load-example");
     if (helpExampleBtn) {
-        helpExampleBtn.addEventListener('click', function (e) {
+        helpExampleBtn.addEventListener("click", function (e) {
             e.preventDefault();
             showStatus("tree is loading", "info");
             newickEl.value = EXAMPLE_NEWICK;
@@ -1231,135 +1192,166 @@ $(function () {
         });
     }
 
-    var loadTimer = null;
-    newickEl.addEventListener('input', function () {
-        if (loadTimer) { clearTimeout(loadTimer); }
-        showStatus("tree is loading", "info");
-        loadTimer = setTimeout(function () {
-            showStatus("tree was loaded", "success");
-        }, 250);
-    });
+    // Typing feedback when Newick changes
+    let loadTimer = null;
+    if (newickEl) {
+        newickEl.addEventListener("input", function () {
+            if (loadTimer) clearTimeout(loadTimer);
+            showStatus("tree is loading", "info");
+            loadTimer = setTimeout(function () {
+                showStatus("tree was loaded", "success");
+            }, 250);
+        });
+    }
 
-    $('#extra-params').on('shown.bs.collapse', function () {
-        $('#extra-params-icon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
-    });
-    $('#extra-params').on('hidden.bs.collapse', function () {
-        $('#extra-params-icon').removeClass('glyphicon-minus').addClass('glyphicon-plus');
-    });
+    // Extra params icon +/-
+    // (Bootstrap 5 fires show.bs.collapse / hide.bs.collapse on the collapse element)
+    const extra = document.getElementById("extra-params");
+    const icon = document.getElementById("extra-params-icon");
+    if (extra && icon) {
+        extra.addEventListener("show.bs.collapse", () => { icon.textContent = "−"; });
+        extra.addEventListener("hide.bs.collapse", () => { icon.textContent = "+"; });
+    }
 
     // Prefill example and auto-run once for convenience
-    newickEl.value = EXAMPLE_NEWICK;
+    if (newickEl) newickEl.value = EXAMPLE_NEWICK;
     runPhytClust();
 
     // Re-draw optimal k chart when tab is shown (to adapt to width)
-    $('a[href="#viewer-optimal-k"]').on('shown.bs.tab', function () {
-        if (latestOptimalKData) {
-            drawOptimalK(latestOptimalKData);
-        }
-    });
-    var layoutSelect = document.getElementById('layout-mode');
-    if (layoutSelect) {
-        layoutSelect.addEventListener('change', function () {
-            CURRENT_LAYOUT_MODE = this.value;
-            drawTree(); // re-render current tree with new layout
+    // Bootstrap 5: use the tab button id, and shown.bs.tab event
+    const optimalKTabBtn = document.getElementById("viewer-optimal-k-tab");
+    if (optimalKTabBtn) {
+        optimalKTabBtn.addEventListener("shown.bs.tab", function () {
+            if (latestOptimalKData) drawOptimalK(latestOptimalKData);
         });
+    }
+
+    // Layout mode selector
+    const layoutSelect = document.getElementById("layout-mode");
+    if (layoutSelect) {
+        layoutSelect.addEventListener("change", function () {
+            CURRENT_LAYOUT_MODE = this.value;
+            drawTree();
+        });
+    }
+
+    // Color mode selector
     const colorModeSelect = document.getElementById("color-mode");
     if (colorModeSelect) {
         colorModeSelect.addEventListener("change", function () {
-            COLOR_MODE = this.value || 'nodes';
-            drawTree();   // re-render tree with new colouring mode
+            COLOR_MODE = this.value || "nodes";
+            drawTree();
         });
     }
 
     // ----------------------
     // Palette Selector Logic
     // ----------------------
-
     let CUSTOM_PALETTE = null;
 
-    // Show the colors in the small preview bar
+    function normalizeHexColor(s) {
+        const v = (s || "").trim();
+        if (!v) return null;
+        if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+        if (/^[0-9a-fA-F]{6}$/.test(v)) return "#" + v;
+        return null;
+    }
+
     function updatePalettePreview(colors) {
         const box = document.getElementById("palette-preview");
         if (!box) return;
         box.innerHTML = colors
-            .map(c => `<span style="display:inline-block;width:12px;height:12px;background:${c};
-        border:1px solid #555;margin-right:2px;"></span>`)
+            .map(c => `<span title="${c}" style="display:inline-block;width:12px;height:12px;background:${c};border:1px solid #555;margin-right:2px;"></span>`)
             .join("");
     }
 
-    // Apply a chosen palette to BASE_COLORS
     function applyPalette(type) {
         if (type === "default") {
             BASE_COLORS.splice(0, BASE_COLORS.length,
                 "#b84b4b", "#849060", "#3d7c74", "#6e3f8a",
                 "#ceb94b", "#3f648a", "#3f408a", "#da63aa"
             );
-        }
-
-        if (type === "pastel") {
+        } else if (type === "pastel") {
             BASE_COLORS.splice(0, BASE_COLORS.length,
                 "#ffb3ba", "#ffdfba", "#ffffba", "#baffc9",
                 "#bae1ff", "#d7baff", "#ffcce6", "#c2f0c2"
             );
-        }
-
-        if (type === "vivid") {
+        } else if (type === "vivid") {
             BASE_COLORS.splice(0, BASE_COLORS.length,
                 "#e41a1c", "#377eb8", "#4daf4a", "#984ea3",
                 "#ff7f00", "#ffff33", "#a65628", "#f781bf"
             );
-        }
-
-        if (type === "dark") {
+        } else if (type === "dark") {
             BASE_COLORS.splice(0, BASE_COLORS.length,
-                "#4e79a7",
-                "#59a14f",
-                "#e15759",
-                "#b07aa1",
-                "#edc948",
-                "#76b7b2",
-                "#ff9da7",
-                "#9c755f"
-
+                "#4e79a7", "#59a14f", "#e15759", "#b07aa1",
+                "#edc948", "#76b7b2", "#ff9da7", "#9c755f"
             );
-        }
-
-        if (type === "custom" && CUSTOM_PALETTE) {
-            BASE_COLORS.splice(0, BASE_COLORS.length, ...CUSTOM_PALETTE);
+        } else if (type === "custom") {
+            if (CUSTOM_PALETTE && CUSTOM_PALETTE.length) {
+                BASE_COLORS.splice(0, BASE_COLORS.length, ...CUSTOM_PALETTE);
+            }
         }
 
         updatePalettePreview(BASE_COLORS);
 
         // Recalculate cluster colors + redraw
-        if (Object.keys(CURRENT_CLUSTERS).length > 0) {
+        if (Object.keys(CURRENT_CLUSTERS || {}).length > 0) {
             const maxCluster = Math.max(...Object.values(CURRENT_CLUSTERS));
             CLUSTER_COLORS = generateClusterColors(maxCluster + 1);
             drawTree();
         }
     }
 
-    // Dropdown change listener
     const paletteSelect = document.getElementById("palette-select");
     if (paletteSelect) {
         paletteSelect.addEventListener("change", function () {
             if (this.value === "custom") {
-                alert("Custom palette not implemented yet.");
+                const initial = (CUSTOM_PALETTE && CUSTOM_PALETTE.length)
+                    ? CUSTOM_PALETTE.join(",")
+                    : BASE_COLORS.join(",");
+                const raw = prompt(
+                    "Enter custom palette as comma-separated hex colors (e.g. #ff0000,#00ff00,#0000ff):",
+                    initial
+                );
+                if (raw == null) {
+                    // user cancelled: revert to default option visually
+                    this.value = "default";
+                    applyPalette("default");
+                    return;
+                }
+
+                const parsed = raw.split(",")
+                    .map(x => normalizeHexColor(x))
+                    .filter(Boolean);
+
+                if (parsed.length < 2) {
+                    alert("Please provide at least 2 valid hex colors (like #RRGGBB).");
+                    this.value = "default";
+                    applyPalette("default");
+                    return;
+                }
+
+                CUSTOM_PALETTE = parsed;
+                applyPalette("custom");
                 return;
             }
+
             applyPalette(this.value);
         });
     }
 
     updatePalettePreview(BASE_COLORS);
 
+    // leaf/internal name toggles
     const internalNamesCheckbox = document.getElementById("show-internal-names");
     if (internalNamesCheckbox) {
         internalNamesCheckbox.checked = SHOW_INTERNAL_NAMES;
         internalNamesCheckbox.addEventListener("change", function () {
             SHOW_INTERNAL_NAMES = this.checked;
-            drawTree();   // redraw tree
+            drawTree();
         });
     }
+
     const leafNamesCheckbox = document.getElementById("show-leaf-names");
     if (leafNamesCheckbox) {
         leafNamesCheckbox.checked = SHOW_LEAF_NAMES;
@@ -1368,17 +1360,20 @@ $(function () {
             drawTree();
         });
     }
+
+    // node/label sizes
     const nodeSizeInput = document.getElementById("node-size");
     if (nodeSizeInput) {
         nodeSizeInput.value = LEAF_NODE_RADIUS;
         nodeSizeInput.addEventListener("input", function () {
             const v = parseFloat(this.value);
             if (!isNaN(v) && v >= 1 && v <= 10) {
-                LEAF_NODE_RADIUS = v;  // only terminal nodes
+                LEAF_NODE_RADIUS = v;
                 drawTree();
             }
         });
     }
+
     const labelSizeInput = document.getElementById("label-size");
     if (labelSizeInput) {
         labelSizeInput.value = LABEL_FONT_SIZE;
@@ -1390,17 +1385,49 @@ $(function () {
             }
         });
     }
-    const widthScaleInput  = document.getElementById("tree-width-scale");
+
+    // width/height scale sliders
+    const widthScaleInput = document.getElementById("tree-width-scale");
     const heightScaleInput = document.getElementById("tree-height-scale");
 
-    widthScaleInput.addEventListener("input", function () {
-        TREE_WIDTH_SCALE = parseFloat(this.value);
-        drawTree();
-    });
+    if (widthScaleInput) {
+        widthScaleInput.addEventListener("input", function () {
+            TREE_WIDTH_SCALE = parseFloat(this.value);
+            if (!isNaN(TREE_WIDTH_SCALE)) drawTree();
+        });
+    }
 
-    heightScaleInput.addEventListener("input", function () {
-        TREE_HEIGHT_SCALE = parseFloat(this.value);
-        drawTree();
-    });
+    if (heightScaleInput) {
+        heightScaleInput.addEventListener("input", function () {
+            TREE_HEIGHT_SCALE = parseFloat(this.value);
+            if (!isNaN(TREE_HEIGHT_SCALE)) drawTree();
+        });
+    }
+
+    // Fix reset view handler (replace your current broken block with this)
+    const btnResetView = document.getElementById("btn-reset-view");
+    if (btnResetView) {
+        btnResetView.addEventListener("click", function (e) {
+            e.preventDefault();
+
+            if (LAST_TREE_SVG && LAST_TREE_ZOOM) {
+                LAST_TREE_SVG
+                    .transition()
+                    .duration(150)
+                    .call(LAST_TREE_ZOOM.transform, d3.zoomIdentity);
+            }
+
+            const w = document.getElementById("tree-width-scale");
+            const h = document.getElementById("tree-height-scale");
+            if (w) w.value = "1.0";
+            if (h) h.value = "1.0";
+            TREE_WIDTH_SCALE = 1.0;
+            TREE_HEIGHT_SCALE = 1.0;
+
+            // Reset collapsed nodes
+            clearAllCollapsedFlags(NEWICK_RAW_TREE);
+
+            drawTree();
+        });
     }
 });

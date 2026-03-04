@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <title>PhytClust – Phylogenetic Tree Viewer</title>
 
-    <!-- Bootstrap CSS (for look-and-feel only) -->
-    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
-    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
-    <!-- Plotly for the Optimal k interactive chart -->
-    <!-- <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script> -->
-    <!-- D3 v6 (matches local phylotree usage) -->
-    <script src="https://d3js.org/d3.v6.min.js"></script>
-    <script>window._$1 = window._$1 || window._;</script>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- D3 v6 -->
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+
+    <link rel="stylesheet" href="/static/app.css">
 
     <style>
-        body { padding: 0px; }
+        body {
+            padding: 0px;
+        }
 
         .tree-wrapper {
             border: 1px solid #ddd;
@@ -31,9 +32,20 @@
             height: 600px;
         }
 
-        .controls { margin-bottom: 15px; }
-        .small-note { font-size: 11px; color: #777; }
-        .result-box { max-height: 260px; overflow: auto; font-size: 12px; }
+        .controls {
+            margin-bottom: 15px;
+        }
+
+        .small-note {
+            font-size: 11px;
+            color: #777;
+        }
+
+        .result-box {
+            max-height: 260px;
+            overflow: auto;
+            font-size: 12px;
+        }
 
         .header-bar {
             background: #F2F2F2;
@@ -45,12 +57,11 @@
         .header-content {
             display: flex;
             align-items: center;
-            justify-content: center;   /* center the logo */
-            flex-wrap: wrap;           /* allow wrapping */
+            justify-content: center;
+            flex-wrap: wrap;
             gap: 10px;
         }
 
-        /* invisible spacer to balance layout */
         .header-spacer {
             flex: 1;
         }
@@ -58,29 +69,28 @@
         .logo {
             max-width: 100%;
             height: auto;
-            max-height: 90px;   /* optional: controls maximum size */
+            max-height: 90px;
         }
 
-        /* buttons stay on the right but can wrap */
         .header-buttons {
             flex: 1;
             display: flex;
-            justify-content: flex-end;  /* push buttons right */
+            justify-content: flex-end;
             gap: 8px;
         }
 
-        @media (max-width: 768px) {   /* choose breakpoint you like */
+        @media (max-width: 768px) {
             .header-spacer {
-                display: none;        /* remove the left spacer */
+                display: none;
             }
 
             .header-content {
-                justify-content: center;  /* center what’s left */
+                justify-content: center;
             }
 
             .header-buttons {
-                flex: 0 0 auto;       /* no stretching */
-                width: 100%;          /* own full row */
+                flex: 0 0 auto;
+                width: 100%;
                 justify-content: center;
                 margin-top: 10px;
             }
@@ -88,7 +98,7 @@
 
         .app-footer {
             background: #F2F2F2;
-            border-top: 1px solid #000; /* thin black line */
+            border-top: 1px solid #000;
             width: 100%;
             margin: 0;
             padding: 0;
@@ -98,22 +108,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-
-            padding: 15px 20px;   /* inner padding */
+            padding: 15px 20px;
         }
 
-
-        /*.footer-left img,*/
         .footer-left img {
-            max-height: 60px; /* adjust to desired size */
+            max-height: 60px;
             width: auto;
             margin-right: 20px;
         }
-
-        /*.footer-center img {*/
-        /*    height: 40px;         !* adjust image sizes *!*/
-        /*    cursor: pointer;*/
-        /*}*/
 
         .footer-right p {
             margin: 0;
@@ -121,22 +123,20 @@
             color: #333;
         }
 
-        .app-footer .row {
-            margin: 0;
-        }
         #file-input {
-            opacity: 0;           /* hide the real button */
-            width: 150px;         /* must overlap the custom button */
+            opacity: 0;
+            width: 150px;
             height: 34px;
             position: absolute;
             cursor: pointer;
         }
+
         .btn-upload-custom {
             background-color: #486387;
             color: #ffffff;
             padding: 6px 12px;
             border: 1px solid #486387;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
         }
 
@@ -169,38 +169,18 @@
             border: 1px solid #684186 !important;
         }
 
-        #btn-help {
-            background-color: #3F4086 !important;
-            color: #ffffff !important;
-            border: 1px solid #3F4086 !important;
-        }
-
-        #btn-help:hover {
-            background-color: #9E9EC2 !important;  /* light purple on hover */
-            color: #F2F2F2 !important;
-            border: 1px solid #684186 !important;
-        }
-
-        #btn-help-close {
-            background-color: #3F4086 !important;
-            color: #ffffff !important;
-            border: 1px solid #3F4086 !important;
-        }
-
-        #btn-help-close:hover {
-            background-color: #9E9EC2 !important;  /* light purple on hover */
-            color: #F2F2F2 !important;
-            border: 1px solid #684186 !important;
-        }
-
+        #btn-help,
+        #btn-help-close,
         #btn-help-load-example {
             background-color: #3F4086 !important;
             color: #ffffff !important;
             border: 1px solid #3F4086 !important;
         }
 
+        #btn-help:hover,
+        #btn-help-close:hover,
         #btn-help-load-example:hover {
-            background-color: #9E9EC2 !important;  /* light purple on hover */
+            background-color: #9E9EC2 !important;
             color: #F2F2F2 !important;
             border: 1px solid #684186 !important;
         }
@@ -212,7 +192,7 @@
         }
 
         #btn-extra-reset:hover {
-            background-color: #E5DCAE !important;  /* light purple on hover */
+            background-color: #E5DCAE !important;
             color: #F2F2F2 !important;
             border: 1px solid #CBBA5D !important;
         }
@@ -224,7 +204,7 @@
         }
 
         #btn-run:hover {
-            background-color: #A6BCB9 !important;  /* light purple on hover */
+            background-color: #A6BCB9 !important;
             color: #F2F2F2 !important;
             border: 1px solid #4D7B74 !important;
         }
@@ -234,233 +214,273 @@
             color: #ffffff !important;
             border: 1px solid #869065 !important;
         }
+
         #btn-save:hover {
-            background-color: #C3C8B3 !important;  /* light purple on hover */
+            background-color: #C3C8B3 !important;
             color: #F2F2F2 !important;
             border: 1px solid #869065 !important;
         }
+
+        /* Bootstrap 5 alert background tweaks */
         #status-message.alert-info {
-            background-color: #CBBA5D !important;  /* your custom background */
-            background-image: none !important;     /* kill any gradient/image */
-            border-color: #CBBA5D !important;      /* match border */
-            color: #ffffff !important;             /* text color */
+            background-color: #CBBA5D !important;
+            border-color: #CBBA5D !important;
+            color: #ffffff !important;
         }
+
         #status-message.alert-success {
-            background-color: #CE9A5F !important;  /* your custom background */
-            background-image: none !important;     /* kill any gradient/image */
-            border-color: #CE9A5F !important;      /* match border */
-            color: #ffffff !important;             /* text color */
+            background-color: #CE9A5F !important;
+            border-color: #CE9A5F !important;
+            color: #ffffff !important;
         }
 
         #status-message.alert-danger {
-            background-color: #AB524F !important;  /* your custom background */
-            background-image: none !important;     /* kill any gradient/image */
-            border-color: #AB524F !important;      /* match border */
-            color: #ffffff !important;             /* text color */
-        }
-
-        .nav-tabs > li.active > a,
-        .nav-tabs > li.active > a:focus,
-        .nav-tabs > li.active > a:hover {
-            color: #A3B1C2 !important;
+            background-color: #AB524F !important;
+            border-color: #AB524F !important;
+            color: #ffffff !important;
         }
     </style>
 </head>
+
 <body>
 
-<div class="header-bar" style="padding:10px 40px;">
-    <div class="header-content">
-            <div class="header-spacer"></div>  <!-- left invisible spacer -->
+    <div class="header-bar" style="padding:10px 40px;">
+        <div class="header-content">
+            <div class="header-spacer"></div>
 
-            <img src="/static/phytclust_logo_colour.png"
-                 alt="PhytClust"
-                 class="logo">
+            <img src="/static/phytclust_logo_colour.png" alt="PhytClust" class="logo">
 
             <div class="header-buttons">
-                <button id="btn-about" class="btn" data-toggle="modal" data-target="#aboutModal" style="background-color:#684186;color:#ffffff;">About</button>
-                <button id="btn-help" class="btn" style="background-color:#3F4086; color:#ffffff;">Help</button>
+                <button id="btn-about" class="btn" data-bs-toggle="modal" data-bs-target="#aboutModal">About</button>
+                <button id="btn-help" class="btn">Help</button>
             </div>
+        </div>
     </div>
-</div>
 
-<div class="container-fluid" style="padding:40px">
+    <div class="container-fluid" style="padding:40px">
 
-    <!-- Loader and parameters stacked below header -->
-    <div class="row">
-        <div class="col-xs-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
-            <p class="text-muted" style="margin-bottom:16px; color:black; font-size:22px;">Upload or paste a Newick tree, run PhytClust, and visualize the result.</p>
+        <div class="row">
+            <div class="col-12 col-md-8 col-lg-7" style="margin-bottom:15px;">
+                <p class="text-muted" style="margin-bottom:16px; color:black; font-size:22px;">
+                    Upload or paste a Newick tree, run PhytClust, and visualize the result.
+                </p>
 
-            <h4>Load tree</h4>
-                <form class="form-inline" onsubmit="return false;">
-                    <div class="form-group" style="position: relative;">
-                        <label for="file-input" class="btn btn-upload-custom">
-                            Choose file
-                        </label>
-                        <input type="file" id="file-input"
-                               accept=".new,.nwk,.newick,.txt">
-                        <span class="small-note">&nbsp;(.new / .nwk / .newick / .txt in Newick format)</span>
+                <h4>Load tree</h4>
+                <form class="row g-2 align-items-center" onsubmit="return false;">
+                    <div class="col-auto" style="position: relative;">
+                        <label for="file-input" class="btn btn-upload-custom">Choose file</label>
+                        <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt">
+                    </div>
+                    <div class="col-auto">
+                        <span class="small-note">(.new / .nwk / .newick / .txt in Newick format)</span>
+                    </div>
 
-                        <div id="file-name"
-                             style="margin-top:8px; font-size:16px; color:#555;">
-                            No file chosen
-                        </div>
-<!--                        <span id="file-name" style="margin-left:10px; color:#555;">No file chosen</span>-->
-<!--                        <span class="small-note">&nbsp;(.new / .nwk / .newick / .txt in Newick format)</span>-->
+                    <div class="col-12">
+                        <div id="file-name" style="margin-top:8px; font-size:16px; color:#555;">No file chosen</div>
                     </div>
                 </form>
 
-            <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
-            <textarea id="newick-input" class="form-control" rows="2" placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+                <label for="newick-input" style="margin-top:10px;">Or paste Newick here:</label>
+                <textarea id="newick-input" class="form-control" rows="2"
+                    placeholder="e.g. (A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
 
-            <!-- Extra parameters toggle -->
-            <div style="margin-top: 10px;">
-                <a data-toggle="collapse" href="#extra-params" role="button" aria-expanded="false" aria-controls="extra-params" id="extra-params-toggle" style="color: #486387;">
-                    <span class="glyphicon glyphicon-plus" id="extra-params-icon" aria-hidden="true" style="color: #486387;"></span>
-                    &nbsp;Extra parameters
-                </a>
-            </div>
+                <!-- Extra parameters toggle (Bootstrap 5 collapse) -->
+                <div style="margin-top: 10px;">
+                    <a data-bs-toggle="collapse" href="#extra-params" role="button" aria-expanded="false"
+                        aria-controls="extra-params" id="extra-params-toggle" style="color: #486387;">
+                        <span id="extra-params-icon" aria-hidden="true" style="color: #486387;">+</span>
+                        &nbsp;Extra parameters
+                    </a>
+                </div>
 
-            <div class="collapse" id="extra-params" style="margin-top:10px;">
-                <div class="panel panel-default">
-                    <div class="panel-body">
-                        <div class="form-group">
-                            <label for="extra-k">Number of clusters</label>
-                            <input type="number" min="1" id="extra-k" class="form-control input-sm" placeholder="e.g. 2">
-                            <p class="small-note">Exact k-way partition.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-outgroup">Outgroup</label>
-                            <input type="text" id="extra-outgroup" class="form-control input-sm" placeholder="Taxon name">
-                            <p class="small-note">Any leaf node from the tree.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-topn">Top N peaks</label>
-                            <input type="number" min="1" id="extra-topn" class="form-control input-sm" placeholder="default 1">
-                            <p class="small-note">Number of optimal number of clusters to return.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-maxk">Max k</label>
-                            <input type="number" min="1" id="extra-maxk" class="form-control input-sm" placeholder="e.g. 100">
-                            <p class="small-note">Upper bound for the number of clusters.</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-maxklimit">Max k limit</label>
-                            <input type="number" id="extra-maxklimit" class="form-control input-sm" placeholder="e.g. 0.1">
-                            <p class="small-note">If "max K" is not set, set max_k = ceil(max_k_limit * num_leaves).</p>
-                        </div>
-                        <div class="form-group">
-                            <label for="extra-lambda">Lambda weight</label>
-                            <input type="number" id="extra-lambda" class="form-control input-sm" placeholder="default 0.7">
-                            <p class="small-note">Peak prominence parameter for score peak selection.</p>
-                        </div>
-                        <hr>
-                        <div class="form-group">
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" id="extra-resolution"> Use multi-resolution mode
-                                </label>
+                <div class="collapse" id="extra-params" style="margin-top:10px;">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label for="extra-k" class="form-label">Number of clusters</label>
+                                <input type="number" min="1" id="extra-k" class="form-control form-control-sm"
+                                    placeholder="e.g. 2">
+                                <p class="small-note">Exact k-way partition.</p>
                             </div>
-                            <p class="small-note">One peak per log-spaced bin.</p>
+
+                            <div class="mb-2">
+                                <label for="extra-outgroup" class="form-label">Outgroup</label>
+                                <input type="text" id="extra-outgroup" class="form-control form-control-sm"
+                                    placeholder="Taxon name">
+                                <p class="small-note">Any leaf node from the tree.</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="extra-topn" class="form-label">Top N peaks</label>
+                                <input type="number" min="1" id="extra-topn" class="form-control form-control-sm"
+                                    placeholder="default 1">
+                                <p class="small-note">Number of optimal number of clusters to return.</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="extra-maxk" class="form-label">Max k</label>
+                                <input type="number" min="1" id="extra-maxk" class="form-control form-control-sm"
+                                    placeholder="e.g. 100">
+                                <p class="small-note">Upper bound for the number of clusters.</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="extra-maxklimit" class="form-label">Max k limit</label>
+                                <input type="number" id="extra-maxklimit" class="form-control form-control-sm"
+                                    placeholder="e.g. 0.1">
+                                <p class="small-note">If "max K" is not set, set max_k = ceil(max_k_limit * num_leaves).
+                                </p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="extra-lambda" class="form-label">Lambda weight</label>
+                                <input type="number" id="extra-lambda" class="form-control form-control-sm"
+                                    placeholder="default 0.7">
+                                <p class="small-note">Peak prominence parameter for score peak selection.</p>
+                            </div>
+
+                            <hr>
+
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="extra-resolution">
+                                <label class="form-check-label" for="extra-resolution">Use multi-resolution mode</label>
+                                <p class="small-note">One peak per log-spaced bin.</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="extra-bins" class="form-label">Number of bins (resolution)</label>
+                                <input type="number" min="1" id="extra-bins" class="form-control form-control-sm"
+                                    placeholder="default 3">
+                                <p class="small-note">Number of log bins when using multi-resolution mode.</p>
+                            </div>
+
+                            <hr>
+
+                            <button id="btn-extra-reset" class="btn btn-sm" type="button"
+                                title="Reset Extra parameters to defaults">
+                                Reset to defaults
+                            </button>
                         </div>
-                        <div class="form-group">
-                            <label for="extra-bins">Number of bins (resolution)</label>
-                            <input type="number" min="1" id="extra-bins" class="form-control input-sm" placeholder="default 3">
-                            <p class="small-note">Number of log bins when using multi-resolution mode.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <button id="btn-run" class="btn btn-sm">Run PhytClust</button>
+
+                    <div class="btn-group" style="margin-right:6px;">
+                        <button id="btn-save" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            Save
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" data-save-type="tsv">TSV</a></li>
+                            <li><a class="dropdown-item" href="#" data-save-type="tsv_plots">all</a></li>
+                            <li><a class="dropdown-item" href="#" data-save-type="tree_plot">Tree plot</a></li>
+                            <li><a class="dropdown-item" href="#" data-save-type="k_plot">Optimal k plot</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="row g-2 align-items-center" style="margin-top:8px;">
+                        <div class="col-auto">
+                            <label for="output-dir" class="col-form-label">Output directory (server path):</label>
                         </div>
+                        <div class="col-auto">
+                            <input type="text" id="output-dir" class="form-control form-control-sm"
+                                placeholder="results" style="width:220px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Modal (Bootstrap 5) -->
+        <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Please cite this repository if you use the algorithm in your work: <br>
+                            K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C.
+                            Dessimoz, R.F. Schwarz, <b>PhytClust</b> (2025).
+                            Bitbucket repository:
+                            <a
+                                href="https://bitbucket.org/schwarzlab/phytclust">https://bitbucket.org/schwarzlab/phytclust</a>.
+                        </p>
+
                         <hr>
-                        <div>
-<!--                            <button id="btn-extra-reset" class="btn btn-default btn-xs" type="button" title="Reset Extra parameters to defaults">Reset to defaults</button>-->
-                            <button id="btn-extra-reset" class="btn" type="button" title="Reset Extra parameters to defaults" style="background-color:#CBBA5D; color:#ffffff;">Reset to defaults</button>
+
+                        <p class="mb-0">
+                            <b>Acknowledgements:</b> C. Robens, L. Godfrey, T. L. Kaufmann.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="btn-close" type="button" class="btn" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="app-loading" class="alert alert-info">Loading UI…</div>
+        <div id="status-message" class="alert" style="display:none;"></div>
+
+        <!-- Tabs (Bootstrap 5) -->
+        <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="viewer-tab" data-bs-toggle="tab" data-bs-target="#viewer"
+                    type="button" role="tab" aria-controls="viewer" aria-selected="true" style="color: #486387;">
+                    Clustering
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="viewer-optimal-k-tab" data-bs-toggle="tab"
+                    data-bs-target="#viewer-optimal-k" type="button" role="tab" aria-controls="viewer-optimal-k"
+                    aria-selected="false" style="color: #486387;">
+                    Optimal number of clusters
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="debug-tab" data-bs-toggle="tab" data-bs-target="#debug" type="button"
+                    role="tab" aria-controls="debug" aria-selected="false" style="color: #486387;">
+                    JSON
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" style="margin-top: 15px;">
+
+            <div class="tab-pane fade show active" id="viewer" role="tabpanel" aria-labelledby="viewer-tab">
+
+                <div class="row" style="margin-bottom:8px;">
+                    <div class="col-12" style="display:flex; align-items:center; gap:6px;">
+                        <button id="btn-copy-tree" class="btn btn-outline-secondary btn-sm">Copy tree to
+                            clipboard</button>
+                        <button id="btn-reset-view" class="btn btn-outline-secondary btn-sm" type="button">
+                            Reset view
+                        </button>
+                        <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:0;">
+                            <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
+                            <select id="cluster-select" class="form-select form-select-sm"
+                                style="display:inline-block; width:auto;"></select>
+                            <span id="cluster-select-label" class="small-note" style="margin-left:8px;">1 / 1</span>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div style="margin-top: 10px;">
-                <button id="btn-run" class="btn btn-sm" style="background-color:#4D7B74; color:#ffffff;">Run PhytClust</button>
-                <div class="btn-group" style="margin-right:6px;">
-    <button id="btn-save" class="btn btn-sm dropdown-toggle" data-toggle="dropdown" style=" background-color:#869065; color:#ffffff;">
-        Save <span class="caret"></span>
-    </button>
-    <ul class="dropdown-menu">
-        <li><a href="#" data-save-type="tsv">TSV</a></li>
-        <li><a href="#" data-save-type="tsv_plots">all</a></li>
-        <li><a href="#" data-save-type="tree_plot">Tree plot</a></li>
-        <li><a href="#" data-save-type="k_plot">Optimal k plot</a></li>
-    </ul>
-</div>
-                <div class="form-inline" style="margin-top:8px;">
-                    <label for="output-dir" style="margin-right:6px;">Output directory (server path):</label>
-                    <input type="text" id="output-dir" class="form-control input-sm" placeholder="results" style="width:220px;">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- About Modal -->
-    <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalLabel">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-<!--                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>-->
-                    <h4 class="modal-title" id="aboutModalLabel">About PhytClust</h4>
-                </div>
-                <div class="modal-body">
-                    <p>Please cite this repository if you use the algorithm in your work: <br>
-                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, <b>PhytClust</b> (2025). Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust">https://bitbucket.org/schwarzlab/phytclust</a>.
-                    </p>
-                </div>
-                <div class="modal-footer">
-                    <button id="btn-close" type="button" class="btn" data-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Loading indicator (hidden once DOM is ready) -->
-    <div id="app-loading" class="alert alert-info">Loading UI…</div>
-
-    <!-- Dynamic status messages -->
-    <div id="status-message" class="alert" style="display:none;"></div>
-
-    <!-- Tabs -->
-    <ul class="nav nav-tabs" role="tablist">
-        <li class="active"><a href="#viewer" role="tab" data-toggle="tab" style="color: #486387;">Clustering</a></li>
-        <li><a href="#viewer-optimal-k" role="tab" data-toggle="tab" style="color: #486387;">Optimal number of clusters</a></li>
-        <li><a href="#debug" role="tab" data-toggle="tab" style="color: #486387;">JSON</a></li>
-    </ul>
-
-    <div class="tab-content" style="margin-top: 15px;">
-
-        <!-- Viewer Tab -->
-        <div class="tab-pane active" id="viewer">
-
-            <div class="row" style="margin-bottom:8px;">
-                <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
-                    <button id="btn-copy-tree" class="btn btn-default">Copy tree to clipboard</button>
-                    <div id="cluster-select-controls" class="controls" style="display:none; margin-bottom:0;">
-                        <label for="cluster-select" style="margin-right:6px;">Cluster set:</label>
-                        <select id="cluster-select" class="form-control input-sm" style="display:inline-block; width:auto;"></select>
-                        <span id="cluster-select-label" class="small-note" style="margin-left:8px;">1 / 1</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-content" style="margin-top: 15px;">
 
                 <div class="controls" style="margin-bottom:8px;">
-
-                    <!-- Layout Selector -->
                     <label for="layout-mode" style="margin-right:6px;">Layout:</label>
-                    <select id="layout-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <select id="layout-mode" class="form-select form-select-sm"
+                        style="display:inline-block; width:auto;">
                         <option value="cladogram">Cladogram (linear)</option>
                         <option value="rectangular">Rectangular (vertical lines)</option>
                         <option value="circular">Circular</option>
                     </select>
 
-                    <!-- Palette Selector -->
                     <label for="palette-select" style="margin-left:15px; margin-right:6px;">Palette:</label>
-                    <select id="palette-select" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <select id="palette-select" class="form-select form-select-sm"
+                        style="display:inline-block; width:auto;">
                         <option value="default">Default</option>
                         <option value="pastel">Pastel</option>
                         <option value="vivid">Vivid</option>
@@ -469,377 +489,148 @@
                     </select>
 
                     <label for="color-mode" style="margin-left:15px; margin-right:6px;">Colour:</label>
-                    <select id="color-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
+                    <select id="color-mode" class="form-select form-select-sm"
+                        style="display:inline-block; width:auto;">
                         <option value="nodes">Nodes</option>
                         <option value="bars">Side bars</option>
                     </select>
 
-                    <label style="margin-left:15px;">
-                        <input type="checkbox" id="show-leaf-names" checked>
+                    <label style="margin-left:15px;" class="form-check-label">
+                        <input type="checkbox" id="show-leaf-names" class="form-check-input" checked>
                         Show terminal (leaf) names
                     </label>
 
-                    <label style="margin-left:15px;">
-                        <input type="checkbox" id="show-internal-names">
+                    <label style="margin-left:15px;" class="form-check-label">
+                        <input type="checkbox" id="show-internal-names" class="form-check-input">
                         Show internal node names
                     </label>
 
                     <label style="margin-left:15px;">
                         Node size:
-                        <input type="number" id="node-size" class="form-control input-sm" style="width:60px; display:inline-block;"
-                            min="1" max="10" value="2.5">
+                        <input type="number" id="node-size" class="form-control form-control-sm"
+                            style="width:70px; display:inline-block;" min="1" max="10" value="2.5">
                     </label>
+
                     <label style="margin-left:15px;">
                         Tree width:
-                        <input type="range" id="tree-width-scale" min="0.5" max="2.0" step="0.1" value="1.0" style="width:120px;">
+                        <input type="range" id="tree-width-scale" min="0.1" max="2.0" step="0.1" value="1.0"
+                            style="width:120px;">
                     </label>
 
                     <label style="margin-left:15px;">
                         Tree height:
-                        <input type="range" id="tree-height-scale" min="0.5" max="2.0" step="0.1" value="1.0" style="width:120px;">
+                        <input type="range" id="tree-height-scale" min="0.1" max="2.0" step="0.1" value="1.0"
+                            style="width:120px;">
                     </label>
 
                     <label style="margin-left:10px;">
                         Label size:
-                        <input type="number" id="label-size" class="form-control input-sm" style="width:60px; display:inline-block;"
-                            min="6" max="14" value="9">
+                        <input type="number" id="label-size" class="form-control form-control-sm"
+                            style="width:70px; display:inline-block;" min="6" max="14" value="9">
                     </label>
 
-                    <!-- Palette Preview -->
-                    <span id="palette-preview" style="display:inline-block; margin-left:8px; vertical-align:middle;"></span>
+                    <span id="palette-preview"
+                        style="display:inline-block; margin-left:8px; vertical-align:middle;"></span>
 
                     <span class="small-note" style="margin-left:8px;">
                         Click nodes to collapse/expand. Zoom &amp; pan with mouse.
                     </span>
                 </div>
+
                 <div class="tree-wrapper">
                     <div id="tree_display"></div>
                 </div>
-                </div>
-        </div>
+            </div>
 
+            <div class="tab-pane fade" id="viewer-optimal-k" role="tabpanel" aria-labelledby="viewer-optimal-k-tab">
 
-        <!-- Optimal k Tab -->
-        <div class="tab-pane" id="viewer-optimal-k">
+                <div class="row" style="margin-bottom:8px;">
+                    <div class="col-12" style="display:flex; align-items:center; gap:6px;">
+                        <button id="btn-copy-maxk" class="btn btn-outline-secondary btn-sm">Copy optimal k plot to
+                            clipboard</button>
 
-            <div class="row" style="margin-bottom:8px;">
-                <div class="col-xs-12" style="display:flex; align-items:center; gap:6px;">
-                    <button id="btn-copy-maxk" class="btn btn-default">Copy optimal k plot to clipboard</button>
-                    <!-- <h4>Optimal number of clusters</h4> -->
-                    <div class="controls" style="display:block; margin-bottom:0;">
-                        <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
-                        <select id="axis-mode" class="form-control input-sm" style="display:inline-block; width:auto;">
-                            <option value="log">Log</option>
-                            <option value="normal">Normal</option>
-                        </select>
-                        <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if available.</span>
+                        <div class="controls" style="display:block; margin-bottom:0;">
+                            <label for="axis-mode" style="margin-right:6px;">X-axis mode:</label>
+                            <select id="axis-mode" class="form-select form-select-sm"
+                                style="display:inline-block; width:auto;">
+                                <option value="log">Log</option>
+                                <option value="normal">Normal</option>
+                            </select>
+                            <span class="small-note" style="margin-left:8px;">Plot shows scores for k ≥ 2 if
+                                available.</span>
+                        </div>
                     </div>
                 </div>
+
+                <div id="optimalk_plot" style="width:100%; height:420px;"></div>
             </div>
 
-            <div id="optimalk_plot" style="width:100%; height:420px;"></div>
-            <div style="margin-bottom:8px;">
-            </div>
-
-
-        </div>
-
-        <!-- Help Sidebar (off-canvas style) -->
-        <div id="help-sidebar" style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
-            <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e5e5; display:flex; align-items:center; justify-content:space-between;">
-                <h4 class="modal-title" id="aboutModalLabel">Help</h4>
-<!--                <button id="btn-help-close" class="btn btn-default btn-xs">Close</button>-->
-                <button id="btn-help-close" class="btn">Close</button>
-            </div>
-            <div class="help-section" style="padding:12px;">
-                <h4>Input format</h4>
-                <ul>
-                    <li>Trees must be in <strong>Newick</strong> format.</li>
-                    <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
-                    <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain text files.</li>
-                </ul>
-                <h4>How to use</h4>
-                <ol>
-                    <li>Upload a Newick file or paste a Newick string.</li>
-                    <li>Set optional parameters (k, outgroup) as needed.</li>
-                    <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
-                    <li>View the Tree, JSON, and Logs in their tabs.</li>
-                </ol>
-                <h4>Example</h4>
-                <p>
-                    Use our small built-in tree to try PhytClust quickly.
-<!--                    <button id="btn-help-load-example" class="btn btn-default btn-xs" style="margin-left:6px;">Load example tree</button>-->
-                    <button id="btn-help-load-example" class="btn">Load example tree</button>
-                </p>
+            <div class="tab-pane fade" id="debug" role="tabpanel" aria-labelledby="debug-tab">
+                <pre id="result" class="result-box">(waiting for run...)</pre>
             </div>
         </div>
 
-        <!-- JSON Tab -->
-        <div class="tab-pane" id="debug">
-            <pre id="result" class="result-box">(waiting for run...)</pre>
+    </div>
+
+    <!-- Help Sidebar (keep as-is; it's your custom offcanvas) -->
+    <div id="help-sidebar"
+        style="display:none; position:fixed; top:0; right:0; width:340px; height:100%; background:#f7f7f7; border-left:1px solid #ddd; z-index:1040; overflow:auto; box-shadow:-2px 0 6px rgba(0,0,0,0.1);">
+        <div
+            style="padding:12px 12px 6px 12px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+            <h4 class="modal-title">Help</h4>
+            <button id="btn-help-close" class="btn">Close</button>
         </div>
+        <div class="help-section" style="padding:12px;">
+            <h4>Input format</h4>
+            <ul>
+                <li>Trees must be in <strong>Newick</strong> format.</li>
+                <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
+                <li>File upload accepts <code>.new</code>, <code>.nwk</code>, <code>.newick</code> or plain text files.
+                </li>
+            </ul>
+            <h4>How to use</h4>
+            <ol>
+                <li>Upload a Newick file or paste a Newick string.</li>
+                <li>Set optional parameters (k, outgroup) as needed.</li>
+                <li>Click <strong>Run PhytClust</strong> to compute clusters.</li>
+                <li>View the Tree, JSON, and Logs in their tabs.</li>
+            </ol>
+            <h4>Example</h4>
+            <p>
+                Use our small built-in tree to try PhytClust quickly.
+                <button id="btn-help-load-example" class="btn">Load example tree</button>
+            </p>
+        </div>
+    </div>
 
-    </div><!-- /.tab-content -->
+    <!-- Bootstrap 5 JS bundle -->
+    <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-</div><!-- /.container-fluid -->
-
-<!-- Dependencies for Bootstrap tabs -->
-<script src="//code.jquery.com/jquery.js"></script>
-<script src="//netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
-<script src="/static/tree_viz.js"></script>
-
-<script>
-    document.getElementById("file-input").addEventListener("change", function() {
-        const fileNameSpan = document.getElementById("file-name");
-        if (this.files && this.files.length > 0) {
-            fileNameSpan.innerHTML =
-                '<span style="color: #555;">Chosen file:</span> ' +
-                '<span style="color: #000;">' + this.files[0].name + '</span>';
-        } else {
-            fileNameSpan.innerHTML =
-                '<span style="color: #555;">No file chosen</span>';
-        }
-    })
-    /* ============================================================
-       Utility: Download TSV from server (/api/export_tsv)
-       ============================================================ */
-    async function downloadTSV() {
-        const fname = prompt("Filename:", "phytclust_results.tsv") || "phytclust_results.tsv";
-
-        const res = await fetch("/api/export_tsv", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                filename: fname,
-                top_n: 1,
-                outlier: true,
-                output_all: false
-            })
-        });
-
-        if (!res.ok) {
-            alert("Failed to export TSV.");
-            return;
-        }
-
-        const text = await res.text();
-
-        const blob = new Blob([text], { type: "text/tab-separated-values" });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fname;
-        a.click();
-
-        URL.revokeObjectURL(url);
-    }
-
-
-    /* ============================================================
-       Utility: Save TREE SVG
-       ============================================================ */
-    function downloadTreePlotSVG() {
-        // const svg = document.querySelector("#tree_display svg");
-        // if (!svg) {
-        //     alert("No tree plot to save.");
-        //     return;
-        // }
-        //
-        // const serializer = new XMLSerializer();
-        // const src = serializer.serializeToString(svg);
-        //
-        // const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-        // const url = URL.createObjectURL(blob);
-        //
-        // const a = document.createElement("a");
-        // a.href = url;
-        // a.download = "tree_plot.svg";
-        // a.click();
-        //
-        // URL.revokeObjectURL(url);
-        const src = window.PHYTCLUST_ORIGINAL_TREE_SVG;
-
-        if (!src) {
-            alert("No tree plot to save.");
-            return;
-        }
-
-        const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "tree_plot.svg";
-        a.click();
-
-        URL.revokeObjectURL(url);
-    }
-
-
-    /* ============================================================
-       Utility: Save Optimal-k SVG
-       (your D3 version — NOT Plotly)
-       ============================================================ */
-    function downloadOptimalKPlot() {
-        // const svg = document.querySelector("#optimalk_plot svg");
-        // if (!svg) {
-        //     alert("No optimal-k plot to save.");
-        //     return;
-        // }
-        //
-        // const serializer = new XMLSerializer();
-        // const src = serializer.serializeToString(svg);
-        //
-        // const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-        // const url = URL.createObjectURL(blob);
-        //
-        // const a = document.createElement("a");
-        // a.href = url;
-        // a.download = "optimal_k.svg";
-        // a.click();
-        //
-        // URL.revokeObjectURL(url);
-        const src = window.PHYTCLUST_ORIGINAL_OPTIMALK_SVG;
-
-        if (!src) {
-            alert("No optimal-k plot to save.");
-            return;
-        }
-
-        const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "optimal_k.svg";
-        a.click();
-
-        URL.revokeObjectURL(url);
-    }
-
-
-    /* ============================================================
-       Clipboard: Copy Tree SVG
-       ============================================================ */
-    async function copyTreeToClipboard() {
-        const svg = document.querySelector("#tree_display svg");
-        if (!svg) {
-            showStatus("No tree to copy.", "warning");
-            return;
-        }
-
-        try {
-            const serializer = new XMLSerializer();
-            const src = serializer.serializeToString(svg);
-            const blob = new Blob([src], { type: "image/svg+xml" });
-            const item = new ClipboardItem({ "image/svg+xml": blob });
-
-            await navigator.clipboard.write([item]);
-            showStatus("Tree copied to clipboard.", "success");
-        } catch (err) {
-            console.error(err);
-            showStatus("Clipboard copy failed.", "danger");
-        }
-}
-
-
-    /* ============================================================
-       Clipboard: Copy Optimal-k SVG
-       ============================================================ */
-    async function copyOptimalKPlotToClipboard() {
-        const svg = document.querySelector("#optimalk_plot svg");
-        if (!svg) {
-            showStatus("No optimal-k plot to copy.", "warning");
-            return;
-        }
-
-        const serializer = new XMLSerializer();
-        const src = serializer.serializeToString(svg);
-        const blob = new Blob([src], { type: "image/svg+xml" });
-        const item = new ClipboardItem({ "image/svg+xml": blob });
-
-        try {
-            await navigator.clipboard.write([item]);
-            showStatus("Optimal-k plot copied to clipboard.", "success");
-        } catch (err) {
-            console.error(err);
-            showStatus("Clipboard copy failed.", "danger");
-        }
-    }
-
-
-
-    /* ============================================================
-       UI Wiring
-       ============================================================ */
-    $(function () {
-
-        /* ---------- Save dropdown ---------- */
-        document.querySelectorAll(".dropdown-menu a[data-save-type]").forEach(function (el) {
-            el.addEventListener("click", function (e) {
-                e.preventDefault();
-                const type = this.dataset.saveType;
-
-                if (type === "tsv") return downloadTSV();
-                if (type === "tree_plot") return downloadTreePlotSVG();
-                if (type === "k_plot") return downloadOptimalKPlot();
-                if (type === "tsv_plots") {
-                    downloadTSV();
-                    downloadTreePlotSVG();
-                    downloadOptimalKPlot();
-                }
-            });
-        });
-
-        /* ---------- Copy buttons ---------- */
-        const btnTree = document.getElementById("btn-copy-tree");
-        if (btnTree) {
-            btnTree.addEventListener("click", function (e) {
-                e.preventDefault();
-                copyTreeToClipboard();
-            });
-        }
-
-        const btnK = document.getElementById("btn-copy-maxk");
-        if (btnK) {
-            btnK.addEventListener("click", (e) => {
-                e.preventDefault();
-                copyOptimalKPlotToClipboard();
-            });
-        }
-
-    });
-</script>
+    <!-- App scripts -->
+    <script src="/static/tree_viz.js"></script>
 
     <!-- FOOTER -->
     <footer class="app-footer">
         <div class="footer-inner">
-
-            <!-- Left: footer image -->
             <div class="footer-left">
                 <a href="https://iccb-cologne.org/home" target="_blank">
-                <img src="/static/ICCB_logo.png" alt="Footer Logo">
+                    <img src="/static/ICCB_logo.png" alt="Footer Logo">
                 </a>
             </div>
 
-<!--            &lt;!&ndash; Center: hidden link inside an image &ndash;&gt;-->
-<!--            <div class="footer-center">-->
-<!--                <a href="https://bitbucket.org/schwarzlab/phytclust/src/master/" target="_blank">-->
-<!--                    <img src="/static/bitbucket_link.png" alt="Secret Link">-->
-<!--                </a>-->
-<!--            </div>-->
-
-            <!-- Right: footer text -->
-<!--            <div class="footer-right">-->
             <div class="footer-center">
                 <p>Please cite this repository if you use the algorithm in your work:<br>
-                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, PhytClust, (2025)<br>
-                    Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust/"> https://bitbucket.org/schwarzlab/phytclust/</a> </p>
+                    K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F.
+                    Schwarz, PhytClust, (2025)<br>
+                    Bitbucket repository: <a href="https://bitbucket.org/schwarzlab/phytclust/">
+                        https://bitbucket.org/schwarzlab/phytclust/</a>
+                    <br>
+                    <span><b>Acknowledgements:</b> C. Robens, L. Godfrey, T. L. Kaufmann.</span>
+                </p>
             </div>
-
         </div>
     </footer>
 
 </body>
+
 </html>

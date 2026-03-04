@@ -1,0 +1,44 @@
+:root {
+  --pc-bg: #ffffff;
+  --pc-muted: #6b7280;
+  --pc-border: #e5e7eb;
+  --pc-surface: #f8fafc;
+  --pc-text: #111827;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  background: var(--pc-bg);
+  color: var(--pc-text);
+}
+
+.tree-wrapper {
+  border: 1px solid var(--pc-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--pc-surface);
+}
+
+.d3-tooltip{
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(17, 24, 39, 0.92);
+  color: white;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.25;
+  max-width: 260px;
+}
+
+.header-bar, .app-footer {
+  border-color: var(--pc-border);
+}
+
+var okSvgNode = document.querySelector("#optimalk_plot svg");
+var okSvgNode = document.querySelector("#optimalk_plot svg");
