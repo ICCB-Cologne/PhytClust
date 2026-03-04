@@ -11,15 +11,18 @@ from typing import Any
 
 from Bio import Phylo
 from ..algo.core import PhytClust
+from pathlib import Path
+from importlib import resources
 
 try:
     from importlib.metadata import version, PackageNotFoundError
 except Exception:
     try:
-        from importlib_metadata import version, PackageNotFoundError  # type: ignore
-    except Exception:  # pragma: no cover
+        from importlib_metadata import version, PackageNotFoundError
+    except Exception:
         version = None
-        PackageNotFoundError = Exception  # type: ignore
+        PackageNotFoundError = Exception
+
 try:
     from rich.console import Console
     from rich.status import Status
@@ -38,9 +41,11 @@ LOG = logging.getLogger("phytclust.cli")
 
 def print_banner():
     try:
-        here = pathlib.Path(__file__).resolve().parent
-        logo_path = here / "ascii_logo.txt"
-        text = logo_path.read_text(encoding="utf-8")
+        text = (
+            resources.files("phytclust")
+            .joinpath("ascii_logo.txt")
+            .read_text(encoding="utf-8")
+        )
         print(text)
     except Exception:
         LOG.debug("ascii_logo.txt not found; skipping banner.")
@@ -52,12 +57,14 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError("value must be ≥ 1")
     return ivalue
 
+
 def _min_int(min_value: int):
     def _check(value: str) -> int:
         ivalue = int(value)
         if ivalue < min_value:
             raise argparse.ArgumentTypeError(f"value must be ≥ {min_value}")
         return ivalue
+
     return _check
 
 
@@ -75,7 +82,7 @@ def _package_version() -> str:
         return "unknown"
     try:
         return version("phytclust")
-    except PackageNotFoundError:  # pragma: no cover
+    except PackageNotFoundError:
         return "unknown"
 
 
@@ -84,9 +91,8 @@ def _load_config(path: pathlib.Path | None) -> dict:
         return {}
     try:
         text = path.read_text()
-        # try YAML first if available; fallback to JSON
         try:
-            import yaml  # type: ignore
+            import yaml
 
             data = yaml.safe_load(text)
             return data or {}
@@ -138,7 +144,6 @@ def _configure_logging(
     Configure a single handler for the 'phytclust' logger hierarchy so that
     all submodules (phytclust.*, using logging.getLogger(__name__)) inherit it.
     """
-    # Decide level from -v / -q
     level = logging.WARNING
     if verbosity > 0:
         level = logging.INFO
@@ -149,17 +154,15 @@ def _configure_logging(
     if quiet > 1:
         level = logging.CRITICAL
 
-    # Remove any existing handlers (avoid duplicate logs during tests)
     root = logging.getLogger("phytclust")
     root.handlers.clear()
     root.setLevel(level)
     root.propagate = False
 
-    # Try rich (nicer formatting/colors) unless disabled
     handler = None
     if not no_color:
         try:
-            from rich.logging import RichHandler  # type: ignore
+            from rich.logging import RichHandler
 
             handler = RichHandler(
                 level=level,
@@ -175,7 +178,6 @@ def _configure_logging(
             handler = None
 
     if handler is None:
-        # Plain stdlib handler
         handler = logging.StreamHandler()
         formatter = logging.Formatter(log_format)
         handler.setFormatter(formatter)
@@ -210,27 +212,7 @@ class phase:
         dt = time.perf_counter() - self.t0
         if self.enabled and self.status:
             self.status.stop()
-        # single source of truth for timing lines:
         LOG.info("⏱ %s: %.3fs", self.label, dt)
-
-
-# def phase(enabled: bool, label: str):
-#     """
-#     Context manager to time phases when --time is set.
-#     Usage: with phase(args.time, "load tree"):
-#     """
-
-#     class _Ctx:
-#         def __enter__(self):
-#             self.t0 = time.perf_counter()
-#             return self
-
-#         def __exit__(self, exc_type, exc, tb):
-#             if enabled:
-#                 dt = time.perf_counter() - self.t0
-#                 LOG.info("⏱ %s: %.3fs", label, dt)
-
-#     return _Ctx()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -352,7 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--lambda-weight",
         type=float,
-        dest='lambda_weight',
+        dest="lambda_weight",
         default=0.5,
         help="Peak prominence parameter for score peak selection.",
     )
@@ -362,14 +344,14 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-# ───────────────────────── main ─────────────────────────
-
-
-def main(argv: list[str] | None = None) -> None:
+def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     _configure_logging(args.verbose, args.quiet, args.no_color, args.log_format)
 
+    show_phase_ui = bool(console is not None and sys.stderr.isatty())
+
     print_banner()
+    _emit_header(args)
 
     cfg = _load_config(args.config)
     plot_cfg = dict(cfg.get("plot") or {})
@@ -377,16 +359,14 @@ def main(argv: list[str] | None = None) -> None:
 
     t0_total = time.perf_counter()
 
-    if args.save_fig or args.save_tree or not args.no_tsv:
-        try:
-            args.out_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            LOG.error("Cannot create output directory '%s': %s", args.out_dir, exc)
-            sys.exit(2)
+    will_write_anything = bool(args.save_fig or args.save_tree or (not args.no_tsv))
+    if will_write_anything:
+        out_dir = Path(args.out_dir) if args.out_dir is not None else Path("results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        args.out_dir = str(out_dir)
 
-    # Load tree
     try:
-        with phase(args.time or args.progress, "load tree"):
+        with phase(show_phase_ui, "load tree"):
             handle: Any = sys.stdin if args.tree == "-" else args.tree
             tree = Phylo.read(handle, "newick")
     except Exception as exc:
@@ -394,7 +374,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(2)
 
     try:
-        with phase(args.time or args.progress, "initialization"):
+        with phase(show_phase_ui, "initialization"):
             pc = PhytClust(tree=tree, outgroup=args.outgroup)
         LOG.info("Tree terminals (after outgroup handling): %d", pc.num_terminals)
     except Exception as exc:
@@ -402,7 +382,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     try:
-        with phase(args.time or args.progress, "clustering"):
+        with phase(show_phase_ui, "clustering"):
             LOG.info(
                 "Running PhytClust (k=%s, top_n=%d, resolution=%s, max_k=%s)…",
                 args.k or "auto",
@@ -421,7 +401,22 @@ def main(argv: list[str] | None = None) -> None:
                 plot_scores=args.plot,
                 lambda_weight=args.lambda_weight,
             )
-            pc.run(**run_kwargs)
+
+            t0_run = time.perf_counter()
+            result = pc.run(**run_kwargs)
+            dt_run = time.perf_counter() - t0_run
+
+            LOG.info("⏱ phytclust.run(): %.3fs", dt_run)
+
+            ks = []
+            if isinstance(result, dict):
+                if "k" in result and result["k"] is not None:
+                    ks = [int(result["k"])]
+                elif "ks" in result and result["ks"] is not None:
+                    ks = [int(x) for x in result["ks"]]
+
+            if ks:
+                LOG.info("Selected k: %s", ks if len(ks) > 1 else ks[0])
 
     except ValueError as e:
         LOG.error("Clustering failed: %s", e)
@@ -432,13 +427,13 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         if args.plot or args.save_fig or args.save_tree:
-            with phase(args.time or args.progress, "render/plot"):
+            with phase(show_phase_ui, "render/plot"):
                 pc.plot(
                     results_dir=(
                         args.out_dir if (args.save_fig or args.save_tree) else None
                     ),
                     save=(args.save_fig or args.save_tree),
-                    outlier=not args.no_outlier,
+                    n=args.k,
                     **plot_cfg,
                 )
     except Exception as exc:
@@ -446,7 +441,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if not args.no_tsv:
         try:
-            with phase(args.time or args.progress, "write tsv"):
+            with phase(show_phase_ui, "write tsv"):
                 pc.save(
                     results_dir=args.out_dir,
                     filename=args.tsv_name,
@@ -458,7 +453,63 @@ def main(argv: list[str] | None = None) -> None:
             LOG.error("Failed to write tsv: %s", exc)
             sys.exit(1)
 
-    if args.time:
-        LOG.info("Total runtime: %.3fs", time.perf_counter() - t0_total)
+    if will_write_anything:
+        _emit_artifacts(args.out_dir)
+
+    LOG.info("Total runtime: %.3fs", time.perf_counter() - t0_total)
 
     LOG.info("Done.")
+    return 0
+
+
+def _emit_header(args: argparse.Namespace) -> None:
+    if console is None or Panel is None or Text is None:
+        LOG.info(
+            "phytclust | k=%s | top_n=%s | resolution=%s | out_dir=%s",
+            args.k or "auto",
+            args.top_n,
+            args.resolution,
+            args.out_dir,
+        )
+        return
+
+    mode = (
+        "k" if args.k is not None else ("resolution" if args.resolution else "global")
+    )
+    body = Text()
+    body.append("Mode: ", style="bold")
+    body.append(f"{mode}\n")
+    body.append("Tree: ", style="bold")
+    body.append(f"{args.tree}\n")
+    body.append("Output: ", style="bold")
+    body.append(f"{args.out_dir}\n")
+    body.append("Flags: ", style="bold")
+    body.append(
+        f"plot={args.plot} save_fig={args.save_fig} save_tree={args.save_tree} tsv={not args.no_tsv}"
+    )
+
+    console.print(Panel(body, title="phytclust", expand=False))
+
+
+def _emit_artifacts(out_dir: str) -> None:
+    try:
+        p = Path(out_dir)
+        if not p.exists():
+            return
+        files = sorted([x.name for x in p.iterdir() if x.is_file()])
+        if not files:
+            return
+
+        if console is None:
+            LOG.info("Wrote %d file(s) to %s", len(files), out_dir)
+            return
+
+        from rich.table import Table  # type: ignore
+
+        t = Table(title="Output files", show_lines=False)
+        t.add_column("File", style="cyan")
+        for f in files:
+            t.add_row(f)
+        console.print(t)
+    except Exception:
+        return

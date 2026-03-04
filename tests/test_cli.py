@@ -10,14 +10,25 @@ def run_cli(args):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def _assert_ok(result):
+    if result.returncode != 0:
+        raise AssertionError(
+            "CLI failed\n"
+            f"returncode={result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}\n"
+        )
+
+
 def test_cli_k_mode(tmp_path):
     out_dir = tmp_path / "results"
     result = run_cli(
         [str(TREE_FILE), "--k", "2", "--save-fig", "--out-dir", str(out_dir)]
     )
 
-    assert result.returncode == 0
+    _assert_ok(result)
     assert out_dir.exists()
+    assert any(out_dir.iterdir())
 
 
 def test_cli_resolution_mode(tmp_path):
@@ -34,4 +45,6 @@ def test_cli_resolution_mode(tmp_path):
         ]
     )
 
-    assert result.returncode == 0
+    _assert_ok(result)
+    assert out_dir.exists()
+    assert any(out_dir.iterdir())

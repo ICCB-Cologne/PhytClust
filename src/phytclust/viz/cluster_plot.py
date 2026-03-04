@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional
 import matplotlib.pyplot as plt
 
 from ..algo.dp import cluster_map
@@ -25,27 +25,38 @@ def plot_clusters(
     **kwargs,
 ) -> None:
     if pc.clusters is None:
-        print("No clusters to plot – run get_clusters / best_* first.")
-        return
+        pc.clusters = {}
 
     if pc.k is None and (pc.scores is None):
         print("Scores not available – continuing without a score plot.")
 
+    def _get_map(k: int):
+        try:
+            get_clusters = getattr(pc, "get_clusters", None)
+            if callable(get_clusters):
+                return get_clusters(int(k))
+        except Exception:
+            pass
+        return cluster_map(pc, int(k))
+
     clusters_to_plot: list[tuple[int, dict]] = []
 
     if pc.k is not None:
-        clmap = cluster_map(pc, pc.k)
+        k_val = int(pc.k)
+        clmap = _get_map(k_val)
         if clmap is not None:
-            clusters_to_plot.append((pc.k, clmap))
+            clusters_to_plot.append((k_val, clmap))
     elif n is not None:
-        clmap = cluster_map(pc, n)
+        k_val = int(n)
+        clmap = _get_map(k_val)
         if clmap is not None:
-            clusters_to_plot.append((n, clmap))
+            clusters_to_plot.append((k_val, clmap))
     else:
         for k_val in (pc.peaks_by_rank or [])[:top_n]:
-            clmap = cluster_map(pc, k_val)
+            kv = int(k_val)
+            clmap = _get_map(kv)
             if clmap is not None:
-                clusters_to_plot.append((k_val, clmap))
+                clusters_to_plot.append((kv, clmap))
 
     if not clusters_to_plot:
         print("No clusters to plot – check your arguments.")
@@ -71,10 +82,11 @@ def plot_clusters(
             results_dir=None,
             **kwargs,
         )
-        print(f"Plotted clusters for k={k_val}.")
 
         if save or results_dir:
             out_dir = results_dir or "."
             out_name = filename or f"tree_k{k_val}.png"
-            fig.savefig(os.path.join(out_dir, out_name), bbox_inches="tight")
-            print(f"Saved figure → {os.path.join(out_dir, out_name)}")
+            out_path = os.path.join(out_dir, out_name)
+            fig.savefig(out_path, bbox_inches="tight")
+
+        plt.close(fig)

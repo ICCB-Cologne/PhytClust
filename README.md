@@ -1,19 +1,29 @@
-# PhytClust <img src="https://bitbucket.org/schwarzlab/phytclust/raw/HEAD/src/phytclust/phytclust_logo_colour.png" width="120">
+# PhytClust <img src="src/phytclust/phytclust_logo_colour.png" width="120" align="right" alt="PhytClust logo">
 
 Monophyletic, dynamic-programming **clustering of phylogenetic trees**.
 
-PhytClust finds clusterings of the leaves of a rooted tree such that **every cluster is a monophyletic clade**. It supports:
+PhytClust finds clusterings of the leaves of a phylogenetic tree such that **each cluster corresponds to a monophyletic clade**.
 
+It supports:
 - **Exact k-way clustering** (`run(k=...)`)
-- **Global peak search** in k using a Calinski–Harabasz + Elbow 1 Index for validating cluster quality
+- **Global peak search** over k using internal validation scores (Calinski–Harabasz + elbow-style index)
 - **Multi-resolution clustering**: one representative k per log-spaced resolution bin
-- Polytomies, minimum cluster size constraints, support-aware branch lengths, outlier penalties and more!
+- Polytomies, minimum cluster size constraints, support-aware branch lengths, outlier penalties, and more
+
+---
+
+## Requirements
+
+- Python 3.10+
+- Biopython, NumPy (installed automatically via pip)
+
+Input trees are expected in **Newick** format. If the tree is unrooted, provide an outgroup (CLI option) or root it beforehand.
 
 ---
 
 ## Installation
 
-### 1. Recommended: clean conda environment and install with PyPI
+### 1) Recommended: clean conda environment + install from PyPI
 
 ```bash
 conda create -n phyt_env python=3.10
@@ -21,19 +31,21 @@ conda activate phyt_env
 pip install phytclust
 ```
 
-### 2. Install from source
+### 2) Install from source (development)
 
 ```bash
 git clone https://bitbucket.org/schwarzlab/phytclust.git
 cd phytclust
-pip install -e .[dev]
+pip install -e ".[dev]"
 ```
+
+---
 
 ## Command-line usage
 
 ### Exact k clusters
 
-Compute an exact k-way clustering, plot it, and save PNG + CSV under ./results:
+Compute an exact k-way clustering, plot it, and save PNG + CSV under `./results`:
 
 ```bash
 phytclust tree.nwk --k 5 --save-fig --out-dir results
@@ -41,7 +53,7 @@ phytclust tree.nwk --k 5 --save-fig --out-dir results
 
 ### Global clustering solution
 
-Search for the top 3 Calinski–Harabasz + Elbow index peaks up to k = 200, save everything in ./out:
+Search for the top 3 peaks up to `k = 200`, save everything in `./out`:
 
 ```bash
 phytclust tree.nwk --top-n 3 \
@@ -63,14 +75,20 @@ phytclust tree.nwk --bins 4 \
   --out-dir out
 ```
 
-(See phytclust --help for the complete CLI.)
+Run `phytclust --help` for the complete CLI reference.
+
+---
+
+## Development
+
+Run tests:
+
+```bash
+pytest -q
+```
+
+---
 
 ## Please cite
 
-Please cite this repository if you use the algorithm in your work:
-
-> K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, PhytClust, (2025), Bitbucket repository, https://bitbucket.org/schwarzlab/phytclust/
-
-```
-
-```
+> K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, *PhytClust* (2025), repository: https://bitbucket.org/schwarzlab/phytclust/

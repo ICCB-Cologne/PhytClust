@@ -9,8 +9,7 @@ where = ["src"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-phytclust = ["*.png"]
-"phytclust.cli" = ["ascii_logo.txt"]
+phytclust = ["*.png", "ascii_logo.txt"]
 
 [project]
 name = "phytclust"
@@ -39,7 +38,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 dependencies = [
     "numpy>=1.24",

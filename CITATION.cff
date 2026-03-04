@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use PhytClust in your work, please cite it."
+title: "PhytClust"
+type: software
+authors:
+  - family-names: "Ganesan"
+    given-names: "Katyayni"
+    email: "katyayni.ganesan@iccb-cologne.org"
+  - family-names: "Schwarz"
+    given-names: "Roland F"
+    email: "roland.schwarz@iccb-cologne.org"
+repository-code: "https://bitbucket.org/schwarzlab/phytclust"
+url: "https://bitbucket.org/schwarzlab/phytclust"
+license: "GPL-3.0-only"
+version: "0.1.1"
+date-released: "2026-03-04"
+keywords:
+  - phylogenetics
+  - clustering
+  - dynamic programming
+  - monophyly

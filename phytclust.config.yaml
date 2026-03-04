@@ -1,6 +1,5 @@
 # Plotting defaults
 plot:
-  # Wider figure when trees are long in branch-length space
   width_scale: 2.5
   # Lower value = shorter figure; increase if labels overlap
   height_scale: 0.30
@@ -8,7 +7,7 @@ plot:
   marker_size: 40
   # Hide numbers on branches by default
   show_branch_lengths: false
-  # Hide internal nodes' labels/markers to reduce clutter
+  # Hide internal nodes' labels
   hide_internal_nodes: true
 
 # Saving defaults

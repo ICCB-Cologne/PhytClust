@@ -165,19 +165,19 @@ class PhytClust:
     def _ensure_dp(self) -> None:
         current = self._hash_tree()
 
-        if self._dp_ready and (self._tree_hash == current): 
-            logger.debug('DP exists, not recalculating')
+        if self._dp_ready and (self._tree_hash == current):
+            logger.debug("DP exists, not recalculating")
             return
+
+        self.clusters = {}
+        self.scores = None
+        self.peaks_by_rank = None
 
         validate_args(self)
         compute_dp_table(self)
 
         self._dp_ready = True
         self._tree_hash = current
-
-        self.clusters = {}
-        self.scores = None
-        self.peaks_by_rank = None
 
         if self.max_k is None or self.max_k < 1:
             self.max_k = max(2, ceil(self.num_terminals * self.max_k_limit))
@@ -191,8 +191,10 @@ class PhytClust:
             raise ValueError("Please provide k")
         if k < 1:
             raise ValueError("k must be ≥ 1")
+        self._ensure_dp()
+        if self.clusters is not None and k in self.clusters:
+            return self.clusters[k]
 
-        self.k = k
         cmap = backtrack(self, k, verbose=verbose)
 
         if self.clusters is None:
@@ -218,8 +220,18 @@ class PhytClust:
         """
         self._ensure_dp()
 
-        self.max_k_limit = max_k_limit if max_k_limit is not None else 0.9
-        self.max_k = min(self.num_terminals, max_k or max(2, ceil(self.num_terminals * self.max_k_limit)))
+        if top_n < 1:
+            raise ValueError("`top_n` must be ≥ 1.")
+
+        if max_k_limit is not None:
+            self.max_k_limit = max_k_limit
+
+        effective_max_k = (
+            max_k
+            if max_k is not None
+            else max(2, ceil(self.num_terminals * self.max_k_limit))
+        )
+        self.max_k = min(self.num_terminals, effective_max_k)
 
         if self.max_k < 4:
             raise ValueError("max_k must be at least 4.")
@@ -278,24 +290,27 @@ class PhytClust:
         plot_scores: bool = True,
         lambda_weight: float = 0.7,
     ) -> List[Dict[Any, int]]:
-        """
-        Multi-resolution mode: one peak per log-bin.
-
-        Returns a list of cluster maps, one per selected k.
-        """
         self._ensure_dp()
 
         self.max_k = max_k or ceil(self.num_terminals * self.max_k_limit)
         calculate_scores(self, plot=plot_scores)
 
+        if self.scores is None:
+            return []
+
         score_k_count = min(self.max_k, len(self.scores))
 
+        if score_k_count < 4:
+            # trivial fallback: just k=2 if possible
+            try:
+                return [self.get_clusters(2)]
+            except Exception:
+                return []
+
         if score_k_count < 50:
-            logger.info(
-                "Tree too small for resolution mode, finding globally optimal solution instead."
-            )
+            top = max(1, min(self.num_peaks, score_k_count - 1))
             return self.best_global(
-                top_n=min(self.num_peaks, score_k_count - 1),
+                top_n=top,
                 max_k=self.max_k,
                 max_k_limit=self.max_k_limit,
                 plot_scores=plot_scores,
@@ -368,6 +383,10 @@ class PhytClust:
             # exact-k mode
             self._ensure_dp()
             cmap = self.get_clusters(k_val)
+
+            self.k = int(k_val)
+            self.peaks_by_rank = [int(k_val)]
+
             result = {
                 "mode": "k",
                 "k": k_val,
@@ -436,7 +455,7 @@ class PhytClust:
         outlier: bool = True,
         n: Optional[int] = None,
         output_all: bool = False,
-            ) -> None:
+    ) -> None:
         save_clusters(
             self,
             results_dir=results_dir,
