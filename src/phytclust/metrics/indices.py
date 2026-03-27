@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import statistics
-from typing import List, Optional
+from typing import Optional
 import numpy as np
 from Bio.Phylo.BaseTree import Tree, Clade
 

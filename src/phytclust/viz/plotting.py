@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import matplotlib as mpl
 import matplotlib.collections as mpcollections
@@ -348,7 +348,20 @@ def plot_tree(
     return fig
 
 
-def _get_x_positions(tree: Any) -> Dict[Any, float]:
+def _get_x_positions(tree: Any) -> dict[Any, float]:
+    """
+    Get x-coordinates for tree nodes based on branch lengths.
+
+    Parameters
+    ----------
+    tree : Bio.Phylo.BaseTree.Tree
+        The phylogenetic tree.
+
+    Returns
+    -------
+    dict[Any, float]
+        Mapping of clade objects to x-coordinates (branch lengths from root).
+    """
     depths = tree.depths()
     if not depths or not max(depths.values()):
         depths = tree.depths(unit_branch_lengths=True)
@@ -359,8 +372,28 @@ def _get_y_positions(
     tree: Any,
     adjust: bool = False,
     outgroup: Optional[str] = None,
-) -> Dict[Any, float]:
-    """Map clade -> y coordinate. Terminals are integers. Outgroup (if present) is set on top."""
+) -> dict[Any, float]:
+    """
+    Get y-coordinates for tree nodes.
+
+    Maps each clade to a y-coordinate for drawing. Terminal leaves are assigned integer
+    coordinates in reverse order. Internal nodes are positioned at the midpoint of their
+    children. If an outgroup is specified, it is placed at the top.
+
+    Parameters
+    ----------
+    tree : Bio.Phylo.BaseTree.Tree
+        The phylogenetic tree.
+    adjust : bool, optional
+        If True, adjust positions to account for variable numbers of children.
+    outgroup : str, optional
+        Name of outgroup clade to place at top. If provided, must match a clade name.
+
+    Returns
+    -------
+    dict[Any, float]
+        Mapping of clade objects to y-coordinates (vertical position).
+    """
     maxheight = tree.count_terminals()
     terms = [
         x for x in tree.get_terminals() if (outgroup is None or x.name != outgroup)
@@ -405,8 +438,8 @@ def _get_y_positions(
 
 
 def plot_peaks(
-    scores_subset: List[float],
-    peaks: List[int],
+    scores_subset: list[float],
+    peaks: list[int],
     k_start: int,
     k_end: Optional[int] = None,
     fig_width: int = 10,
@@ -415,6 +448,38 @@ def plot_peaks(
     log_scale_y: bool = False,
     show_plot: bool = True,
 ) -> plt.Figure:
+    """
+    Plot score peaks over a range of k values.
+
+    Creates a line plot of scores with highlighted peak points, useful for visualizing
+    the optimal clustering solutions across different k values.
+
+    Parameters
+    ----------
+    scores_subset : list[float]
+        Array of scores for each k value.
+    peaks : list[int]
+        Indices of peak positions within scores_subset.
+    k_start : int
+        Starting k value (displayed on x-axis).
+    k_end : int, optional
+        Ending k value. If None, uses the full range.
+    fig_width : int, optional
+        Figure width in inches (default: 10).
+    fig_height : int, optional
+        Figure height in inches (default: 10).
+    log_scale_x : bool, optional
+        Apply log scale to x-axis (default: False).
+    log_scale_y : bool, optional
+        Apply log scale to y-axis (default: False).
+    show_plot : bool, optional
+        Display plot immediately (default: True).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The created figure object.
+    """
     title_fontsize, label_fontsize = 16, 14
     tick_labelsize, legend_fontsize, peak_labelsize = 12, 12, 12
 
@@ -464,7 +529,7 @@ def plot_peaks(
 
 
 def plot_cluster(
-    cluster: Dict[Any, int],
+    cluster: dict[Any, int],
     tree: Any,
     *,
     cmap: str | mcolors.Colormap = "tab20",
@@ -480,10 +545,57 @@ def plot_cluster(
     show_branch_lengths: bool = False,
     marker_size: int = 50,
     outgroup: str | None = None,
-    scores: List[float] | np.ndarray | None = None,
+    scores: list[float] | np.ndarray | None = None,
     **kwargs: Any,
 ) -> plt.Figure:
-    """Plot one clustering on the tree; API kept compatible with core."""
+    """
+    Plot a single clustering solution on the phylogenetic tree.
+
+    Displays clusters as colored leaf nodes, with each cluster assigned a distinct color
+    from the colormap. Can optionally save to file and annotate with clustering scores.
+
+    Parameters
+    ----------
+    cluster : dict[Any, int]
+        Mapping of leaf clades to cluster IDs.
+    tree : Bio.Phylo.BaseTree.Tree
+        The phylogenetic tree.
+    cmap : str | matplotlib.colors.Colormap, optional
+        Colormap name or object (default: "tab20").
+    save : bool, optional
+        Save figure to file (default: False).
+    filename : str, optional
+        Output filename (default: auto-generated as "tree_k{n}.png").
+    results_dir : str, optional
+        Directory for saving results (default: current directory).
+    outlier : bool, optional
+        Highlight singleton clusters differently (currently unused).
+    hide_internal_nodes : bool, optional
+        Hide internal node markers (default: True).
+    show_terminal_labels : bool, optional
+        Display terminal labels (default: False).
+    width_scale : float, optional
+        Scale factor for figure width (default: 2.0).
+    height_scale : float, optional
+        Scale factor for figure height (default: 0.4).
+    label_func : Callable, optional
+        Function to format node labels.
+    show_branch_lengths : bool, optional
+        Display branch length labels (default: False).
+    marker_size : int, optional
+        Size of leaf node markers (default: 50).
+    outgroup : str, optional
+        Name of outgroup (displayed in grey).
+    scores : list[float] | np.ndarray, optional
+        Clustering scores for title annotation.
+    **kwargs : Any
+        Additional arguments passed to plot_tree.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The created figure object.
+    """
     if isinstance(cmap, str):
         cmap = plt.get_cmap(cmap)
 
@@ -550,19 +662,62 @@ def plot_cluster(
 def plot_multiple_clusters(
     input_df: pd.DataFrame,
     final_tree: Optional[Any] = None,
-    y_posns: Optional[Dict[str, int]] = None,
+    y_posns: Optional[dict[str, int]] = None,
     cmax: Optional[int] = None,
     tree_width_ratio: float = 1.0,
     cbar_width_ratio: float = 0.05,
-    figsize: Tuple[int, int] = (20, 10),
+    figsize: tuple[int, int] = (20, 10),
     tree_marker_size: int = 0,
     show_internal_nodes: bool = False,
     title: str = "",
     tree_label_func: Optional[Callable[[Any], str]] = None,
     cmap: str = "tab20b",
     outgroup: str = "diploid",
-    fixed_x_range: Tuple[int, int] = (10000, 50000),
+    fixed_x_range: tuple[int, int] = (10000, 50000),
 ) -> plt.Figure:
+    """
+    Plot multiple clustering solutions simultaneously.
+
+    Creates a heatmap-style visualization showing how cluster assignments change
+    across multiple clustering solutions, displayed alongside the phylogenetic tree.
+
+    Parameters
+    ----------
+    input_df : pd.DataFrame
+        DataFrame with species names as index and cluster assignments as columns,
+        where each column represents a different clustering solution.
+    final_tree : Bio.Phylo.BaseTree.Tree, optional
+        The phylogenetic tree to display alongside clusters.
+    y_posns : dict[str, int], optional
+        Pre-computed y-positions for species (default: auto-computed from tree).
+    cmax : int, optional
+        Maximum cluster ID for colormap scaling (default: auto).
+    tree_width_ratio : float, optional
+        Relative width of tree to heatmap (default: 1.0).
+    cbar_width_ratio : float, optional
+        Width of colorbar as fraction of heatmap (default: 0.05).
+    figsize : tuple[int, int], optional
+        Figure dimensions in inches (default: (20, 10)).
+    tree_marker_size : int, optional
+        Size of tree node markers (default: 0).
+    show_internal_nodes : bool, optional
+        Display internal node labels (default: False).
+    title : str, optional
+        Figure title (default: empty).
+    tree_label_func : Callable, optional
+        Function to format tree node labels.
+    cmap : str, optional
+        Colormap name for clusters (default: "tab20b").
+    outgroup : str, optional
+        Name of outgroup species (default: "diploid").
+    fixed_x_range : tuple[int, int], optional
+        Fixed x-axis range for tree (default: (10000, 50000)).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The created figure object.
+    """
     """
     Heatmap for multiple clusterings alongside a tree (optional).
     """

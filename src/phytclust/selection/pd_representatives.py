@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 import heapq
 
 from Bio.Phylo.BaseTree import Tree
 
 
 #  terminal -> path of internal nodes
-def map_terminal_to_internal(tree: Tree) -> Dict[str, List]:
-    terminal_to_internal: Dict[str, List] = {}
+def map_terminal_to_internal(tree: Tree) -> dict[str, list]:
+    terminal_to_internal: dict[str, list] = {}
 
     def traverse(clade, path):
         if not clade.clades:
@@ -24,7 +24,7 @@ def map_terminal_to_internal(tree: Tree) -> Dict[str, List]:
 
 
 # PD pick
-def _get_output_maximizing_pd(ranked_nodes: List[Tuple[str, float]]) -> Tuple[str, str]:
+def _get_output_maximizing_pd(ranked_nodes: list[Tuple[str, float]]) -> Tuple[str, str]:
     sum_distances = sum(distance for _, distance in ranked_nodes)
     node_names = [name for name, _ in ranked_nodes]
     maximizing_pd_output = f"Maximizing PD to get {sum_distances}"
@@ -32,7 +32,7 @@ def _get_output_maximizing_pd(ranked_nodes: List[Tuple[str, float]]) -> Tuple[st
     return maximizing_pd_output, chosen_leaves_output
 
 
-def maximize_pd(tree: Tree, num_species: Optional[int] = None) -> List[Tuple[str, str]]:
+def maximize_pd(tree: Tree, num_species: Optional[int] = None) -> list[Tuple[str, str]]:
     """
     Convenience wrapper: greedy selection by 'all' distances, maximizing sum.
     Returns human-readable summaries for each incremental selection set.
@@ -40,7 +40,7 @@ def maximize_pd(tree: Tree, num_species: Optional[int] = None) -> List[Tuple[str
     ranked_nodes = rank_terminal_nodes(
         tree, num_species=num_species, mode="maximize", distance_ref="all"
     )
-    outputs: List[Tuple[str, str]] = []
+    outputs: list[Tuple[str, str]] = []
     maximizing_pd_output, chosen_leaves_output = _get_output_maximizing_pd(ranked_nodes)
     outputs.append((maximizing_pd_output, chosen_leaves_output))
     return outputs
@@ -49,10 +49,10 @@ def maximize_pd(tree: Tree, num_species: Optional[int] = None) -> List[Tuple[str
 # Distances used for ranking
 def compute_species_distance(
     tree: Tree,
-    terminals: List[str],
+    terminals: list[str],
     *,
     distance_ref: str = "all",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Compute a distance measure for each terminal.
 
@@ -66,7 +66,7 @@ def compute_species_distance(
     is invoked pairwise. Consider caching paths or using a distance matrix if this
     becomes slow at scale.
     """
-    distances: Dict[str, float] = {}
+    distances: dict[str, float] = {}
 
     if distance_ref == "all":
         for i, t in enumerate(terminals):
@@ -97,7 +97,7 @@ def rank_terminal_nodes(
     *,
     mode: str = "maximize",
     distance_ref: str = "all",
-) -> List[Tuple[str, float]]:
+) -> list[Tuple[str, float]]:
     """
     Rank/Select terminals by a simple scalar "distance" measure.
 
@@ -119,7 +119,7 @@ def rank_terminal_nodes(
         queue = [(base[t], t) for t in terminals]
     heapq.heapify(queue)
 
-    selected: List[Tuple[str, float]] = []
+    selected: list[Tuple[str, float]] = []
     seen = set()
     while queue and (num_species is None or len(selected) < num_species):
         priority, terminal = heapq.heappop(queue)
@@ -135,22 +135,22 @@ def rank_terminal_nodes(
 # One representative per cluster
 def select_representative_species(
     tree: Tree,
-    clusters: Dict[str, int],
+    clusters: dict[str, int],
     *,
     mode: str = "maximize",
     distance_ref: str = "mrca",
-) -> List[str]:
+) -> list[str]:
     """
     Pick a single representative species per cluster using the chosen criterion.
 
     clusters: mapping {species_name -> cluster_id}
     """
     # group by cluster
-    by_cluster: Dict[int, List[str]] = {}
+    by_cluster: dict[int, list[str]] = {}
     for sp, cid in clusters.items():
         by_cluster.setdefault(cid, []).append(sp)
 
-    reps: List[str] = []
+    reps: list[str] = []
 
     for cid, species_list in by_cluster.items():
         if len(species_list) == 1:

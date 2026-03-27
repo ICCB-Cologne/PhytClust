@@ -198,8 +198,6 @@ class phase:
         self.status = None
 
     def __enter__(self):
-        import time
-
         self.t0 = time.perf_counter()
         if self.enabled:
             self.status = console.status(f"[bold]{self.label}…", spinner="dots")
@@ -207,8 +205,6 @@ class phase:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        import time
-
         dt = time.perf_counter() - self.t0
         if self.enabled and self.status:
             self.status.stop()
@@ -249,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for PNGs / tsv (created if needed).",
     )
     p.add_argument("--outgroup", help="Taxon to exclude from all clusters.")
+    p.add_argument(
+        "--root-taxon",
+        dest="root_taxon",
+        help="Taxon to root tree on (or 'midpoint' for midpoint rooting). If not specified, tree is assumed rooted.",
+    )
     p.add_argument(
         "--no-outlier",
         action="store_true",
@@ -339,6 +340,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Peak prominence parameter for score peak selection.",
     )
 
+    # Outlier and cluster size constraints
+    p.add_argument(
+        "--min-cluster-size",
+        type=_min_int(1),
+        default=1,
+        dest="min_cluster_size",
+        help="Minimum number of leaves allowed per cluster (hard constraint).",
+    )
+    p.add_argument(
+        "--outlier-size-threshold",
+        type=_min_int(1),
+        dest="outlier_size_threshold",
+        help="Clusters smaller than this are marked as outliers in output and penalized in DP.",
+    )
+    p.add_argument(
+        "--outlier-penalty",
+        type=float,
+        default=0.0,
+        dest="outlier_penalty",
+        help="Cost penalty for isolating a small cluster (>= 0).",
+    )
+    p.add_argument(
+        "--no-optimize-polytomies",
+        action="store_false",
+        dest="optimize_polytomies",
+        default=True,
+        help="Use greedy dummy-node polytomy resolution instead of optimal sequential convolution.",
+    )
+    p.add_argument(
+        "--no-split-zero-length",
+        action="store_true",
+        dest="no_split_zero_length",
+        default=False,
+        help="Prevent splitting zero-length branches (blocks DP from separating clades with all-zero edges).",
+    )
+
     _add_common_run_flags(p)
 
     return p
@@ -375,7 +412,16 @@ def main(argv=None) -> int:
 
     try:
         with phase(show_phase_ui, "initialization"):
-            pc = PhytClust(tree=tree, outgroup=args.outgroup)
+            pc = PhytClust(
+                tree=tree,
+                outgroup=args.outgroup,
+                root_taxon=args.root_taxon,
+                min_cluster_size=args.min_cluster_size,
+                outlier_size_threshold=args.outlier_size_threshold,
+                outlier_penalty=args.outlier_penalty,
+                optimize_polytomies=args.optimize_polytomies,
+                no_split_zero_length=args.no_split_zero_length,
+            )
         LOG.info("Tree terminals (after outgroup handling): %d", pc.num_terminals)
     except Exception as exc:
         LOG.error("Failed to initialize PhytClust: %s", exc)

@@ -43,8 +43,16 @@ def save_clusters(
         for cid in cmap.values():
             counts[cid] = counts.get(cid, 0) + 1
 
+        outlier_thresh = getattr(pc, "outlier_size_threshold", None)
         for node, cid in cmap.items():
-            mark = -1 if (outlier and counts[cid] == 1) else cid
+            if outlier_thresh is not None:
+                # Mark clusters smaller than threshold as outliers (-1)
+                mark = -1 if counts[cid] < outlier_thresh else cid
+            elif outlier:
+                # Backward-compatible: mark singletons as outliers when outlier=True
+                mark = -1 if counts[cid] == 1 else cid
+            else:
+                mark = cid
             records.append({"Node Name": node.name, "k": k_val, "Cluster ID": mark})
 
     if not records:

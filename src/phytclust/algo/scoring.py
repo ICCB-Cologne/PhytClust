@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Any
 import numpy as np
 
 from ..viz.scores_plot import plot_scores as _plot_scores
@@ -6,7 +6,7 @@ from .bins import define_bins as _define_bins
 
 
 def _single_cluster_score(
-    pc, clusters: Optional[Dict[Any, Any]] = None, k: Optional[int] = None
+    pc, clusters: Optional[dict[Any, Any]] = None, k: Optional[int] = None
 ):
     if not pc.max_k or pc.max_k <= 0:
         raise ValueError("max_k must be set and positive to compute cluster scores.")
@@ -168,7 +168,7 @@ def find_score_peaks(
     min_prominence: float = 1e-3,
     ranking_mode: str = "adjusted",
     lambda_weight=0.7,
-) -> List[int]:
+) -> list[int]:
     """Direct split of your original _find_score_peaks (unchanged logic)."""
     import numpy as np
     from scipy.signal import find_peaks

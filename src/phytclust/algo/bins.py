@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple
 import numpy as np
 
 
@@ -8,7 +8,7 @@ def define_bins(
     *,
     k_lo: int = 1,
     k_hi: Optional[int] = None,
-) -> List[Tuple[int, int]]:
+) -> list[Tuple[int, int]]:
     """Return num_bins log-spaced (inclusive) ranges covering [k_lo … k_hi]."""
     if k_hi is None:
         k_hi = pc.num_terminals

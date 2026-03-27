@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from math import ceil
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional
 
 import numpy as np
 from pathlib import Path
@@ -17,12 +17,10 @@ from ..algo.dp import (
     backtrack,
 )
 from ..algo.scoring import calculate_scores, find_score_peaks
-from ..viz.cluster_plot import plot_clusters
-from ..io.save_results import save_clusters
 
 logger = logging.getLogger("phytclust")
 
-IntMap = Dict[Any, int]
+IntMap = dict[Any, int]
 
 
 def _coerce_to_tree(obj: Any) -> Tree:
@@ -67,6 +65,9 @@ class PhytClust:
         The input tree (you can pass a Newick string/file upstream).
     outgroup : str | None, default=None
         Taxon to exclude from all clusters (treated as outgroup).
+    root_taxon : str | None, default=None
+        Taxon to root tree on, or "midpoint" for midpoint rooting. If None,
+        tree is assumed to be rooted.
     min_cluster_size : int, default=1
         Hard constraint: final clusters smaller than this are disallowed.
     k : int | None, default=None
@@ -97,10 +98,19 @@ class PhytClust:
     Outlier handling (soft constraint)
     ----------------------------------
     outlier_size_threshold : int | None, default=None
-        If set, clusters with size < threshold incur `outlier_penalty`
-        added to their cost (soft penalty, not a hard constraint).
+        If set, clusters with size < threshold incur `outlier_penalty` added
+        to their cost. This is a soft constraint — small clusters are penalized
+        but allowed if monophyly + k value require them. Use alongside
+        min_cluster_size: min_cluster_size blocks k entirely, while
+        outlier_penalty discourages (but allows) small clusters within feasible k.
     outlier_penalty : float, default=0.0
         Additive penalty for clusters smaller than outlier_size_threshold.
+
+    Zero-length cluster handling (hard constraint)
+    -----------------------------------------------
+    no_split_zero_length : bool, default=False
+        If True, prevents splitting nodes where both child edges are zero-length
+        (no evolutionary signal to justify separation).
 
     Other flags
     -----------
@@ -112,6 +122,7 @@ class PhytClust:
 
     tree: Any
     outgroup: Optional[str] = None
+    root_taxon: Optional[str] = None
     min_cluster_size: int = 1
     k: Optional[int] = None
     max_k: Optional[int] = None
@@ -128,6 +139,12 @@ class PhytClust:
     # outlier penalties
     outlier_size_threshold: Optional[int] = None
     outlier_penalty: float = 0.0
+
+    # polytomy optimization
+    optimize_polytomies: bool = True
+
+    # zero-length edge handling
+    no_split_zero_length: bool = False
 
     compute_all_clusters: bool = False
     drop_outliers: bool = False
@@ -149,8 +166,8 @@ class PhytClust:
 
         self._dp_ready = False
         self._tree_hash: Optional[int] = None
-        self.clusters: Dict[int, IntMap] = {}
-        self._last_result: Optional[Dict[str, Any]] = None
+        self.clusters: dict[int, IntMap] = {}
+        self._last_result: Optional[dict[str, Any]] = None
 
         prepare_tree(self)
 
@@ -158,7 +175,8 @@ class PhytClust:
         """tree fingerprint, used to detect modifications."""
         try:
             cur_hash = hash(self.tree.format("newick"))
-        except Exception:
+        except (ValueError, AttributeError):
+            # Fallback if tree formatting fails
             cur_hash = hash(repr(self.tree))
         return cur_hash
 
@@ -183,7 +201,7 @@ class PhytClust:
             self.max_k = max(2, ceil(self.num_terminals * self.max_k_limit))
 
     # explicit k
-    def get_clusters(self, k: int, *, verbose: bool = False) -> Dict[Any, int]:
+    def get_clusters(self, k: int, *, verbose: bool = False) -> dict[Any, int]:
         """
         Exact k-cluster partition
         """
@@ -212,7 +230,7 @@ class PhytClust:
         plot_scores: bool = True,
         compute_all_clusters: bool = False,
         lambda_weight: float = 0.7,
-    ) -> List[Dict[Any, int]]:
+    ) -> list[dict[Any, int]]:
         """
         cluster-validity index-based global peak search.
 
@@ -249,7 +267,8 @@ class PhytClust:
                 self.peaks_by_rank = [2]
                 self.k = None
                 return [cmap]
-            except Exception:
+            except (ValueError, RuntimeError):
+                # Cannot partition into k=2, return empty result
                 self.clusters = {}
                 self.peaks_by_rank = []
                 self.k = None
@@ -269,7 +288,13 @@ class PhytClust:
         self.clusters = {}
         if compute_all_clusters:
             for k_val in range(1, self.max_k + 1):
-                self.get_clusters(k_val)
+                try:
+                    self.get_clusters(k_val)
+                except RuntimeError as e:
+                    # Skip k values that can't be backtracked (infeasible with current constraints)
+                    if "Back-pointer missing" in str(e) or "fatal error" in str(e):
+                        continue
+                    raise
         else:
             for k_val in self.peaks_by_rank or []:
                 self.get_clusters(k_val)
@@ -289,7 +314,7 @@ class PhytClust:
         max_k: Optional[int] = None,
         plot_scores: bool = True,
         lambda_weight: float = 0.7,
-    ) -> List[Dict[Any, int]]:
+    ) -> list[dict[Any, int]]:
         self._ensure_dp()
 
         self.max_k = max_k or ceil(self.num_terminals * self.max_k_limit)
@@ -304,7 +329,8 @@ class PhytClust:
             # trivial fallback: just k=2 if possible
             try:
                 return [self.get_clusters(2)]
-            except Exception:
+            except (ValueError, RuntimeError):
+                # Cannot partition into k=2, return empty result
                 return []
 
         if score_k_count < 50:
@@ -353,7 +379,7 @@ class PhytClust:
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
         lambda_weight: float = 0.7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Unified high-level entry point.
 
@@ -431,7 +457,7 @@ class PhytClust:
             max_k=max_k,
             max_k_limit=max_k_limit,
             plot_scores=plot_scores,
-            compute_all_clusters=False,
+            compute_all_clusters=self.compute_all_clusters,
             lambda_weight=lambda_weight,
         )
         result = {
@@ -445,6 +471,8 @@ class PhytClust:
         return result
 
     def plot(self, results_dir: Optional[str] = None, **kwargs) -> None:
+        """Plot clustering results (requires matplotlib)."""
+        from ..viz.cluster_plot import plot_clusters
         plot_clusters(self, results_dir=results_dir, **kwargs)
 
     def save(
@@ -456,6 +484,8 @@ class PhytClust:
         n: Optional[int] = None,
         output_all: bool = False,
     ) -> None:
+        """Save clustering results to file (requires pandas)."""
+        from ..io.save_results import save_clusters
         save_clusters(
             self,
             results_dir=results_dir,

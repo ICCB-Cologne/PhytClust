@@ -1,6 +1,5 @@
 # bootstrap_stability.py
-from collections import defaultdict
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -43,7 +42,7 @@ def compute_coassoc_for_k(
     *,
     outgroup: Optional[str] = None,
     min_cluster_size: int = 1,
-    pc_kwargs: Optional[Dict[str, Any]] = None,
+    pc_kwargs: Optional[dict[str, Any]] = None,
 ):
     """
     For a given k, run PhytClust on each bootstrap tree and compute:
@@ -108,11 +107,11 @@ def stability_for_k(coassoc: np.ndarray) -> float:
 
 def choose_k_by_stability(
     trees,
-    k_values: List[int],
+    k_values: list[int],
     *,
     outgroup: Optional[str] = None,
     min_cluster_size: int = 1,
-    pc_kwargs: Optional[Dict[str, Any]] = None,
+    pc_kwargs: Optional[dict[str, Any]] = None,
 ):
     """
     For each k in k_values, compute co-association and a stability score.

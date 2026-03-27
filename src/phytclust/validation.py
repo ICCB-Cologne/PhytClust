@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import string
 from collections import deque
-from typing import Any, Optional, Tuple, Dict, List
+from typing import Any, Optional, Tuple
 
 from Bio import Phylo
 from Bio.Phylo.BaseTree import Clade, Tree
@@ -11,16 +11,87 @@ from Bio.Phylo.BaseTree import Clade, Tree
 logger = logging.getLogger(__name__)
 
 
+def root_tree_at_taxon(tree: Tree, root_taxon: Optional[str]) -> Tree:
+    """
+    Root tree at a specified taxon or use midpoint rooting if root_taxon is "midpoint".
+
+    Parameters
+    ----------
+    tree : Tree
+        The phylogenetic tree (modified in-place).
+    root_taxon : str, optional
+        Name of taxon to root on. If "midpoint", use midpoint rooting.
+        If None, tree is used as-is (assumed already rooted).
+
+    Returns
+    -------
+    tree : Tree
+        The rooted tree.
+    """
+    if root_taxon is None:
+        return tree
+
+    if root_taxon == "midpoint":
+        # Midpoint rooting: root at the edge equidistant from all leaves
+        all_depths = tree.depths()
+        terminals = tree.get_terminals()
+        if len(terminals) < 2:
+            return tree
+
+        # Find the two terminals with max distance from root
+        max_dist = 0
+        max_pair = (terminals[0], terminals[1])
+        for i, t1 in enumerate(terminals):
+            for t2 in terminals[i+1:]:
+                d1 = all_depths.get(t1, 0)
+                d2 = all_depths.get(t2, 0)
+                if abs(d1 - d2) > max_dist:
+                    max_dist = abs(d1 - d2)
+                    max_pair = (t1, t2)
+
+        # Root at the parent of the more distant terminal
+        target = max_pair[0] if all_depths.get(max_pair[0], 0) > all_depths.get(max_pair[1], 0) else max_pair[1]
+        tree.root_with_outgroup(target)
+        return tree
+
+    # Root at specified taxon
+    if not is_outgroup_valid(tree, root_taxon):
+        raise ValueError(f"Root taxon '{root_taxon}' not found in the tree.")
+    tree.root_with_outgroup(tree.find_clades(name=root_taxon).__next__())
+    return tree
+
+
 def validate_and_set_outgroup(
-    tree: Tree, outgroup: Optional[str]
+    tree: Tree, outgroup: Optional[str], optimize_polytomies: bool = True,
+    root_taxon: Optional[str] = None
 ) -> Tuple[Tree, Optional[str]]:
     """
-    Validate presence of outgroup (if provided), normalize names, resolve polytomies if needed.
-    Returns (tree, outgroup).
+    Root tree if needed, validate presence of outgroup (if provided), normalize names,
+    resolve polytomies if needed.
+
+    Parameters
+    ----------
+    tree : Tree
+        The phylogenetic tree.
+    outgroup : str, optional
+        Name of outgroup clade.
+    optimize_polytomies : bool, optional
+        If True, polytomies are kept for DP-based optimization. If False, they are
+        binarized using 0-length dummy nodes (default: True).
+    root_taxon : str, optional
+        Taxon to root on, or "midpoint" for midpoint rooting. If None, tree is used as-is.
+
+    Returns
+    -------
+    tree : Tree
+        The validated tree (modified in-place).
+    outgroup : str or None
+        The outgroup name (unchanged).
     """
+    root_tree_at_taxon(tree, root_taxon)
     if outgroup and not is_outgroup_valid(tree, outgroup):
         raise ValueError(f"Outgroup '{outgroup}' not found in the tree.")
-    validate_tree(tree, outgroup)
+    validate_tree(tree, outgroup, optimize_polytomies=optimize_polytomies)
     rename_nodes(tree, outgroup)
     ensure_branch_lengths(tree)
     return tree, outgroup
@@ -28,7 +99,7 @@ def validate_and_set_outgroup(
 
 def prune_outgroup(
     tree: Tree, outgroup: Optional[str]
-) -> Tuple[Dict[Any, List[Any]], Dict[Any, int]]:
+) -> Tuple[dict[Any, list[Any]], dict[Any, int]]:
     """
     Return mappings after pruning the outgroup from a COPY of the tree.
     If the outgroup is at root with two children, we keep the sibling as the new root.
@@ -67,9 +138,20 @@ def is_outgroup_valid(tree: Tree, outgroup: str) -> bool:
     return next(tree.find_clades(name=outgroup), None) is not None
 
 
-def validate_tree(tree: Tree, outgroup: Optional[str] = None) -> None:
+def validate_tree(tree: Tree, outgroup: Optional[str] = None,
+                  optimize_polytomies: bool = True) -> None:
     """
     Ensure binary branching except possibly at the outgroup, and collapse single-child chains.
+
+    Parameters
+    ----------
+    tree : Tree
+        The phylogenetic tree (modified in-place).
+    outgroup : str, optional
+        Name of outgroup clade.
+    optimize_polytomies : bool, optional
+        If True, polytomies are kept as-is for the DP to handle directly via convolution.
+        If False, polytomies are binarized using 0-length dummy nodes (default: True).
     """
     invalid_nodes = []
     for node in tree.get_nonterminals():
@@ -89,19 +171,25 @@ def validate_tree(tree: Tree, outgroup: Optional[str] = None) -> None:
                 ]
             )
         )
-        logger.info(
-            "Resolving polytomies at nodes: "
-            + ", ".join(
-                f"{getattr(node, 'name', '?')} (children={len(node.clades)})"
-                for node in invalid_nodes
-            )
-        )
-        logger.info(
-            "These will be broken into binary using 0-length dummy nodes; "
-            "dummy nodes are excluded as cluster split points."
-        )
         merge_single_child_clades(tree)
-        resolve_polytomies(tree)
+        if optimize_polytomies:
+            logger.info(
+                "Keeping polytomies for DP-based sequential convolution "
+                "(optimize_polytomies=True)."
+            )
+        else:
+            logger.info(
+                "Resolving polytomies at nodes: "
+                + ", ".join(
+                    f"{getattr(node, 'name', '?')} (children={len(node.clades)})"
+                    for node in invalid_nodes
+                )
+            )
+            logger.info(
+                "These will be broken into binary using 0-length dummy nodes; "
+                "dummy nodes are excluded as cluster split points."
+            )
+            resolve_polytomies(tree)
 
 
 def rename_nodes(tree: Tree, outgroup: Optional[str] = None) -> None:

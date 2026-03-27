@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator, LogFormatter, MaxNLocator
@@ -9,7 +9,7 @@ def plot_scores(
     scores_subset: Optional[np.ndarray] = None,
     k_start: int = 1,
     k_end: Optional[int] = None,
-    peaks: Optional[List[int]] = None,
+    peaks: Optional[list[int]] = None,
     resolution_on: bool = False,
     num_bins: int = 3,
     fig_width: int = 18,
@@ -128,7 +128,6 @@ def plot_scores(
                 )
 
             ax.set_xticks(mid_pts)
-            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
             import matplotlib.ticker as mticker
 
             ax.xaxis.set_major_locator(mticker.FixedLocator(mid_pts))
@@ -145,7 +144,6 @@ def plot_scores(
         if resolution_on:
             ax.xaxis.set_major_locator(mticker.FixedLocator(mid_pts))
             ax.xaxis.set_minor_locator(mticker.NullLocator())
-            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
         else:
             ax.xaxis.set_major_locator(LogLocator(base=10.0, numticks=10))
             ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs="auto", numticks=10))
@@ -153,18 +151,14 @@ def plot_scores(
             for label in ax.get_xticklabels():
                 label.set_rotation(45)
                 label.set_ha("right")
-                # label.set_fontsize(tick_labelsize)
         x_label_str = "No. of Clusters (log)"
 
     elif x_axis_mode == "linear":
         ax.set_xscale("linear")
         if resolution_on:
             ax.set_xticks(mid_pts)
-            # ax.set_xticklabels(xtick_labels, fontsize=tick_labelsize)
         else:
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-            # for label in ax.get_xticklabels():
-            #     label.set_fontsize(tick_labelsize)
         x_label_str = "No. of Clusters"
 
     else:
@@ -175,8 +169,6 @@ def plot_scores(
         y_label_str = "Scores (log)"
     else:
         y_label_str = "Scores"
-    # for label in ax.get_yticklabels():
-    #     label.set_fontsize(tick_labelsize)
 
     ax.tick_params(axis="both", which="both", labelsize=tick_labelsize)
     ax.set_xlabel(x_label_str, fontsize=axis_label_fontsize)
