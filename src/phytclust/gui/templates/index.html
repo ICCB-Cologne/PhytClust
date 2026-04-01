@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhytClust</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- D3 v6 -->
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════
+     TOP NAVIGATION
+     ═══════════════════════════════════════ -->
+<nav class="top-nav">
+  <div class="nav-brand">
+    <img src="/static/phytclust_logo_colour.png" alt="PhytClust">
+    <span class="brand-text">PhytClust</span>
+  </div>
+  <div class="nav-actions">
+    <button id="btn-about" class="nav-btn" type="button">About</button>
+    <button id="btn-help" class="nav-btn" type="button">Help</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════
+     APP LAYOUT (sidebar + main)
+     ═══════════════════════════════════════ -->
+<div class="app-layout">
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar">
+
+    <!-- Data Input -->
+    <div class="sidebar-section">
+      <div class="section-title">Data Input</div>
+
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept=".new,.nwk,.newick,.txt,.tree">
+        <span class="upload-icon">&#x1F4C2;</span>
+        <div class="upload-text">Drop Newick file here or click to browse</div>
+        <div class="upload-hint">.nwk .newick .new .txt .tree</div>
+      </div>
+      <div class="file-name-display" id="file-name" style="display:none;">
+        <span class="file-badge" id="file-badge"></span>
+      </div>
+
+      <div class="newick-area">
+        <label for="newick-input">Or paste Newick string</label>
+        <textarea id="newick-input" rows="3" placeholder="(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"></textarea>
+      </div>
+    </div>
+
+    <!-- Clustering Mode -->
+    <div class="sidebar-section">
+      <div class="section-title">Clustering Mode</div>
+      <div class="mode-selector" id="mode-selector">
+        <button class="mode-btn active" data-mode="global" type="button">Auto</button>
+        <button class="mode-btn" data-mode="k" type="button">Fixed k</button>
+        <button class="mode-btn" data-mode="resolution" type="button">Multi-res</button>
+      </div>
+
+      <!-- Mode-specific params -->
+      <div id="mode-params" style="margin-top:14px;">
+        <!-- Fixed k -->
+        <div class="form-group" id="param-k" style="display:none;">
+          <label for="extra-k">Number of clusters (k)</label>
+          <input type="number" min="2" id="extra-k" class="form-input" placeholder="e.g. 5">
+          <div class="hint">Exact k-way partition</div>
+        </div>
+
+        <!-- Top N (Auto/Resolution) -->
+        <div class="form-group" id="param-topn">
+          <label for="extra-topn">Top N peaks</label>
+          <input type="number" min="1" id="extra-topn" class="form-input" placeholder="1">
+          <div class="hint">Number of optimal k values to return</div>
+        </div>
+
+        <!-- Bins (Resolution only) -->
+        <div class="form-group" id="param-bins" style="display:none;">
+          <label for="extra-bins">Number of bins</label>
+          <input type="number" min="2" id="extra-bins" class="form-input" placeholder="3">
+          <div class="hint">Log-spaced bins for multi-resolution analysis</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Options -->
+    <div class="sidebar-section">
+      <button class="collapse-trigger" id="extra-params-toggle" type="button"
+              data-bs-toggle="collapse" data-target="extra-params" aria-expanded="false">
+        <span class="chevron" id="extra-params-icon">&#x25B6;</span>
+        Advanced Options
+      </button>
+
+      <div id="extra-params" style="display:none; margin-top:12px;">
+        <div class="form-group">
+          <label for="extra-outgroup">Outgroup</label>
+          <input type="text" id="extra-outgroup" class="form-input" placeholder="Taxon name to exclude">
+        </div>
+
+        <div class="form-group">
+          <label for="extra-root-taxon">Root taxon</label>
+          <input type="text" id="extra-root-taxon" class="form-input" placeholder='Taxon name or "midpoint"'>
+          <div class="hint">Root tree on this taxon, or use "midpoint"</div>
+        </div>
+
+        <div class="form-group">
+          <label for="extra-maxk">Max k</label>
+          <input type="number" min="4" id="extra-maxk" class="form-input" placeholder="e.g. 100">
+          <div class="hint">Upper bound for number of clusters</div>
+        </div>
+
+        <div class="form-group">
+          <label for="extra-maxklimit">Max k fraction</label>
+          <input type="number" step="0.01" min="0.01" max="1" id="extra-maxklimit" class="form-input" placeholder="0.9">
+          <div class="hint">max_k = ceil(fraction &times; num_leaves)</div>
+        </div>
+
+        <div class="form-group">
+          <label for="extra-lambda">Lambda weight</label>
+          <input type="number" step="0.05" min="0" max="1" id="extra-lambda" class="form-input" placeholder="0.7">
+          <div class="hint">Balance prominence vs. score in peak selection</div>
+        </div>
+
+        <div class="form-group">
+          <label for="extra-min-cluster-size">Min cluster size</label>
+          <input type="number" min="1" id="extra-min-cluster-size" class="form-input" placeholder="1">
+          <div class="hint">Hard minimum size constraint per cluster</div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Mark outliers</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="extra-outlier" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="hint" style="margin-top:-4px;">Label small clusters as outliers (-1)</div>
+
+        <div class="toggle-row" style="margin-top:8px;">
+          <span class="toggle-label">Compute all clusters</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="extra-compute-all">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="hint" style="margin-top:-4px;">Cache clusters for every k (enables cycling)</div>
+
+        <!-- Hidden checkbox for resolution mode (wired by JS) -->
+        <input type="checkbox" id="extra-resolution" style="display:none;">
+
+        <div style="margin-top:16px;">
+          <button id="btn-extra-reset" class="btn-ghost danger" type="button">Reset to defaults</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="sidebar-section" style="margin-top:auto; position:sticky; bottom:0; background:var(--pc-surface); z-index:2; border-top:1px solid var(--pc-border);">
+      <button id="btn-run" class="btn-primary" type="button">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><polygon points="3,1 13,8 3,15"/></svg>
+        Run PhytClust
+      </button>
+
+      <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+        <div class="save-group" style="flex:1;">
+          <button id="btn-save" class="btn-secondary" type="button" style="width:100%;">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14h12M8 2v9M5 8l3 3 3-3"/></svg>
+            Export
+          </button>
+          <div class="save-dropdown" id="save-dropdown">
+            <button class="dropdown-item" data-save-type="tsv">Download TSV</button>
+            <button class="dropdown-item" data-save-type="tree_plot">Download tree (SVG)</button>
+            <button class="dropdown-item" data-save-type="k_plot">Download scores plot (SVG)</button>
+            <button class="dropdown-item" data-save-type="save_server">Save all to server</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:10px; margin-bottom:0;">
+        <label for="output-dir" style="font-size:11px;">Server output directory</label>
+        <input type="text" id="output-dir" class="form-input" placeholder="results" style="height:30px; font-size:12px;">
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─── MAIN CONTENT ─── -->
+  <div class="main-content">
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="viewer" id="viewer-tab" type="button">Clustering</button>
+      <button class="tab-btn" data-tab="viewer-optimal-k" id="viewer-optimal-k-tab" type="button">Optimal k</button>
+      <button class="tab-btn" data-tab="debug" id="debug-tab" type="button">JSON</button>
+      <div class="tab-spacer"></div>
+
+      <!-- Cluster selector (shown when multiple results) -->
+      <div class="cluster-selector" id="cluster-select-controls">
+        <label for="cluster-select">Result:</label>
+        <select id="cluster-select"></select>
+        <span class="badge" id="cluster-select-label">1 / 1</span>
+        <button id="cluster-view-toggle" class="btn-ghost" type="button" style="display:none; margin-left:6px; font-size:11px; padding:2px 8px;">Show all k</button>
+      </div>
+    </div>
+
+    <!-- Toolbar (Tree tab controls) -->
+    <div class="toolbar" id="tree-toolbar">
+      <div class="toolbar-group">
+        <label for="layout-mode">Layout</label>
+        <select id="layout-mode">
+          <option value="rectangular">Rectangular</option>
+          <option value="cladogram">Cladogram</option>
+          <option value="circular">Circular</option>
+        </select>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <label for="palette-select">Palette</label>
+        <select id="palette-select">
+          <option value="default">Default</option>
+          <option value="pastel">Pastel</option>
+          <option value="vivid">Vivid</option>
+          <option value="dark">Dark</option>
+          <option value="custom">Custom&hellip;</option>
+        </select>
+        <span id="palette-preview" class="palette-preview"></span>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <label for="color-mode">Color</label>
+        <select id="color-mode">
+          <option value="bars">Side bars</option>
+          <option value="nodes">Nodes</option>
+        </select>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <label for="node-size">Node</label>
+        <input type="number" id="node-size" min="1" max="10" step="0.5" value="3.0" style="width:50px;">
+      </div>
+
+      <div class="toolbar-group">
+        <label for="label-size">Label</label>
+        <input type="number" id="label-size" min="6" max="18" value="9" style="width:50px;">
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <div class="slider-control">
+          <span class="slider-label">W</span>
+          <input type="range" id="tree-width-scale" min="0.1" max="3.0" step="0.1" value="1.0">
+        </div>
+        <div class="slider-control">
+          <span class="slider-label">H</span>
+          <input type="range" id="tree-height-scale" min="0.1" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <label class="check-row">
+        <input type="checkbox" id="show-leaf-names" checked> Leaves
+      </label>
+      <label class="check-row">
+        <input type="checkbox" id="show-internal-names"> Internal
+      </label>
+
+      <div class="toolbar-divider"></div>
+
+      <button id="btn-reset-view" class="btn-icon" type="button" title="Reset view">&#x21BA;</button>
+      <button id="btn-copy-tree" class="btn-icon" type="button" title="Copy tree SVG">&#x1F4CB;</button>
+    </div>
+
+    <!-- Optimal k toolbar (hidden by default) -->
+    <div class="toolbar" id="optk-toolbar" style="display:none;">
+      <div class="toolbar-group">
+        <label for="axis-mode">X-axis</label>
+        <select id="axis-mode">
+          <option value="log">Log scale</option>
+          <option value="normal">Linear</option>
+        </select>
+      </div>
+      <span class="text-sm text-muted">Scores shown for k &ge; 2</span>
+      <div style="flex:1;"></div>
+      <button id="btn-copy-maxk" class="btn-icon" type="button" title="Copy plot SVG">&#x1F4CB;</button>
+    </div>
+
+    <!-- Visualization Panels -->
+    <div class="viz-container">
+      <div class="viz-panel active" id="viewer" role="tabpanel">
+        <div id="tree_display"></div>
+      </div>
+
+      <div class="viz-panel" id="viewer-optimal-k" role="tabpanel">
+        <div id="optimalk_plot"></div>
+      </div>
+
+      <div class="viz-panel json-panel" id="debug" role="tabpanel">
+        <pre id="result">(waiting for run...)</pre>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-message">Ready</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════
+     ABOUT MODAL
+     ═══════════════════════════════════════ -->
+<div class="modal-backdrop-custom" id="aboutBackdrop"></div>
+<div class="modal-custom" id="aboutModal">
+  <div class="modal-header-custom">
+    <h3>About PhytClust</h3>
+    <button id="btn-about-close" class="btn-icon" type="button">&times;</button>
+  </div>
+  <div class="modal-body-custom">
+    <p>
+      <strong>PhytClust</strong> is a dynamic-programming-based algorithm for optimal phylogenetic tree clustering.
+      It uses the CalBow scoring index with prominence-based peak detection to find the best number of clusters.
+    </p>
+    <p style="margin-top:12px;">
+      Please cite this repository if you use the algorithm in your work:<br>
+      K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz,
+      <strong>PhytClust</strong> (2025).<br>
+      <a href="https://bitbucket.org/schwarzlab/phytclust" target="_blank" rel="noopener">
+        https://bitbucket.org/schwarzlab/phytclust
+      </a>
+    </p>
+    <hr style="border:none; border-top:1px solid var(--pc-border); margin:16px 0;">
+    <p style="margin:0;"><strong>Acknowledgements:</strong> C. Robens, L. Godfrey, T. L. Kaufmann.</p>
+  </div>
+  <div class="modal-footer-custom">
+    <button id="btn-about-close2" class="btn-secondary" type="button">Close</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     HELP SIDEBAR
+     ═══════════════════════════════════════ -->
+<div class="help-sidebar" id="help-sidebar">
+  <div class="help-header">
+    <h4>Help</h4>
+    <button id="btn-help-close" class="btn-icon" type="button">&times;</button>
+  </div>
+  <div class="help-body">
+    <h5>Input format</h5>
+    <ul>
+      <li>Trees must be in <strong>Newick</strong> format.</li>
+      <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
+      <li>Accepted extensions: <code>.nwk</code> <code>.newick</code> <code>.new</code> <code>.txt</code> <code>.tree</code></li>
+    </ul>
+
+    <h5>Clustering modes</h5>
+    <ul>
+      <li><strong>Auto</strong> &mdash; Finds optimal k using CalBow score peak detection.</li>
+      <li><strong>Fixed k</strong> &mdash; Partitions the tree into exactly k clusters.</li>
+      <li><strong>Multi-resolution</strong> &mdash; Finds one optimal k per log-spaced bin.</li>
+    </ul>
+
+    <h5>How to use</h5>
+    <ol>
+      <li>Upload a Newick file or paste a tree string.</li>
+      <li>Select clustering mode and set parameters.</li>
+      <li>Click <strong>Run PhytClust</strong>.</li>
+      <li>Explore results in the Clustering, Optimal k, or JSON tabs.</li>
+      <li>Use Export to download results.</li>
+    </ol>
+
+    <h5>Tree interaction</h5>
+    <ul>
+      <li>Click internal nodes to collapse/expand subtrees.</li>
+      <li>Scroll to zoom, drag to pan.</li>
+      <li>Use the toolbar to change layout, colors, and labels.</li>
+    </ul>
+
+    <h5>Quick start</h5>
+    <p style="font-size:13px; color:var(--pc-text-secondary);">Load an example tree to see PhytClust in action:</p>
+    <button id="btn-help-load-example" class="btn-primary example-btn" type="button">Load example tree</button>
+  </div>
+</div>
+
+<!-- Node context menu -->
+<div id="node-context-menu" class="node-context-menu" style="display:none;">
+  <button id="ctx-rename" type="button">Rename node</button>
+  <button id="ctx-highlight" type="button">Toggle highlight</button>
+  <button id="ctx-grow" type="button">Increase size</button>
+  <button id="ctx-shrink" type="button">Decrease size</button>
+  <button id="ctx-reset" type="button">Reset node</button>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Hidden loading indicator (referenced by JS) -->
+<div id="app-loading" style="display:none;"></div>
+
+<!-- FOOTER -->
+<footer class="app-footer">
+  <div class="footer-inner">
+    <div class="footer-left">
+      <a href="https://iccb-cologne.org/home" target="_blank">
+        <img src="/static/ICCB_logo.png" alt="ICCB Logo">
+      </a>
+    </div>
+    <div class="footer-center">
+      <p>Please cite this repository if you use the algorithm in your work:<br>
+        K. Ganesan, E. Billard, T.L. Kaufmann, C. B Strange, M. C. Cwikla, A. Altenhoff, C. Dessimoz, R.F. Schwarz, PhytClust, (2025)<br>
+        GitHub: <a href="https://github.com/schwarzlab/phytclust" target="_blank">https://github.com/schwarzlab/phytclust</a></p>
+    </div>
+  </div>
+</footer>
+
+<!-- App Scripts -->
+<script src="/static/tree_viz.js"></script>
+
+</body>
+</html>
