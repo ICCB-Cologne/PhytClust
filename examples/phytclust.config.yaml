@@ -1,0 +1,46 @@
+# Plot/Save config (optional)
+runtime:
+  plot:
+    cluster:
+      width_scale: 2.5
+      # Lower value = shorter figure (increase if labels overlap)
+      height_scale: 0.30
+      # Node marker size
+      marker_size: 40
+      # Hide numbers on branches by default
+      show_branch_lengths: false
+      # Hide internal nodes' labels
+      hide_internal_nodes: true
+
+    scores:
+      # Make k>=3 (unsmoothed) the main scores plot
+      prefer_unsmoothed_primary: true
+      # Keep only one score plot by default
+      show_secondary_score_plot: false
+      # Clamp negatives to zero on y-axis (set false to allow symlog negatives)
+      clamp_negative_to_zero: true
+      fig_width: 18
+      fig_height: 10
+      x_axis_mode: "log"
+      # Helps when k=2 is really high and dominates the plot (set false to use linear y-axis)
+      log_scale_y: true
+      title_fontsize: 50
+      axis_label_fontsize: 35
+      tick_labelsize: 30
+      peak_labelsize: 50
+
+  save:
+    csv_name: "phytclust_results.csv"
+    # Mark singletons as -1 in CSV (treat as outliers)
+    outlier: true
+
+# Algorithm tuning (optional)
+algorithm:
+  peak:
+    # weight assigned prominence vs absolute score when ranking peaks
+    lambda_weight: 0.7
+    # "raw" only takes absolute value into account, "adjusted" also considers prominence
+    ranking_mode: "adjusted"
+    min_k: 2
+    # For resolution bins with no detected peaks: "none" or "max_score"
+    resolution_fallback_mode: "none"
