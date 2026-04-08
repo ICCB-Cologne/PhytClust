@@ -11,6 +11,8 @@ from typing import Any
 
 from Bio import Phylo
 from ..algo.core import PhytClust
+from ..config import OutlierConfig, PeakConfig, build_runtime_config
+from ..exceptions import ConfigurationError
 from pathlib import Path
 from importlib import resources
 
@@ -43,7 +45,7 @@ def print_banner():
     try:
         text = (
             resources.files("phytclust")
-            .joinpath("ascii_logo.txt")
+            .joinpath("assets", "ascii_logo.txt")
             .read_text(encoding="utf-8")
         )
         print(text)
@@ -105,9 +107,64 @@ def _load_config(path: pathlib.Path | None) -> dict:
         return {}
 
 
+def _runtime_overrides_from_cfg(raw_cfg: dict[str, Any]) -> dict[str, Any]:
+    """Map user config file keys to RuntimeConfig overrides."""
+    out: dict[str, Any] = {}
+
+    plot_block = dict(raw_cfg.get("plot") or {})
+    scores_block = dict(raw_cfg.get("scores_plot") or {})
+    save_block = dict(raw_cfg.get("save") or {})
+
+    if plot_block:
+        cluster = {
+            "width_scale": plot_block.get("width_scale"),
+            "height_scale": plot_block.get("height_scale"),
+            "marker_size": plot_block.get("marker_size"),
+            "show_branch_lengths": plot_block.get("show_branch_lengths"),
+            "hide_internal_nodes": plot_block.get("hide_internal_nodes"),
+        }
+        cluster = {k: v for k, v in cluster.items() if v is not None}
+        if cluster:
+            out.setdefault("plot", {})["cluster"] = cluster
+
+    if scores_block:
+        out.setdefault("plot", {})["scores"] = dict(scores_block)
+
+    if save_block:
+        save_map = {
+            "csv_name": save_block.get("csv_name"),
+            "outlier": save_block.get("outlier"),
+        }
+        save_map = {k: v for k, v in save_map.items() if v is not None}
+        if save_map:
+            out["save"] = save_map
+
+    # New-style nested runtime overrides can be passed directly.
+    runtime_block = raw_cfg.get("runtime")
+    if isinstance(runtime_block, dict):
+        out.update(runtime_block)
+
+    return out
+
+
+def _peak_config_from_cfg(raw_cfg: dict[str, Any], lambda_weight: float) -> PeakConfig:
+    """Build PeakConfig from CLI lambda override + optional config file values."""
+    peak_cfg = PeakConfig(lambda_weight=lambda_weight)
+    peak_block = raw_cfg.get("peak")
+    if not isinstance(peak_block, dict):
+        peak_block = (raw_cfg.get("algorithm") or {}).get("peak")
+    if not isinstance(peak_block, dict):
+        return peak_cfg
+
+    for key, val in peak_block.items():
+        if hasattr(peak_cfg, key):
+            setattr(peak_cfg, key, val)
+    return peak_cfg
+
+
 def _add_common_run_flags(sp: argparse.ArgumentParser) -> None:
     sp.add_argument(
-        "--plot/--no-plot",
+        "--plot",
         dest="plot",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -355,11 +412,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Clusters smaller than this are marked as outliers in output and penalized in DP.",
     )
     p.add_argument(
-        "--outlier-penalty",
-        type=float,
-        default=0.0,
-        dest="outlier_penalty",
-        help="Cost penalty for isolating a small cluster (>= 0).",
+        "--prefer-fewer-outliers",
+        action="store_true",
+        dest="prefer_fewer_outliers",
+        default=False,
+        help="At fixed k, minimise outlier count first, then break ties by raw cost.",
     )
     p.add_argument(
         "--no-optimize-polytomies",
@@ -367,6 +424,19 @@ def build_parser() -> argparse.ArgumentParser:
         dest="optimize_polytomies",
         default=True,
         help="Use greedy dummy-node polytomy resolution instead of optimal sequential convolution.",
+    )
+    p.add_argument(
+        "--polytomy-mode",
+        choices=("hard", "soft"),
+        default=None,
+        help="Polytomy DP mode: hard forbids cross-child subset merges; soft allows subset merges.",
+    )
+    p.add_argument(
+        "--soft-polytomy-max-degree",
+        type=_min_int(2),
+        default=None,
+        dest="soft_polytomy_max_degree",
+        help="Maximum polytomy degree allowed in soft mode (guardrail for exponential complexity).",
     )
     p.add_argument(
         "--no-split-zero-length",
@@ -391,8 +461,28 @@ def main(argv=None) -> int:
     _emit_header(args)
 
     cfg = _load_config(args.config)
-    plot_cfg = dict(cfg.get("plot") or {})
-    save_cfg = dict(cfg.get("save") or {})
+    runtime_cfg = build_runtime_config(_runtime_overrides_from_cfg(cfg))
+    algorithm_cfg = (
+        cfg.get("algorithm") if isinstance(cfg.get("algorithm"), dict) else {}
+    )
+
+    polytomy_mode = args.polytomy_mode or algorithm_cfg.get("polytomy_mode", "hard")
+    soft_polytomy_max_degree = (
+        args.soft_polytomy_max_degree
+        if args.soft_polytomy_max_degree is not None
+        else int(algorithm_cfg.get("soft_polytomy_max_degree", 18))
+    )
+
+    plot_cfg = {
+        "width_scale": runtime_cfg.plot.cluster.width_scale,
+        "height_scale": runtime_cfg.plot.cluster.height_scale,
+        "marker_size": runtime_cfg.plot.cluster.marker_size,
+        "show_branch_lengths": runtime_cfg.plot.cluster.show_branch_lengths,
+        "hide_internal_nodes": runtime_cfg.plot.cluster.hide_internal_nodes,
+    }
+
+    save_default_filename = runtime_cfg.save.csv_name
+    save_default_outlier = runtime_cfg.save.outlier
 
     t0_total = time.perf_counter()
 
@@ -412,15 +502,21 @@ def main(argv=None) -> int:
 
     try:
         with phase(show_phase_ui, "initialization"):
+            outlier_cfg = OutlierConfig(
+                size_threshold=args.outlier_size_threshold,
+                prefer_fewer=args.prefer_fewer_outliers,
+            )
             pc = PhytClust(
                 tree=tree,
                 outgroup=args.outgroup,
                 root_taxon=args.root_taxon,
                 min_cluster_size=args.min_cluster_size,
-                outlier_size_threshold=args.outlier_size_threshold,
-                outlier_penalty=args.outlier_penalty,
+                outlier=outlier_cfg,
                 optimize_polytomies=args.optimize_polytomies,
+                polytomy_mode=polytomy_mode,
+                soft_polytomy_max_degree=soft_polytomy_max_degree,
                 no_split_zero_length=args.no_split_zero_length,
+                runtime_config=runtime_cfg,
             )
         LOG.info("Tree terminals (after outgroup handling): %d", pc.num_terminals)
     except Exception as exc:
@@ -437,6 +533,8 @@ def main(argv=None) -> int:
                 args.max_k or "auto",
             )
 
+            peak_cfg = _peak_config_from_cfg(cfg, args.lambda_weight)
+            pc.peak_config = peak_cfg
             run_kwargs = dict(
                 k=args.k,
                 top_n=args.top_n,
@@ -445,7 +543,7 @@ def main(argv=None) -> int:
                 max_k=args.max_k,
                 max_k_limit=args.max_k_limit,
                 plot_scores=args.plot,
-                lambda_weight=args.lambda_weight,
+                peak_config=peak_cfg,
             )
 
             t0_run = time.perf_counter()
@@ -464,7 +562,7 @@ def main(argv=None) -> int:
             if ks:
                 LOG.info("Selected k: %s", ks if len(ks) > 1 else ks[0])
 
-    except ValueError as e:
+    except (ConfigurationError, ValueError) as e:
         LOG.error("Clustering failed: %s", e)
         sys.exit(1)
     except Exception as exc:
@@ -490,10 +588,13 @@ def main(argv=None) -> int:
             with phase(show_phase_ui, "write tsv"):
                 pc.save(
                     results_dir=args.out_dir,
-                    filename=args.tsv_name,
-                    outlier=not args.no_outlier,
+                    filename=(
+                        save_default_filename
+                        if args.tsv_name == "phytclust_results.tsv"
+                        else args.tsv_name
+                    ),
+                    outlier=(False if args.no_outlier else save_default_outlier),
                     output_all=args.save_all_k,
-                    **save_cfg,
                 )
         except Exception as exc:
             LOG.error("Failed to write tsv: %s", exc)

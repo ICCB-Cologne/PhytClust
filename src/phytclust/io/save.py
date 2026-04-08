@@ -1,28 +1,29 @@
 import os
+import logging
+from collections import Counter
 from typing import Any, Optional
+
 import pandas as pd
 
 from ..algo.dp import cluster_map
+
+logger = logging.getLogger(__name__)
 
 
 def save_clusters(
     pc,
     results_dir: str,
     top_n: int = 1,
-    filename: str = "phyclust_results.csv",
+    filename: str = "phytclust_results.tsv",
     outlier: bool = True,
     n: Optional[int] = None,
     output_all: bool = False,
-) -> None:
-    """
-    Write out cluster assignments:
-    - Save score plot if available.
-    - Save specific k(s) depending on flags.
+) -> Optional[str]:
+    """Write cluster assignments to a TSV file.
+
+    Returns the path to the written file, or None if nothing was saved.
     """
     os.makedirs(results_dir, exist_ok=True)
-
-    if getattr(pc, "plot_of_scores", None) is not None:
-        pc.plot_of_scores.savefig(os.path.join(results_dir, "scores.png"))
 
     if pc.k is not None:
         ks = [pc.k]
@@ -33,43 +34,49 @@ def save_clusters(
     else:
         ks = (pc.peaks_by_rank or [])[:top_n]
 
+    outlier_thresh = pc.outlier.size_threshold
     records: list[dict[str, Any]] = []
 
     for k_val in ks:
         cmap = cluster_map(pc, k_val)
         if cmap is None:
             continue
-        counts: dict[int, int] = {}
-        for cid in cmap.values():
-            counts[cid] = counts.get(cid, 0) + 1
+        counts = Counter(cmap.values())
 
-        outlier_thresh = getattr(pc, "outlier_size_threshold", None)
         for node, cid in cmap.items():
             if outlier_thresh is not None:
-                # Mark clusters smaller than threshold as outliers (-1)
                 mark = -1 if counts[cid] < outlier_thresh else cid
             elif outlier:
-                # Backward-compatible: mark singletons as outliers when outlier=True
                 mark = -1 if counts[cid] == 1 else cid
             else:
                 mark = cid
-            records.append({"Node Name": node.name, "k": k_val, "Cluster ID": mark})
+            records.append({
+                "Node Name": node.name,
+                "k": k_val,
+                "Cluster ID": mark,
+            })
 
     if not records:
-        print("No clusters to save.")
-        return
+        logger.warning("No clusters to save.")
+        return None
 
     df = pd.DataFrame(records)
     pivot = df.pivot_table(
-        index="Node Name", columns="k", values="Cluster ID", aggfunc="first"
+        index="Node Name", columns="k",
+        values="Cluster ID", aggfunc="first",
     )
     pivot.columns = [f"clusters_k{col}" for col in pivot.columns]
     pivot.reset_index(inplace=True)
-    pivot.to_csv(os.path.join(results_dir, filename), index=False, sep="\t")
-    print(f"Wrote clusters to {filename}")
+
+    out_path = os.path.join(results_dir, filename)
+    pivot.to_csv(out_path, index=False, sep="\t")
+    logger.info("Wrote clusters to %s", out_path)
 
     if getattr(pc, "peaks_by_rank", None):
-        with open(os.path.join(results_dir, "peaks_by_rank.txt"), "w") as fh:
+        peaks_path = os.path.join(results_dir, "peaks_by_rank.txt")
+        with open(peaks_path, "w") as fh:
             for rank, k_val in enumerate(pc.peaks_by_rank, 1):
                 fh.write(f"Rank {rank}: {k_val} clusters\n")
-        print("Wrote peaks_by_rank.txt")
+        logger.info("Wrote peaks_by_rank.txt")
+
+    return out_path

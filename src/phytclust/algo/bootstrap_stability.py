@@ -1,39 +1,60 @@
-# bootstrap_stability.py
+"""Bootstrap co-association stability analysis."""
+
 from typing import Any, Optional
 
 import numpy as np
 
-from .core import PhytClust  # your class
+from .core import PhytClust
+from ..exceptions import DataError
 
 
 def _taxon_order(trees):
-    """
-    Get a sorted, consistent list of taxa present in *all* trees (intersection).
-    You can choose union instead if you want, but intersection is safer.
-    """
-    sets = []
-    for t in trees:
-        leaves = [term.name for term in t.get_terminals()]
-        sets.append(set(leaves))
-
+    """Sorted list of taxa present in *all* trees (intersection)."""
+    sets = [
+        {term.name for term in t.get_terminals()}
+        for t in trees
+    ]
     common = set.intersection(*sets)
     if not common:
-        raise ValueError("No common taxa across bootstrap trees.")
-
+        raise DataError("No common taxa across bootstrap trees.")
     return sorted(common)
 
 
 def _labels_from_cmap(cmap, taxa, missing_label: int = -1):
-    """
-    Convert {leaf_obj -> cluster_id} into a label vector aligned with `taxa` list.
-    Assumes cmap keys are leaf objects with .name.
-    """
+    """Convert {leaf_obj -> cluster_id} into a label vector aligned with `taxa`."""
     name_to_cluster = {leaf.name: cid for leaf, cid in cmap.items()}
     labels = np.full(len(taxa), missing_label, dtype=int)
     for i, name in enumerate(taxa):
         if name in name_to_cluster:
             labels[i] = name_to_cluster[name]
     return labels
+
+
+def _coassoc_from_labels(labels: np.ndarray) -> np.ndarray:
+    """Compute co-association matrix from a (B, N) label array.
+
+    For each pair (i, j), the co-association is the fraction of bootstrap
+    replicates where both taxa were assigned to the same cluster (ignoring
+    replicates where either taxon has label < 0).
+    """
+    B, N = labels.shape
+    coassoc = np.zeros((N, N), dtype=float)
+    counts = np.zeros((N, N), dtype=float)
+
+    for b in range(B):
+        row = labels[b]
+        valid = row >= 0
+        # Only consider pairs where both are valid
+        valid_pair = np.outer(valid, valid)
+        counts += valid_pair
+        # Same-cluster pairs
+        same = np.equal.outer(row, row) & valid_pair
+        coassoc += same
+
+    mask = counts > 0
+    coassoc[mask] /= counts[mask]
+    np.fill_diagonal(coassoc, 1.0)
+    return coassoc
 
 
 def compute_coassoc_for_k(
@@ -44,12 +65,17 @@ def compute_coassoc_for_k(
     min_cluster_size: int = 1,
     pc_kwargs: Optional[dict[str, Any]] = None,
 ):
-    """
-    For a given k, run PhytClust on each bootstrap tree and compute:
+    """For a given k, run PhytClust on each bootstrap tree and compute
+    co-association.
 
-    - labels: (B, N) int array of cluster IDs (or -1 for missing)
-    - coassoc: (N, N) float array of co-association frequencies
-    - taxa: list of taxon names in order
+    Returns
+    -------
+    taxa : list[str]
+        Taxon names in order.
+    labels : ndarray of shape (B, N)
+        Cluster IDs per replicate (or -1 for missing).
+    coassoc : ndarray of shape (N, N)
+        Co-association frequencies.
     """
     if pc_kwargs is None:
         pc_kwargs = {}
@@ -61,43 +87,22 @@ def compute_coassoc_for_k(
 
     for b, tree in enumerate(trees):
         pc = PhytClust(
-            tree=tree, outgroup=outgroup, min_cluster_size=min_cluster_size, **pc_kwargs
+            tree=tree,
+            outgroup=outgroup,
+            min_cluster_size=min_cluster_size,
+            **pc_kwargs,
         )
         res = pc.run(k=k)
-        cmap = res["clusters"]  # {leaf_obj -> cluster_id}
+        cmap = res["clusters"][0]
         labels[b, :] = _labels_from_cmap(cmap, taxa)
 
-    coassoc = np.zeros((N, N), dtype=float)
-    counts = np.zeros((N, N), dtype=float)
-
-    for b in range(B):
-        row = labels[b]
-        for i in range(N):
-            if row[i] < 0:
-                continue
-            for j in range(i + 1, N):
-                if row[j] < 0:
-                    continue
-                counts[i, j] += 1
-                counts[j, i] += 1
-                if row[i] == row[j]:
-                    coassoc[i, j] += 1
-                    coassoc[j, i] += 1
-
-    mask = counts > 0
-    coassoc[mask] = coassoc[mask] / counts[mask]
-    np.fill_diagonal(coassoc, 1.0)
-
+    coassoc = _coassoc_from_labels(labels)
     return taxa, labels, coassoc
 
 
 def stability_for_k(coassoc: np.ndarray) -> float:
-    """
-    Simple example: average co-association over all pairs.
-    You can design something more clever later.
-    """
+    """Average co-association over all off-diagonal pairs."""
     N = coassoc.shape[0]
-    # exclude diagonal
     triu_idx = np.triu_indices(N, k=1)
     vals = coassoc[triu_idx]
     if vals.size == 0:
@@ -113,24 +118,22 @@ def choose_k_by_stability(
     min_cluster_size: int = 1,
     pc_kwargs: Optional[dict[str, Any]] = None,
 ):
-    """
-    For each k in k_values, compute co-association and a stability score.
-    Return k* with max stability and all metadata.
+    """For each k in k_values, compute co-association and stability.
 
-    Returns dict:
-    {
-      "best_k": k_star,
-      "scores": {k: score_k, ...},
-      "coassoc": {k: coassoc_matrix, ...},
-      "taxa": [...],
-    }
+    Returns
+    -------
+    dict with keys:
+        best_k : int
+        scores : dict[int, float]
+        coassoc : dict[int, ndarray]
+        taxa : list[str]
     """
     scores = {}
     coassoc_by_k = {}
     taxa_ref = None
 
     for k in k_values:
-        taxa, labels, coassoc = compute_coassoc_for_k(
+        taxa, _labels, coassoc = compute_coassoc_for_k(
             trees,
             k,
             outgroup=outgroup,
@@ -139,14 +142,12 @@ def choose_k_by_stability(
         )
         if taxa_ref is None:
             taxa_ref = taxa
-        else:
-            if taxa != taxa_ref:
-                raise ValueError(
-                    "Taxon order mismatch across k; this should not happen."
-                )
+        elif taxa != taxa_ref:
+            raise DataError(
+                "Taxon order mismatch across k; this should not happen."
+            )
 
-        score_k = stability_for_k(coassoc)
-        scores[k] = score_k
+        scores[k] = stability_for_k(coassoc)
         coassoc_by_k[k] = coassoc
 
     best_k = max(scores, key=scores.get)
@@ -156,4 +157,3 @@ def choose_k_by_stability(
         "coassoc": coassoc_by_k,
         "taxa": taxa_ref,
     }
-

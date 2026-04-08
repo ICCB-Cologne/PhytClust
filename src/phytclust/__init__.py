@@ -1,4 +1,13 @@
 from .algo.core import PhytClust
+from .config import (
+    CoreConfig,
+    OutlierConfig,
+    PeakConfig,
+    RuntimeConfig,
+    PlotConfig,
+    ScorePlotConfig,
+    ClusterPlotConfig,
+)
 from .exceptions import (
     PhytClustError,
     ValidationError,
@@ -14,6 +23,13 @@ from importlib.metadata import version, PackageNotFoundError
 
 __all__ = [
     "PhytClust",
+    "CoreConfig",
+    "OutlierConfig",
+    "PeakConfig",
+    "RuntimeConfig",
+    "PlotConfig",
+    "ScorePlotConfig",
+    "ClusterPlotConfig",
     "PhytClustError",
     "ValidationError",
     "ConfigurationError",

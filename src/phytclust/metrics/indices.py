@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import statistics
-from typing import Optional
+from typing import Optional, List
 import numpy as np
 from Bio.Phylo.BaseTree import Tree, Clade
 
@@ -14,10 +14,7 @@ def colless_index_calc(tree: Tree) -> int:
     """
     colless_sum = 0
     for node in tree.find_clades(terminal=False):
-        # guard: Colless is defined for bifurcating nodes
         if len(node.clades) != 2:
-            # You could raise or skip; here we skip non-binary nodes
-            # to keep behavior tolerant.
             continue
         left_size = len(node.clades[0].get_terminals())
         right_size = len(node.clades[1].get_terminals())
@@ -163,11 +160,17 @@ def calculate_proportions(tree: Tree, sibling_distances: List[float]) -> List[fl
     return [(d / total) if total else 0.0 for d in sibling_distances]
 
 
-def gini_coefficient(proportions: List[float]) -> float:
+def gini_coefficient(proportions_or_tree: List[float] | Tree) -> float:
     """
     Gini coefficient of a vector of non-negative proportions.
     Returns 0 if empty or sum is zero.
     """
+    if isinstance(proportions_or_tree, Tree):
+        sibling_distances = find_siblings(proportions_or_tree)
+        proportions = calculate_proportions(proportions_or_tree, sibling_distances)
+    else:
+        proportions = list(proportions_or_tree)
+
     n = len(proportions)
     if n == 0:
         return 0.0
@@ -177,3 +180,24 @@ def gini_coefficient(proportions: List[float]) -> float:
         return 0.0
     numerator = sum((2 * i - n - 1) * x for i, x in enumerate(sorted_p, start=1))
     return float(numerator / (n * total))
+
+
+def variance_ratio(tree: Tree) -> float:
+    """Backward-compatible alias for internal/terminal variance ratio."""
+    return variation_ratio(tree)
+
+
+def colless_ratio(tree: Tree) -> float:
+    """Backward-compatible normalized Colless ratio in [0, 1] for binary trees."""
+    return normalized_colless(tree)
+
+
+def variance_indices(tree: Tree) -> dict[str, float]:
+    """Convenience bundle of variance-style tree metrics."""
+    return {
+        "branch_length_variance": calculate_variance_branch_length(tree),
+        "total_length_variation": calculate_total_length_variation(tree),
+        "internal_variance": calculate_internal_variance(tree),
+        "terminal_variance": calculate_terminal_variance(tree),
+        "variance_ratio": variance_ratio(tree),
+    }

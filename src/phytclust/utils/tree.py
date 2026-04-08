@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from Bio.Phylo.BaseTree import Tree, Clade
 
+from ..exceptions import InvalidTreeError, ConfigurationError
+
 
 def get_pairwise_distances(
     tree: Tree,
@@ -21,7 +23,7 @@ def get_pairwise_distances(
     if mrca:
         clade = next((cl for cl in tree.find_clades(name=mrca)), None)
         if clade is None:
-            raise ValueError(f"No node found with name {mrca}")
+            raise InvalidTreeError(f"No node found with name {mrca}")
         terms = list(clade.get_terminals())
     elif mode == "terminals":
         terms = list(tree.get_terminals())
@@ -30,7 +32,7 @@ def get_pairwise_distances(
     elif mode == "all":
         terms = list(tree.get_terminals()) + list(tree.get_nonterminals())
     else:
-        raise ValueError("mode must be one of {'terminals','nonterminals','all'}")
+        raise ConfigurationError("mode must be one of {'terminals','nonterminals','all'}")
 
     n = len(terms)
     dist = np.zeros((n, n), dtype=float)

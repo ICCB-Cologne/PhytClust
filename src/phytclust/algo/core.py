@@ -8,6 +8,13 @@ from pathlib import Path
 from io import StringIO
 
 from Bio import Phylo
+
+from ..exceptions import (
+    InvalidKError,
+    ConfigurationError,
+    MissingDPTableError,
+    ValidationError,
+)
 from Bio.Phylo.BaseTree import Tree
 
 from ..algo.dp import (
@@ -17,6 +24,7 @@ from ..algo.dp import (
     backtrack,
 )
 from ..algo.scoring import calculate_scores, find_score_peaks
+from ..config import OutlierConfig, PeakConfig, RuntimeConfig
 
 logger = logging.getLogger("phytclust")
 
@@ -26,13 +34,13 @@ IntMap = dict[Any, int]
 def _coerce_to_tree(obj: Any) -> Tree:
     """
     Accepts:
-      - Bio.Phylo.BaseTree.Tree  → returned as-is
-      - pathlib.Path             → read as Newick
+      - Bio.Phylo.BaseTree.Tree  -> returned as-is
+      - pathlib.Path             -> read as Newick
       - str:
-          * if it looks like a file path and exists → read as Newick file
-          * otherwise → treat as a Newick string
+          * if it looks like a file path and exists -> read as Newick file
+          * otherwise -> treat as a Newick string
 
-    Raises TypeError if the object cannot be interpreted as a tree.
+    Raises ValidationError if the object cannot be interpreted as a tree.
     """
     if isinstance(obj, Tree):
         return obj
@@ -41,14 +49,18 @@ def _coerce_to_tree(obj: Any) -> Tree:
         return Phylo.read(str(obj), "newick")
 
     if isinstance(obj, str):
-        candidate = Path(obj)
-        if candidate.exists() and not any(ch in obj for ch in "() ;"):
-            return Phylo.read(str(candidate), "newick")
+        try:
+            candidate = Path(obj)
+            if candidate.exists():
+                return Phylo.read(str(candidate), "newick")
+        except OSError:
+            # String too long to be a valid path (Errno 36) — treat as Newick
+            pass
 
         handle = StringIO(obj)
         return Phylo.read(handle, "newick")
 
-    raise TypeError(
+    raise ValidationError(
         f"Unsupported tree input type: {type(obj)!r}. "
         "Expected a Bio.Phylo Tree, a Newick string, or a path to a Newick file."
     )
@@ -65,9 +77,6 @@ class PhytClust:
         The input tree (you can pass a Newick string/file upstream).
     outgroup : str | None, default=None
         Taxon to exclude from all clusters (treated as outgroup).
-    root_taxon : str | None, default=None
-        Taxon to root tree on, or "midpoint" for midpoint rooting. If None,
-        tree is assumed to be rooted.
     min_cluster_size : int, default=1
         Hard constraint: final clusters smaller than this are disallowed.
     k : int | None, default=None
@@ -78,10 +87,6 @@ class PhytClust:
         from `max_k_limit * num_terminals`.
     max_k_limit : float, default=0.9
         When `max_k` is not set, `max_k` = ceil(max_k_limit * num_terminals).
-    resolution_on : bool, default=False
-        Internal flag for multi-resolution peak search.
-    num_peaks : int, default=3
-        Number of global peaks to report in best_global.
     num_bins : int, default=3
         Number of log-resolution bins for best_by_resolution.
 
@@ -95,29 +100,22 @@ class PhytClust:
     support_weight : float, default=1.0
         Weight of the support-derived penalty in `_eff_length`.
 
-    Outlier handling (soft constraint)
-    ----------------------------------
-    outlier_size_threshold : int | None, default=None
-        If set, clusters with size < threshold incur `outlier_penalty` added
-        to their cost. This is a soft constraint — small clusters are penalized
-        but allowed if monophyly + k value require them. Use alongside
-        min_cluster_size: min_cluster_size blocks k entirely, while
-        outlier_penalty discourages (but allows) small clusters within feasible k.
-    outlier_penalty : float, default=0.0
-        Additive penalty for clusters smaller than outlier_size_threshold.
-
-    Zero-length cluster handling (hard constraint)
-    -----------------------------------------------
-    no_split_zero_length : bool, default=False
-        If True, prevents splitting nodes where both child edges are zero-length
-        (no evolutionary signal to justify separation).
+    Outlier handling
+    ----------------
+    outlier : OutlierConfig
+        Controls outlier detection thresholds, DP penalty, and tie-breaking.
+        See :class:`~phytclust.config.OutlierConfig`.
 
     Other flags
     -----------
+    optimize_polytomies : bool, default=True
+        If True, use native DP over multifurcations.
+    polytomy_mode : {"hard", "soft"}, default="hard"
+        Hard mode forbids cross-child partial merges; soft mode allows them.
+    soft_polytomy_max_degree : int, default=18
+        Degree guardrail for soft mode's exponential subset DP.
     compute_all_clusters : bool, default=False
         If True in best_global, compute and cache all k clusterings up to max_k.
-    drop_outliers : bool, default=False
-        Reserved flag (used downstream in plotting/saving).
     """
 
     tree: Any
@@ -127,8 +125,6 @@ class PhytClust:
     k: Optional[int] = None
     max_k: Optional[int] = None
     max_k_limit: float = 0.9
-    resolution_on: bool = False
-    num_peaks: int = 3
     num_bins: int = 3
 
     # tunables
@@ -136,18 +132,19 @@ class PhytClust:
     min_support: float = 0.05
     support_weight: float = 1.0
 
-    # outlier penalties
-    outlier_size_threshold: Optional[int] = None
-    outlier_penalty: float = 0.0
-
-    # polytomy optimization
-    optimize_polytomies: bool = True
+    # outlier handling
+    outlier: OutlierConfig = field(default_factory=OutlierConfig)
+    use_penalized_beta_for_scoring: bool = False
 
     # zero-length edge handling
     no_split_zero_length: bool = False
+    optimize_polytomies: bool = True
+    polytomy_mode: str = "hard"
+    soft_polytomy_max_degree: int = 18
 
     compute_all_clusters: bool = False
-    drop_outliers: bool = False
+    runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
+    peak_config: PeakConfig = field(default_factory=PeakConfig)
 
     def __post_init__(self) -> None:
         self.tree = _coerce_to_tree(self.tree)
@@ -172,13 +169,11 @@ class PhytClust:
         prepare_tree(self)
 
     def _hash_tree(self) -> int:
-        """tree fingerprint, used to detect modifications."""
+        """Tree fingerprint, used to detect modifications."""
         try:
-            cur_hash = hash(self.tree.format("newick"))
-        except (ValueError, AttributeError):
-            # Fallback if tree formatting fails
-            cur_hash = hash(repr(self.tree))
-        return cur_hash
+            return hash(self.tree.format("newick"))
+        except Exception:
+            return hash(repr(self.tree))
 
     def _ensure_dp(self) -> None:
         current = self._hash_tree()
@@ -200,101 +195,100 @@ class PhytClust:
         if self.max_k is None or self.max_k < 1:
             self.max_k = max(2, ceil(self.num_terminals * self.max_k_limit))
 
-    # explicit k
-    def get_clusters(self, k: int, *, verbose: bool = False) -> dict[Any, int]:
-        """
-        Exact k-cluster partition
-        """
+    def _effective_max_k(self, max_k: Optional[int] = None) -> int:
+        """Resolve max_k without mutating self."""
+        if max_k is not None:
+            return min(self.num_terminals, max_k)
+        return max(2, ceil(self.num_terminals * self.max_k_limit))
+
+    @property
+    def plot_config(self):
+        """Convenience accessor for plot-specific runtime config."""
+        return self.runtime_config.plot
+
+    # ------------------------------------------------------------------ #
+    #  Single code path for retrieving / computing a k-partition          #
+    # ------------------------------------------------------------------ #
+
+    def get_clusters(self, k: int, *, verbose: bool = False) -> IntMap:
+        """Return the exact k-cluster partition (cached after first call)."""
         if k is None:
-            raise ValueError("Please provide k")
+            raise InvalidKError("Please provide k")
         if k < 1:
-            raise ValueError("k must be ≥ 1")
+            raise InvalidKError("k must be >= 1")
         self._ensure_dp()
-        if self.clusters is not None and k in self.clusters:
+
+        if k in self.clusters:
             return self.clusters[k]
 
         cmap = backtrack(self, k, verbose=verbose)
-
-        if self.clusters is None:
-            self.clusters = {}
         self.clusters[k] = cmap
         return cmap
 
-    # optimise globally
+    # ------------------------------------------------------------------ #
+    #  Peak-search modes                                                  #
+    # ------------------------------------------------------------------ #
+
+    def _no_peaks_fallback(self) -> list[IntMap]:
+        """When scores are empty or too short, fall back gracefully."""
+        logger.info("No meaningful peaks found.")
+        self.k = None
+        self.peaks_by_rank = []
+        return []
+
     def best_global(
         self,
         *,
         top_n: int = 1,
         max_k: Optional[int] = None,
-        max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
         compute_all_clusters: bool = False,
-        lambda_weight: float = 0.7,
-    ) -> list[dict[Any, int]]:
+        peak_config: Optional[PeakConfig] = None,
+    ) -> list[IntMap]:
         """
-        cluster-validity index-based global peak search.
+        Cluster-validity index-based global peak search.
 
         Returns a list of cluster maps in peak-rank order.
         """
         self._ensure_dp()
 
         if top_n < 1:
-            raise ValueError("`top_n` must be ≥ 1.")
+            raise InvalidKError("`top_n` must be >= 1.")
 
-        if max_k_limit is not None:
-            self.max_k_limit = max_k_limit
+        eff_max_k = self._effective_max_k(max_k)
+        self.max_k = eff_max_k
 
-        effective_max_k = (
-            max_k
-            if max_k is not None
-            else max(2, ceil(self.num_terminals * self.max_k_limit))
-        )
-        self.max_k = min(self.num_terminals, effective_max_k)
-
-        if self.max_k < 4:
-            raise ValueError("max_k must be at least 4.")
+        if eff_max_k < 4:
+            raise InvalidKError("max_k must be at least 4.")
 
         calculate_scores(self, plot=plot_scores)
-        logger.debug(
-            f"score vector length = {0 if self.scores is None else len(self.scores)}"
-        )
-        logger.debug(f"scores = {self.scores}")
 
         if self.scores is None or len(self.scores) == 0:
-            try:
-                cmap = self.get_clusters(2)
-                self.clusters = {2: cmap}
-                self.peaks_by_rank = [2]
-                self.k = None
-                return [cmap]
-            except (ValueError, RuntimeError):
-                # Cannot partition into k=2, return empty result
-                self.clusters = {}
-                self.peaks_by_rank = []
-                self.k = None
-                return []
+            return self._no_peaks_fallback()
 
-        score_len = min(self.max_k, len(self.scores))
+        score_len = min(eff_max_k, len(self.scores))
+        if score_len <= 2:
+            return self._no_peaks_fallback()
+
+        active_peak_config = peak_config or self.peak_config
+
         find_score_peaks(
             self,
             global_peaks=top_n,
             resolution_on=False,
-            k_start=2,
+            k_start=1,
             k_end=score_len,
             plot=plot_scores,
-            lambda_weight=lambda_weight,
+            peak_config=active_peak_config,
         )
 
         self.clusters = {}
         if compute_all_clusters:
-            for k_val in range(1, self.max_k + 1):
+            for k_val in range(1, eff_max_k + 1):
                 try:
                     self.get_clusters(k_val)
-                except RuntimeError as e:
-                    # Skip k values that can't be backtracked (infeasible with current constraints)
-                    if "Back-pointer missing" in str(e) or "fatal error" in str(e):
-                        continue
-                    raise
+                except MissingDPTableError:
+                    continue
         else:
             for k_val in self.peaks_by_rank or []:
                 self.get_clusters(k_val)
@@ -306,45 +300,41 @@ class PhytClust:
             if kv in self.clusters
         ]
 
-    # choose best solutions for different clade levels
     def best_by_resolution(
         self,
         *,
         num_bins: int = 3,
         max_k: Optional[int] = None,
         plot_scores: bool = True,
-        lambda_weight: float = 0.7,
-    ) -> list[dict[Any, int]]:
+        peak_config: Optional[PeakConfig] = None,
+    ) -> list[IntMap]:
         self._ensure_dp()
 
-        self.max_k = max_k or ceil(self.num_terminals * self.max_k_limit)
+        eff_max_k = self._effective_max_k(max_k)
+        self.max_k = eff_max_k
+
         calculate_scores(self, plot=plot_scores)
 
         if self.scores is None:
-            return []
+            return self._no_peaks_fallback()
 
-        score_k_count = min(self.max_k, len(self.scores))
+        score_k_count = min(eff_max_k, len(self.scores))
 
         if score_k_count < 4:
-            # trivial fallback: just k=2 if possible
-            try:
-                return [self.get_clusters(2)]
-            except (ValueError, RuntimeError):
-                # Cannot partition into k=2, return empty result
-                return []
+            return self._no_peaks_fallback()
 
         if score_k_count < 50:
-            top = max(1, min(self.num_peaks, score_k_count - 1))
+            top = max(1, min(3, score_k_count - 1))
             return self.best_global(
                 top_n=top,
-                max_k=self.max_k,
-                max_k_limit=self.max_k_limit,
+                max_k=eff_max_k,
                 plot_scores=plot_scores,
                 compute_all_clusters=False,
-                lambda_weight=lambda_weight,
+                peak_config=peak_config,
             )
 
         score_len = score_k_count - 1
+        active_peak_config = peak_config or self.peak_config
 
         find_score_peaks(
             self,
@@ -354,7 +344,7 @@ class PhytClust:
             k_start=2,
             k_end=score_len,
             plot=plot_scores,
-            lambda_weight=lambda_weight,
+            peak_config=active_peak_config,
         )
 
         self.clusters = {}
@@ -368,6 +358,10 @@ class PhytClust:
             if kv in self.clusters
         ]
 
+    # ------------------------------------------------------------------ #
+    #  Unified entry point                                                #
+    # ------------------------------------------------------------------ #
+
     def run(
         self,
         *,
@@ -378,7 +372,7 @@ class PhytClust:
         max_k: Optional[int] = None,
         max_k_limit: Optional[float] = None,
         plot_scores: bool = True,
-        lambda_weight: float = 0.7,
+        peak_config: Optional[PeakConfig] = None,
     ) -> dict[str, Any]:
         """
         Unified high-level entry point.
@@ -388,91 +382,126 @@ class PhytClust:
         1. Exact k:
             pc.run(k=5)
 
-        2. Global peaks (CalBow):
+        2. Global peaks:
             pc.run(top_n=3)
 
         3. Multi-resolution peaks (one per log-bin):
             pc.run(by_resolution=True, num_bins=3)
+
+        All modes accept ``peak_config`` for tuning peak detection::
+
+            from phytclust.config import PeakConfig
+            pc.run(top_n=3, peak_config=PeakConfig(lambda_weight=0.5))
+
+        Returns
+        -------
+        dict with keys:
+            mode : str — "k", "global", or "resolution"
+            ks : list[int] — selected k values
+            clusters : list[dict] — cluster maps in rank order
+            scores : ndarray | None — score vector
+            peaks : list[int] — same as ks (for convenience)
         """
-        # validation
+        # Apply max_k_limit override for this run only
+        saved_limit = self.max_k_limit
+        if max_k_limit is not None:
+            self.max_k_limit = max_k_limit
+
+        try:
+            result = self._run_inner(
+                k=k,
+                top_n=top_n,
+                by_resolution=by_resolution,
+                num_bins=num_bins,
+                max_k=max_k,
+                plot_scores=plot_scores,
+                peak_config=peak_config,
+            )
+        finally:
+            self.max_k_limit = saved_limit
+
+        self._last_result = result
+        return result
+
+    def _run_inner(
+        self,
+        *,
+        k: Optional[int],
+        top_n: int,
+        by_resolution: bool,
+        num_bins: Optional[int],
+        max_k: Optional[int],
+        plot_scores: bool,
+        peak_config: Optional[PeakConfig],
+    ) -> dict[str, Any]:
         k_val = k if k is not None else self.k
         if k_val is not None:
             if k_val < 1:
-                raise ValueError("k must be ≥ 1.")
+                raise InvalidKError("k must be >= 1.")
             if by_resolution:
-                raise ValueError("Cannot combine `k` with `by_resolution=True`.")
+                raise ConfigurationError(
+                    "Cannot combine `k` with `by_resolution=True`."
+                )
             if top_n != 1:
-                raise ValueError("`top_n` is meaningless when `k` is given.")
-            if num_bins is not None:
-                logger.warning("`num_bins` ignored when `k` is specified.")
+                raise ConfigurationError("`top_n` is meaningless when `k` is given.")
 
-            # exact-k mode
             self._ensure_dp()
             cmap = self.get_clusters(k_val)
 
             self.k = int(k_val)
             self.peaks_by_rank = [int(k_val)]
 
-            result = {
+            return {
                 "mode": "k",
-                "k": k_val,
-                "clusters": cmap,
+                "ks": [int(k_val)],
+                "k": int(k_val),
+                "clusters": [cmap],
                 "scores": None,
-                "peaks": [k_val],
+                "peaks": [int(k_val)],
             }
-            self._last_result = result
-            return result
 
         if top_n < 1:
-            raise ValueError("`top_n` must be ≥ 1.")
+            raise InvalidKError("`top_n` must be >= 1.")
 
         if by_resolution:
-            if num_bins is None:
-                num_bins = self.num_bins
-            if max_k_limit is not None:
-                self.max_k_limit = max_k_limit
-
             clusters = self.best_by_resolution(
-                num_bins=num_bins,
+                num_bins=num_bins or self.num_bins,
                 max_k=max_k,
                 plot_scores=plot_scores,
-                lambda_weight=lambda_weight,
+                peak_config=peak_config or self.peak_config,
             )
-            result = {
+            return {
                 "mode": "resolution",
                 "ks": list(self.peaks_by_rank or []),
                 "clusters": clusters,
-                "scores": None if self.scores is None else self.scores.copy(),
+                "scores": (None if self.scores is None else self.scores.copy()),
                 "peaks": list(self.peaks_by_rank or []),
             }
-            self._last_result = result
-            return result
 
         # global peak mode
-        if max_k_limit is None:
-            max_k_limit = self.max_k_limit
-
         clusters = self.best_global(
             top_n=top_n,
             max_k=max_k,
-            max_k_limit=max_k_limit,
             plot_scores=plot_scores,
-            compute_all_clusters=self.compute_all_clusters,
-            lambda_weight=lambda_weight,
+            compute_all_clusters=False,
+            peak_config=peak_config or self.peak_config,
         )
-        result = {
+        return {
             "mode": "global",
             "ks": list(self.peaks_by_rank or []),
             "clusters": clusters,
-            "scores": None if self.scores is None else self.scores.copy(),
+            "scores": (None if self.scores is None else self.scores.copy()),
             "peaks": list(self.peaks_by_rank or []),
         }
-        self._last_result = result
-        return result
+
+    # ------------------------------------------------------------------ #
+    #  Convenience wrappers                                               #
+    # ------------------------------------------------------------------ #
 
     def plot(self, results_dir: Optional[str] = None, **kwargs) -> None:
         """Plot clustering results (requires matplotlib)."""
-        from ..viz.cluster_plot import plot_clusters
+        from ..viz.cluster import plot_clusters
+
         plot_clusters(self, results_dir=results_dir, **kwargs)
 
     def save(
@@ -483,10 +512,11 @@ class PhytClust:
         outlier: bool = True,
         n: Optional[int] = None,
         output_all: bool = False,
-    ) -> None:
+    ) -> Optional[str]:
         """Save clustering results to file (requires pandas)."""
-        from ..io.save_results import save_clusters
-        save_clusters(
+        from ..io.save import save_clusters
+
+        return save_clusters(
             self,
             results_dir=results_dir,
             top_n=top_n,

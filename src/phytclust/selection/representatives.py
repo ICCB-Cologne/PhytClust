@@ -5,22 +5,24 @@ import heapq
 
 from Bio.Phylo.BaseTree import Tree
 
+from ..exceptions import ConfigurationError
+
 
 #  terminal -> path of internal nodes
 def map_terminal_to_internal(tree: Tree) -> dict[str, list]:
     terminal_to_internal: dict[str, list] = {}
-
-    def traverse(clade, path):
+    stack = [(tree.root, [])]
+    while stack:
+        clade, path = stack.pop()
         if not clade.clades:
-            terminal_to_internal[getattr(clade, "name", None)] = path
+            name = getattr(clade, "name", None)
+            if name is not None:
+                terminal_to_internal[name] = path
         else:
             new_path = path + [clade]
             for child in clade.clades:
-                traverse(child, new_path)
-
-    traverse(tree.root, [])
-    # Filter out None-named leaves if any
-    return {k: v for k, v in terminal_to_internal.items() if k is not None}
+                stack.append((child, new_path))
+    return terminal_to_internal
 
 
 # PD pick
@@ -85,7 +87,7 @@ def compute_species_distance(
             distances[t] = float(tree.distance(t, mrca))
 
     else:
-        raise ValueError("distance_ref must be 'all' or 'mrca'")
+        raise ConfigurationError("distance_ref must be 'all' or 'mrca'")
 
     return distances
 
@@ -111,7 +113,7 @@ def rank_terminal_nodes(
     base = compute_species_distance(tree, terminals, distance_ref=distance_ref)
 
     if mode not in {"maximize", "minimize"}:
-        raise ValueError("mode must be 'maximize' or 'minimize'")
+        raise ConfigurationError("mode must be 'maximize' or 'minimize'")
 
     if mode == "maximize":
         queue = [(-base[t], t) for t in terminals]

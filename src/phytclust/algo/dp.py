@@ -1,152 +1,73 @@
 import numpy as np
 from math import ceil
-from typing import Any, Optional
+from collections import Counter
+from typing import Any
 import logging
 
+
+from ..exceptions import (
+    ConfigurationError,
+    InvalidKError,
+    MissingDPTableError,
+    InvalidClusteringError,
+)
+from .dp_polytomy import compute_polytomy_dp
+from .dp_utils import (
+    eff_length,
+    subtree_all_zero,
+    validate_args as _validate_args,
+)
 from ..validation import (
     validate_and_set_outgroup,
     prune_outgroup,
     resolve_polytomies,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def validate_args(pc) -> None:
-    if pc.k is not None and pc.k < 1:
-        raise ValueError("k must be ≥ 1 if provided.")
-    if not 0 < pc.max_k_limit <= 1:
-        raise ValueError("max_k_limit must be between 0 and 1")
-    if pc.num_peaks < 1:
-        raise ValueError("num_peaks must be ≥ 1")
-
-
-def _eff_length(node, pc):
-    """
-    If `pc.use_branch_support` is True, we augment the branch length
-    with a penalty derived from the support value:
-
-        eff_len = branch_length + support_weight * (-log(p))
-
-    where p = max(confidence/100, pc.min_support).
-    """
-    base = node.branch_length or 0.0
-    if not pc.use_branch_support:
-        return base
-
-    raw = node.confidence if node.confidence is not None else 100.0
-    p = max(raw / 100.0, pc.min_support)
-    penalty = -np.log(p)
-    return base + pc.support_weight * penalty
-
-
-def _compute_polytomy_dp(node, pc, max_states_global, min_cluster_size,
-                          outlier_thresh, outlier_penalty, dtype, bp_dtype):
-    """
-    Compute DP table for a polytomous (k>2 children) node by sequentially
-    convolving child DP tables. Equivalent to trying all (2k-3)!! binary
-    resolutions and keeping the best at each k — but O(n_children * max_k^2).
-
-    Parameters
-    ----------
-    node : Clade
-        The polytomous node (has > 2 children).
-    pc : PhytClust
-        The clustering object.
-    max_states_global : int
-        Maximum k+1 clusters to compute for.
-    min_cluster_size : int
-        Minimum leaves per cluster.
-    outlier_thresh : int or None
-        Threshold for outlier penalty.
-    outlier_penalty : float
-        Cost to add when isolating a small cluster.
-    dtype : numpy dtype
-        Data type for DP table.
-    bp_dtype : numpy dtype
-        Data type for backpointer array.
-
-    Returns
-    -------
-    dp_array : numpy array
-        DP table for this node.
-    step_backptrs : list of numpy arrays
-        Backpointers from each convolution step.
-    """
-    children = node.clades
-    n_leaves = pc.num_leaves_per_node[node]
-    n_states = min(n_leaves, max_states_global)
-
-    # Start: combined = first child's DP table
-    first_child = children[0]
-    first_id = pc.node_to_id[first_child]
-    combined = pc.dp_table[first_id].copy()
-    n_combined = pc.num_leaves_per_node[first_child]
-
-    step_backptrs = []  # step_backptrs[i][k] = clusters from first i+1 children
-
-    for child in children[1:]:
-        child_id = pc.node_to_id[child]
-        child_dp = pc.dp_table[child_id]
-        n_child = pc.num_leaves_per_node[child]
-        n_total = n_combined + n_child
-        n_new_states = min(n_total, max_states_global)
-
-        new_combined = np.full(n_new_states + 1, np.inf, dtype=dtype)
-        step_bp = np.full(n_new_states + 1, -1, dtype=bp_dtype)
-
-        # k=0: all in one cluster (no edge cost added for polytomous branch)
-        if n_total >= min_cluster_size:
-            new_combined[0] = combined[0] + child_dp[0]
-        step_bp[0] = 0
-
-        # k>=1: k+1 total clusters via convolution
-        for k in range(1, n_new_states + 1):
-            max_i = min(k, len(combined) - 1)
-            min_i = max(0, k - 1 - (len(child_dp) - 1))
-            if min_i > max_i:
-                continue
-            i_vals = np.arange(min_i, max_i + 1)
-            j_vals = k - 1 - i_vals
-            scores = combined[i_vals] + child_dp[j_vals]
-
-            # Outlier penalty: when combined (or child) is cut as single cluster
-            if outlier_thresh is not None and outlier_penalty > 0:
-                if i_vals[0] == 0 and n_combined < outlier_thresh:
-                    scores[0] = scores[0] + outlier_penalty
-                if j_vals[-1] == 0 and n_child < outlier_thresh:
-                    scores[-1] = scores[-1] + outlier_penalty
-
-            best = int(np.argmin(scores))
-            new_combined[k] = scores[best]
-            step_bp[k] = i_vals[best]
-
-        step_backptrs.append(step_bp)
-        combined = new_combined
-        n_combined = n_total
-
-    # Apply min_cluster_size at node level
-    if n_leaves < min_cluster_size:
-        combined[0] = np.inf
-
-    return combined, step_backptrs
+    _validate_args(pc)
 
 
 def prepare_tree(pc) -> None:
     pc.tree, pc.outgroup = validate_and_set_outgroup(
-        pc.tree, pc.outgroup,
-        optimize_polytomies=getattr(pc, 'optimize_polytomies', True),
-        root_taxon=getattr(pc, 'root_taxon', None)
+        pc.tree,
+        pc.outgroup,
+        root_taxon=getattr(pc, "root_taxon", None),
     )
+    if not getattr(pc, "optimize_polytomies", True):
+        resolve_polytomies(pc.tree)
+
+    # Log polytomy summary
+    poly_degrees = [
+        len(n.clades)
+        for n in pc.tree.find_clades()
+        if not n.is_terminal() and len(n.clades) > 2
+    ]
+    if poly_degrees:
+        degree_counts = Counter(poly_degrees)
+        summary = ", ".join(
+            f"{count} of degree {deg}" for deg, count in sorted(degree_counts.items())
+        )
+        logger.info(
+            "Tree contains %d polytom%s: %s",
+            len(poly_degrees),
+            "y" if len(poly_degrees) == 1 else "ies",
+            summary,
+        )
+    else:
+        logger.debug("Tree is fully bifurcating (no polytomies).")
+
     pc.name_leaves_per_node = {n: n.get_terminals() for n in pc.tree.find_clades()}
     pc.num_leaves_per_node = {}
     for n in pc.tree.find_clades(order="postorder"):
         if n.is_terminal():
             pc.num_leaves_per_node[n] = 1
         else:
-            left, right = n.clades
-            pc.num_leaves_per_node[n] = (
-                pc.num_leaves_per_node[left] + pc.num_leaves_per_node[right]
+            pc.num_leaves_per_node[n] = sum(
+                pc.num_leaves_per_node[child] for child in n.clades
             )
-
     root_cnt = pc.num_leaves_per_node[pc.tree.root]
     pc.num_terminals = root_cnt - 1 if pc.outgroup else root_cnt
     pc.max_k = (
@@ -166,162 +87,336 @@ def prepare_tree(pc) -> None:
 
 
 def compute_dp_table(pc) -> None:
-    """
-    Build DP tables with a minimum cluster size constraint.
-
-    - pc.min_cluster_size (int >= 1): minimal number of leaves allowed in any final cluster.
-    - pc.max_k (optional): cap on maximum number of clusters.
-    """
     tree = pc._tree_wo_outgroup if pc.outgroup else pc.tree
     nodes = list(tree.find_clades(order="postorder"))
     pc.postorder_nodes = nodes
     num_nodes = len(nodes)
     pc.node_to_id = {node: i for i, node in enumerate(nodes)}
 
-    pc.dp_table = [None] * num_nodes
+    pc.dp_table = [None] * num_nodes  # penalized objective
+    pc.raw_dp_table = [None] * num_nodes  # raw WSS
     pc.backptr = [None] * num_nodes
-    pc.polytomy_backptr = [None] * num_nodes  # for polytomous nodes only
+    pc.polytomy_backptr = [None] * num_nodes
     pc.cluster_cost = {}
+    pc._root_ties = {}
 
     dtype = np.float64 if pc.num_terminals > 80_000 else np.float32
 
     max_states_global = pc.max_k if pc.max_k is not None else pc.num_terminals
     if max_states_global < 1:
-        raise ValueError("max_k (or implied max_states_global) must be ≥ 1.")
+        raise InvalidKError("max_k (or implied max_states_global) must be ≥ 1.")
 
     bp_dtype = np.int16 if max_states_global <= 32767 else np.int32
 
     min_cluster_size = getattr(pc, "min_cluster_size", 1)
     if min_cluster_size < 1:
-        raise ValueError("min_cluster_size must be ≥ 1.")
+        raise ConfigurationError("min_cluster_size must be ≥ 1.")
 
-    outlier_thresh = getattr(pc, "outlier_size_threshold", None)
-    outlier_penalty = getattr(pc, "outlier_penalty", 0.0)
+    outlier_thresh = pc.outlier.size_threshold
+    use_outlier = outlier_thresh is not None
+    prefer_fewer = pc.outlier.prefer_fewer
+
+    if use_outlier:
+        pc._n_small = [None] * num_nodes
 
     for node in nodes:
         node_id = pc.node_to_id[node]
         n_leaves = pc.num_leaves_per_node[node]
-
         n_states = min(n_leaves, max_states_global)
 
-        dp_array = np.full(n_states + 1, np.inf, dtype=dtype)
+        total_array = np.full(n_states + 1, np.inf, dtype=dtype)
+        raw_array = np.full(n_states + 1, np.inf, dtype=dtype)
         backptr_array = np.full((2, n_states + 1), -1, dtype=bp_dtype)
 
         if node.is_terminal():
             pc.cluster_cost[node] = 0.0
 
             if n_leaves >= min_cluster_size:
-                dp_array[0] = 0.0
+                raw_array[0] = 0.0
             else:
-                dp_array[0] = np.inf
+                raw_array[0] = np.inf
 
-            pc.dp_table[node_id] = dp_array
+            total_array[0] = raw_array[0]
+            if use_outlier:
+                ns = np.zeros(n_states + 1, dtype=np.int32)
+                ns[0] = 1 if n_leaves < outlier_thresh else 0
+                pc._n_small[node_id] = ns
+
+            pc.raw_dp_table[node_id] = raw_array
+            pc.dp_table[node_id] = total_array
             pc.backptr[node_id] = backptr_array
             continue
 
-        # Handle polytomous vs binary nodes
-        if len(node.clades) > 2 and getattr(pc, 'optimize_polytomies', True):
-            # Polytomy: use sequential convolution
-            dp_array, step_backptrs = _compute_polytomy_dp(
-                node, pc, max_states_global, min_cluster_size,
-                outlier_thresh, outlier_penalty, dtype, bp_dtype
+        if len(node.clades) > 2 and getattr(pc, "optimize_polytomies", True):
+            total_array, raw_array, poly_info = compute_polytomy_dp(
+                node,
+                pc,
+                max_states_global,
+                min_cluster_size,
+                outlier_thresh,
+                dtype,
+                bp_dtype,
             )
-            pc.dp_table[node_id] = dp_array
-            pc.polytomy_backptr[node_id] = step_backptrs
-            # Free children DP tables
+            pc.dp_table[node_id] = total_array
+            pc.raw_dp_table[node_id] = raw_array
+            pc.polytomy_backptr[node_id] = poly_info
+
             for child in node.clades:
-                pc.dp_table[pc.node_to_id[child]] = None
-        else:
-            # Binary node (or optimize_polytomies=False): existing logic
-            left, right = node.clades[0], node.clades[1]
-            left_id = pc.node_to_id[left]
-            right_id = pc.node_to_id[right]
+                cid = pc.node_to_id[child]
+                pc.dp_table[cid] = None
+                pc.raw_dp_table[cid] = None
+                if use_outlier:
+                    pc._n_small[cid] = None
+            continue
 
-            left_dp = pc.dp_table[left_id]
-            right_dp = pc.dp_table[right_id]
+        left, right = node.clades[0], node.clades[1]
+        left_id = pc.node_to_id[left]
+        right_id = pc.node_to_id[right]
 
-            if left_dp is None or right_dp is None:
-                raise RuntimeError("Child DP table missing – compute_dp_table order bug.")
+        left_total = pc.dp_table[left_id]
+        right_total = pc.dp_table[right_id]
+        left_raw = pc.raw_dp_table[left_id]
+        right_raw = pc.raw_dp_table[right_id]
 
-            n_left = pc.num_leaves_per_node[left]
-            n_right = pc.num_leaves_per_node[right]
-
-            len_left = _eff_length(left, pc)
-            len_right = _eff_length(right, pc)
-
-            # Check if both branches are zero-length and no_split_zero_length is enabled
-            no_split_zero = getattr(pc, "no_split_zero_length", False)
-            both_zero_length = (len_left == 0 and len_right == 0) and no_split_zero
-
-            cost_one_cluster = (
-                left_dp[0] + right_dp[0] + n_left * len_left + n_right * len_right
+        if left_total is None or right_total is None:
+            raise MissingDPTableError(
+                "Child DP table missing – compute_dp_table order bug."
             )
 
-            if getattr(pc, "use_branch_support", False):
-                raw_support = node.confidence if node.confidence is not None else 100.0
-                support = max(raw_support / 100.0, pc.min_support)
-                cost_one_cluster /= support
+        n_left = pc.num_leaves_per_node[left]
+        n_right = pc.num_leaves_per_node[right]
 
-            pc.cluster_cost[node] = float(cost_one_cluster)
+        len_left = eff_length(left, pc)
+        len_right = eff_length(right, pc)
 
-            if n_leaves >= min_cluster_size:
-                dp_array[0] = cost_one_cluster
-            else:
-                dp_array[0] = np.inf
+        raw_one_cluster = (
+            left_raw[0] + right_raw[0] + n_left * len_left + n_right * len_right
+        )
 
-            backptr_array[0, 0] = 0
-            backptr_array[1, 0] = 0
+        if getattr(pc, "use_branch_support", False):
+            raw_support = node.confidence if node.confidence is not None else 100.0
+            support = max(raw_support / 100.0, pc.min_support)
+            raw_one_cluster /= support
 
-            for k in range(1, n_states + 1):
-                # If no_split_zero_length is enabled and both branches are zero-length,
-                # only k=0 (no split) is allowed; all k >= 1 remain infeasible
-                if both_zero_length:
-                    dp_array[k] = np.inf
-                    backptr_array[0, k] = -1
-                    backptr_array[1, k] = -1
-                    continue
+        pc.cluster_cost[node] = float(raw_one_cluster)
 
-                max_i = min(k, len(left_dp) - 1)
-                min_i = max(0, k - 1 - (len(right_dp) - 1))
+        if n_leaves >= min_cluster_size:
+            raw_array[0] = raw_one_cluster
+        else:
+            raw_array[0] = np.inf
 
-                if min_i > max_i:
-                    continue
+        backptr_array[0, 0] = 0
+        backptr_array[1, 0] = 0
 
-                i_vals = np.arange(min_i, max_i + 1)
-                j_vals = k - 1 - i_vals
+        total_array[0] = raw_array[0]
+        if use_outlier:
+            left_ns = pc._n_small[left_id]
+            right_ns = pc._n_small[right_id]
+            ns_array = np.zeros(n_states + 1, dtype=np.int32)
+            ns_array[0] = 1 if n_leaves < outlier_thresh else 0
 
-                scores = left_dp[i_vals] + right_dp[j_vals]
+        zero_eps = getattr(pc, "zero_length_eps", 1e-12)
+        no_split_zero = getattr(pc, "no_split_zero_length", False)
 
-                # Apply outlier penalty at split point: when left or right is cut as a single cluster
-                if outlier_thresh is not None and outlier_penalty > 0:
-                    # Left being cut off as a single cluster (i=0) and it's small
-                    if i_vals[0] == 0 and n_left < outlier_thresh:
-                        scores[0] = scores[0] + outlier_penalty
-                    # Right being cut off as a single cluster (j=0) and it's small
-                    if j_vals[-1] == 0 and n_right < outlier_thresh:
-                        scores[-1] = scores[-1] + outlier_penalty
-
-                best = np.argmin(scores)
-                dp_array[k] = scores[best]
-                backptr_array[0, k] = i_vals[best]
-                backptr_array[1, k] = j_vals[best]
-
-            pc.dp_table[node_id] = dp_array
+        if no_split_zero and subtree_all_zero(node, pc, eps=zero_eps):
+            # Leave k=0 as the only feasible state; all split states stay inf
+            pc.raw_dp_table[node_id] = raw_array
+            pc.dp_table[node_id] = total_array
             pc.backptr[node_id] = backptr_array
+
+            if use_outlier:
+                pc._n_small[node_id] = ns_array
+                pc._n_small[left_id] = None
+                pc._n_small[right_id] = None
 
             pc.dp_table[left_id] = None
             pc.dp_table[right_id] = None
+            pc.raw_dp_table[left_id] = None
+            pc.raw_dp_table[right_id] = None
+            continue
+
+        for k in range(1, n_states + 1):
+            max_i = min(k - 1, len(left_raw) - 1)
+            min_i = max(0, k - 1 - (len(right_raw) - 1))
+
+            if min_i > max_i:
+                continue
+
+            i_vals = np.arange(min_i, max_i + 1)
+            j_vals = k - 1 - i_vals
+
+            raw_scores = left_raw[i_vals] + right_raw[j_vals]
+
+            finite_mask = np.isfinite(raw_scores)
+            if not np.any(finite_mask):
+                continue
+            finite_idx = np.flatnonzero(finite_mask)
+
+            if use_outlier:
+                n_sm = left_ns[i_vals] + right_ns[j_vals]
+
+            if prefer_fewer and use_outlier:
+                # Lexicographic: minimise outlier count, then raw cost
+                n_sm_f = n_sm[finite_idx]
+                raw_f = raw_scores[finite_idx]
+                min_n = int(np.min(n_sm_f))
+                candidates = finite_idx[n_sm_f == min_n]
+                best = int(candidates[np.argmin(raw_scores[candidates])])
+            else:
+                # Minimise raw cost, break ties by fewer outliers
+                raw_f = raw_scores[finite_idx]
+                min_raw = float(np.min(raw_f))
+                tied = finite_idx[np.isclose(raw_f, min_raw, rtol=0.0, atol=1e-12)]
+                if use_outlier and len(tied) > 1:
+                    n_sm_t = n_sm[tied]
+                    min_n = int(np.min(n_sm_t))
+                    still_tied = tied[n_sm_t == min_n]
+                    if len(still_tied) > 1 and node is tree.root:
+                        pc._root_ties[k + 1] = {
+                            "n_solutions": int(len(still_tied)),
+                            "total_score": float(min_raw),
+                            "outlier_count": int(min_n),
+                        }
+                    best = int(still_tied[0])
+                else:
+                    best = int(tied[0])
+
+            raw_array[k] = raw_scores[best]
+            total_array[k] = raw_scores[best]
+            if use_outlier:
+                ns_array[k] = n_sm[best]
+
+            backptr_array[0, k] = i_vals[best]
+            backptr_array[1, k] = j_vals[best]
+
+        pc.raw_dp_table[node_id] = raw_array
+        pc.dp_table[node_id] = total_array
+        pc.backptr[node_id] = backptr_array
+
+        if use_outlier:
+            pc._n_small[node_id] = ns_array
+            pc._n_small[left_id] = None
+            pc._n_small[right_id] = None
+
+        pc.dp_table[left_id] = None
+        pc.dp_table[right_id] = None
+        pc.raw_dp_table[left_id] = None
+        pc.raw_dp_table[right_id] = None
 
     pc.postorder_nodes = nodes
+    pc._dp_ready = True
+
+
+def _assign_group(group_nodes: list, clusters: dict, cluster_id: int) -> int:
+    """Assign all terminals under each node in group_nodes to cluster_id. Returns the next cluster_id."""
+    for group_node in group_nodes:
+        for terminal in group_node.get_terminals():
+            clusters[terminal] = cluster_id
+    return cluster_id + 1
+
+
+def _expand_prefix_hard(
+    pc,
+    children: list,
+    step_backptrs: list,
+    num_children: int,
+    state_index: int,
+) -> list:
+    """
+    Iteratively unroll the left-recursive hard-polytomy backtrack chain.
+
+    Returns a list of ("node", node_id, state) tasks in child order.
+    """
+    pairs: list[tuple[int, int]] = []
+    current = state_index
+    for i in range(num_children - 1, 0, -1):
+        step_bp = step_backptrs[i - 1]
+        left = int(step_bp[current])
+        if left < 0:
+            raise MissingDPTableError(
+                "Hard-polytomy back-pointer missing - fatal error."
+            )
+        right = current - 1 - left
+        if right < 0:
+            raise MissingDPTableError(
+                "Hard-polytomy back-pointer inconsistent - fatal error."
+            )
+        pairs.append((i, right))
+        current = left
+    pairs.append((0, current))
+    pairs.reverse()
+    return [("node", pc.node_to_id[children[i]], s) for i, s in pairs]
+
+
+def _expand_soft_tasks(
+    pc,
+    children: list,
+    parent_map: dict,
+    fullmask: int,
+    target_q: int,
+) -> list:
+    """
+    Iteratively walk the soft-polytomy parent chain and reconstruct the task list.
+
+    Returns tasks in forward (root-to-leaves) order.
+    """
+    chain: list[tuple[int, Any]] = []
+    mask, q = fullmask, target_q
+    while mask != 0 or q != 0:
+        key = (mask, q)
+        if key not in parent_map:
+            raise MissingDPTableError(
+                "Soft-polytomy back-pointer missing - fatal error."
+            )
+        prev_mask, prev_q, block_mask, child_state = parent_map[key]
+        chain.append((block_mask, child_state))
+        mask, q = prev_mask, prev_q
+
+    tasks = []
+    for block_mask, child_state in reversed(chain):
+        bits = [i for i in range(len(children)) if block_mask & (1 << i)]
+        if child_state is None:
+            tasks.append(("group", [children[i] for i in bits], None))
+        else:
+            if len(bits) != 1:
+                raise MissingDPTableError(
+                    "Soft-polytomy singleton back-pointer malformed."
+                )
+            child = children[bits[0]]
+            tasks.append(("node", pc.node_to_id[child], int(child_state)))
+    return tasks
+
+
+def _expand_polytomy_tasks(
+    node: Any, pc, c_index: int
+) -> list[tuple[str, Any, int | None]]:
+    """Return the list of backtrack tasks for a polytomous node at state c_index."""
+    info = pc.polytomy_backptr[pc.node_to_id[node]]
+    if info is None:
+        raise MissingDPTableError("Polytomy back-pointer missing - fatal error.")
+
+    children = list(node.clades)
+    mode = info["mode"]
+
+    if mode == "hard":
+        return _expand_prefix_hard(pc, children, info["steps"], len(children), c_index)
+
+    if mode == "soft":
+        fullmask = (1 << len(children)) - 1
+        return _expand_soft_tasks(pc, children, info["parent"], fullmask, c_index + 1)
+
+    raise MissingDPTableError(f"Unknown polytomy back-pointer mode: {mode}")
 
 
 def backtrack(pc, k: int, *, verbose: bool = False) -> dict[Any, int]:
     if k is None:
-        raise ValueError("value of k is missing.")
+        raise InvalidKError("value of k is missing.")
     if k <= 0:
-        raise ValueError("k must be a positive integer.")
+        raise InvalidKError("k must be a positive integer.")
     if not getattr(pc, "_dp_ready", False):
-        raise RuntimeError("DP table not computed. Call compute_dp_table(pc) first.")
+        raise MissingDPTableError(
+            "DP table not computed. Call compute_dp_table(pc) first."
+        )
 
     active_tree = pc._tree_wo_outgroup if pc.outgroup else pc.tree
     root = active_tree.root
@@ -329,34 +424,65 @@ def backtrack(pc, k: int, *, verbose: bool = False) -> dict[Any, int]:
 
     root_dp = pc.dp_table[root_id]
     if root_dp is None:
-        raise RuntimeError(
+        raise MissingDPTableError(
             "DP table at root is missing. Did compute_dp_table(pc) fail?"
         )
 
     cluster_index = k - 1
 
+    if hasattr(pc, "_root_ties") and k in pc._root_ties:
+        info = pc._root_ties[k]
+        logger.warning(
+            "[phytclust] selected k=%d has %d tied optimal root solutions "
+            "(total score=%g, outlier count=%d); using deterministic fallback",
+            k,
+            info["n_solutions"],
+            info["total_score"],
+            info["outlier_count"],
+        )
+
     if cluster_index >= len(root_dp):
-        raise ValueError(
-            f"Cannot partition into {k} clusters — exceeds tree capacity."
+        max_k_val = getattr(pc, "max_k", None)
+        if max_k_val is not None and k > max_k_val:
+            raise InvalidKError(
+                f"Cannot partition into {k} clusters — max_k is set to {max_k_val}. "
+                f"Increase or remove max_k to allow k={k}."
+            )
+        raise InvalidKError(
+            f"Cannot partition into {k} clusters — exceeds tree capacity "
+            f"(tree has {pc.num_terminals} terminals)."
         )
 
-    # Warn if solution violates min_cluster_size constraint
+    # Warn if solution is infeasible
     min_cluster_size = getattr(pc, "min_cluster_size", 1)
+    no_split_zero = getattr(pc, "no_split_zero_length", False)
     if np.isinf(root_dp[cluster_index]):
-        import warnings
-        warnings.warn(
-            f"Partition into {k} clusters violates min_cluster_size={min_cluster_size}. "
-            f"Using best available solution (some clusters < {min_cluster_size}).",
-            UserWarning
+        reasons = []
+        if min_cluster_size > 1:
+            reasons.append(f"min_cluster_size={min_cluster_size}")
+        if no_split_zero:
+            reasons.append("no_split_zero_length=True")
+        if not reasons:
+            reasons.append("tree structure")
+        raise InvalidClusteringError(
+            f"Partition into {k} clusters is infeasible given {', '.join(reasons)}."
         )
-
     clusters: dict[Any, int] = {}
     current_cluster_id = 0
-    stack = [(root_id, cluster_index)]
+
+    stack: list[tuple[str, Any, int | None]] = [("node", root_id, cluster_index)]
 
     while stack:
-        node_id, c_index = stack.pop()
+        item_type, payload, c_index = stack.pop()
+
+        if item_type == "group":
+            current_cluster_id = _assign_group(payload, clusters, current_cluster_id)
+            continue
+
+        node_id = payload
         node = pc.postorder_nodes[node_id]
+        if c_index is None:
+            raise MissingDPTableError("Node task missing c_index during backtrack.")
 
         if verbose:
             print(f"Visiting node {getattr(node, 'name', '')} with c_index={c_index}")
@@ -367,33 +493,26 @@ def backtrack(pc, k: int, *, verbose: bool = False) -> dict[Any, int]:
                 clusters[t] = current_cluster_id
             current_cluster_id += 1
         elif pc.polytomy_backptr[node_id] is not None:
-            # Polytomous node: unwind the convolution steps in reverse
-            step_backptrs = pc.polytomy_backptr[node_id]
-            n = c_index
-            child_k_indices = []
-            # step_backptrs[s][n] = clusters from first s+1 children
-            for step_bp in reversed(step_backptrs):
-                j = int(step_bp[n])        # clusters from combined part
-                child_k_indices.append(n - j)  # this child gets n-j clusters
-                n = j
-            child_k_indices.append(n)      # first child gets n clusters
-            child_k_indices.reverse()
-            for child, ci in zip(node.clades, child_k_indices):
-                stack.append((pc.node_to_id[child], ci))
+            # Polytomous node: reconstruct child tasks while preserving merged groups.
+            tasks = _expand_polytomy_tasks(node, pc, c_index)
+            for task in reversed(tasks):
+                stack.append(task)
         else:
             # Binary node: unchanged
             left_k = pc.backptr[node_id][0, c_index]
             right_k = pc.backptr[node_id][1, c_index]
 
             if left_k < 0 or right_k < 0:
-                raise RuntimeError("Back-pointer missing - fatal error. Check DP.")
+                raise MissingDPTableError(
+                    "Back-pointer missing - fatal error. Check DP."
+                )
 
             left, right = node.clades[0], node.clades[1]
-            stack.append((pc.node_to_id[right], int(right_k)))
-            stack.append((pc.node_to_id[left], int(left_k)))
+            stack.append(("node", pc.node_to_id[right], int(right_k)))
+            stack.append(("node", pc.node_to_id[left], int(left_k)))
 
     if current_cluster_id != k:
-        raise ValueError(
+        raise InvalidClusteringError(
             f"Number of clusters found: {current_cluster_id}, expected: {k}"
         )
 
@@ -401,25 +520,5 @@ def backtrack(pc, k: int, *, verbose: bool = False) -> dict[Any, int]:
 
 
 def cluster_map(pc, k: int) -> dict[Any, int]:
-    if not getattr(pc, "_dp_ready", False):
-        validate_args(pc)
-        prepare_tree(pc)
-        compute_dp_table(pc)
-
-    pc._dp_ready = True
-    if k <= 0:
-        raise ValueError("k must be a positive integer.")
-
-    if pc.clusters is None:
-        pc.clusters = {}
-
-    if k in pc.clusters:
-        return pc.clusters[k]
-
-    if not getattr(pc, "_dp_ready", False):
-        compute_dp_table(pc)
-        pc._dp_ready = True
-
-    cmap = pc.get_clusters(k)
-    pc.clusters[k] = cmap
-    return cmap
+    """Convenience wrapper — delegates to ``pc.get_clusters(k)``."""
+    return pc.get_clusters(k)

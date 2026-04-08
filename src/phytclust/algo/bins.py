@@ -1,6 +1,8 @@
 from typing import Optional, Tuple
 import numpy as np
 
+from ..exceptions import InvalidKError
+
 
 def define_bins(
     pc,
@@ -13,7 +15,7 @@ def define_bins(
     if k_hi is None:
         k_hi = pc.num_terminals
     if k_hi <= k_lo:
-        raise ValueError("k_hi must be > k_lo")
+        raise InvalidKError("k_hi must be > k_lo")
 
     raw = np.geomspace(k_lo, k_hi, num_bins + 1)
     edges = np.unique(np.round(raw).astype(int))

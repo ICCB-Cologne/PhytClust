@@ -31,7 +31,7 @@ class InvalidKError(ConfigurationError):
     pass
 
 
-class InvalidTreeError(ValidationError):
+class InvalidTreeError(DataError):
     """Raised when tree structure is invalid."""
     pass
 

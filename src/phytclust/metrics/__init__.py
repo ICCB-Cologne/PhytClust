@@ -1,6 +1,7 @@
 from .indices import (
     colless_index_calc,
     normalized_colless,
+    colless_ratio,
     calculate_internal_terminal_ratio,
     calculate_int_term_ratio,
     collect_branch_lengths,
@@ -10,6 +11,8 @@ from .indices import (
     calculate_internal_variance,
     calculate_terminal_variance,
     variation_ratio,
+    variance_ratio,
+    variance_indices,
     calculate_terminal_contributions,
     find_siblings,
     calculate_variance_of_distances,
@@ -21,6 +24,7 @@ from .indices import (
 __all__ = [
     "colless_index_calc",
     "normalized_colless",
+    "colless_ratio",
     "calculate_internal_terminal_ratio",
     "calculate_int_term_ratio",
     "collect_branch_lengths",
@@ -30,6 +34,8 @@ __all__ = [
     "calculate_internal_variance",
     "calculate_terminal_variance",
     "variation_ratio",
+    "variance_ratio",
+    "variance_indices",
     "calculate_terminal_contributions",
     "find_siblings",
     "calculate_variance_of_distances",

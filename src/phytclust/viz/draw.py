@@ -6,6 +6,8 @@ from typing import Any, Callable, Optional, Union
 
 import matplotlib as mpl
 import matplotlib.collections as mpcollections
+
+from ..exceptions import ValidationError
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
@@ -48,6 +50,41 @@ class PlotError(Exception):
     pass
 
 
+def _value_to_str(value: Optional[float]) -> Optional[str]:
+    """Format a float branch-length value for display; returns None for zero/None."""
+    if value is None or value == 0:
+        return None
+    return str(int(value)) if int(value) == value else str(value)
+
+
+def _make_branch_label_func(
+    branch_labels: Optional[Any],
+    show_branch_lengths: bool,
+) -> Callable[[Any], Optional[str]]:
+    """Return the branch-label callable appropriate for the given configuration."""
+    if not branch_labels:
+        if show_branch_lengths:
+
+            def _format_with_lengths(clade: Any) -> Optional[str]:
+                if getattr(clade, "name", None) in (None, "root"):
+                    return None
+                bl = getattr(clade, "branch_length", None)
+                if bl is None:
+                    return None
+                return _value_to_str(np.round(bl, 1))
+
+            return _format_with_lengths
+        return lambda _: None
+
+    if isinstance(branch_labels, dict):
+        return lambda clade: branch_labels.get(clade)
+
+    if not callable(branch_labels):
+        raise ValidationError("branch_labels must be either a dict or a callable")
+
+    return lambda clade: _value_to_str(branch_labels(clade))
+
+
 def plot_tree(
     input_tree: Any,
     label_func: Optional[Callable[[Any], str]] = None,
@@ -61,8 +98,8 @@ def plot_tree(
     show_branch_lengths: bool = True,
     show_branch_support: bool = False,
     show_events: bool = False,  # unused; kept for compatibility
-    branch_labels: Optional[Union[Dict[Any, str], Callable[[Any], str]]] = None,
-    label_colors: Optional[Union[Dict[str, str], Callable[[str], str]]] = None,
+    branch_labels: Optional[Union[dict[Any, str], Callable[[Any], str]]] = None,
+    label_colors: Optional[Union[dict[str, str], Callable[[str], str]]] = None,
     hide_internal_nodes: bool = True,
     marker_size: Optional[int] = None,
     line_width: Optional[float] = None,
@@ -103,9 +140,6 @@ def plot_tree(
     else:
         fig = ax.figure
 
-    def _black(_: str) -> str:
-        return "black"
-
     if label_colors is None:
         clade_colors: dict[str, Any] = {}
         for clade in input_tree.find_clades():
@@ -127,7 +161,6 @@ def plot_tree(
             else (lambda label: label_colors.get(label, "black"))
         )
 
-    marker_size = marker_size if marker_size is not None else SIZES["tree_marker"]
     marker_func = lambda node: (
         (marker_size, get_label_color(getattr(node, "name", "")))
         if getattr(node, "name", None)
@@ -164,66 +197,7 @@ def plot_tree(
     ax.set_ylim(ymax, -0.5)
     ax_scale = ax.get_xlim()[1] - ax.get_xlim()[0]
 
-    def value_to_str(value: Optional[float]) -> Optional[str]:
-        if value is None or value == 0:
-            return None
-        return str(int(value)) if int(value) == value else str(value)
-
-    # branch labels/lengths
-    if not branch_labels:
-        if show_branch_lengths:
-
-            def format_branch_label(clade):
-                if getattr(clade, "name", None) in (None, "root"):
-                    return None
-                bl = getattr(clade, "branch_length", None)
-                if bl is None:
-                    return None
-                return value_to_str(np.round(bl, 1))
-
-        else:
-
-            def format_branch_label(clade):  # noqa
-                return None
-
-    elif isinstance(branch_labels, dict):
-
-        def format_branch_label(clade):
-            return branch_labels.get(clade)
-
-    else:
-        if not callable(branch_labels):
-            raise TypeError("branch_labels must be either a dict or a callable")
-
-        def format_branch_label(clade):
-            return value_to_str(branch_labels(clade))
-
-    if show_branch_support:
-        def format_support_value(clade):
-            name = getattr(clade, "name", None)
-            if name in (None, "root"):
-                return None
-            try:
-                confidences = clade.confidences
-            except AttributeError:
-                pass
-            else:
-                return "/".join(value_to_str(c.value) for c in confidences)
-            conf = getattr(clade, "confidence", None)
-            return value_to_str(conf) if conf is not None else None
-        # if show_branch_support:
-        #     support_text = format_support_value(clade)
-        #     if support_text is not None:
-        #         ax.text(
-        #             x_here,
-        #             y_here - 0.15,   # small offset
-        #             support_text,
-        #             ha="center",
-        #             va="top",
-        #             fontsize=6,
-        #             color="grey",
-        #         )
-
+    format_branch_label = _make_branch_label_func(branch_labels, show_branch_lengths)
 
     def draw_clade_lines(
         *,
@@ -398,7 +372,7 @@ def _get_y_positions(
     terms = [
         x for x in tree.get_terminals() if (outgroup is None or x.name != outgroup)
     ]
-    heights: Dict[Any, float] = {
+    heights: dict[Any, float] = {
         tip: maxheight - 1 - i for i, tip in enumerate(reversed(terms))
     }
 
@@ -422,17 +396,14 @@ def _get_y_positions(
         calc_row(tree.root)
 
     if adjust:
-        pos = pd.DataFrame(
-            [(cl, val) for cl, val in heights.items()], columns=["clade", "pos"]
-        ).sort_values("pos")
-        pos["newpos"] = 0
+        sorted_clades = sorted(heights, key=heights.get)
         count = 0
-        for i in pos.index:
-            if pos.loc[i, "clade"] != tree.root:
+        new_heights: dict[Any, float] = {}
+        for cl in sorted_clades:
+            if cl != tree.root:
                 count += 1
-            pos.loc[i, "newpos"] = count
-        pos.set_index("clade", inplace=True)
-        heights = pos.to_dict()["newpos"]
+            new_heights[cl] = count
+        heights = new_heights
 
     return heights
 
@@ -532,7 +503,7 @@ def plot_cluster(
     cluster: dict[Any, int],
     tree: Any,
     *,
-    cmap: str | mcolors.Colormap = "tab20",
+    cmap: str | mcolors.Colormap = "phytclust",
     save: bool = False,
     filename: str | None = None,
     results_dir: str | None = None,
@@ -596,14 +567,31 @@ def plot_cluster(
     matplotlib.figure.Figure
         The created figure object.
     """
-    if isinstance(cmap, str):
-        cmap = plt.get_cmap(cmap)
+    n_unique = len(set(cluster.values()))
+    if isinstance(cmap, str) and cmap == "phytclust":
+        from .palette import expand_palette
 
-    palette = (
-        cmap.colors
-        if hasattr(cmap, "colors")
-        else cmap(np.linspace(0, 1, getattr(cmap, "N", 20)))
-    )
+        palette = expand_palette(max(n_unique, 8))
+    elif isinstance(cmap, str):
+        cmap_obj = plt.get_cmap(cmap)
+        palette = list(
+            cmap_obj.colors
+            if hasattr(cmap_obj, "colors")
+            else cmap_obj(np.linspace(0, 1, getattr(cmap_obj, "N", 20)))
+        )
+    else:
+        palette = list(
+            cmap.colors
+            if hasattr(cmap, "colors")
+            else cmap(np.linspace(0, 1, getattr(cmap, "N", 20)))
+        )
+
+    # Ensure we never repeat colors: extend palette if needed
+    if n_unique > len(palette):
+        from .palette import expand_palette
+
+        palette = expand_palette(n_unique)
+
     palette = [tuple(col[:3]) for col in palette]
 
     ids = np.fromiter(cluster.values(), dtype=int)
@@ -616,13 +604,7 @@ def plot_cluster(
             if getattr(leaf, "name", None) == outgroup:
                 colours[i] = "grey"
 
-    # singletons → black when outlier=True
     unique, counts = np.unique(ids, return_counts=True)
-    # if outlier:
-    #     size_map = dict(zip(unique, counts))
-    #     for i, cid in enumerate(ids):
-    #         if size_map[cid] == 1:
-    #             colours[i] = "black"
 
     leaf_names = [getattr(leaf, "name", str(leaf)) for leaf in cluster.keys()]
     clumap = dict(zip(leaf_names, colours))
@@ -718,9 +700,6 @@ def plot_multiple_clusters(
     matplotlib.figure.Figure
         The created figure object.
     """
-    """
-    Heatmap for multiple clusterings alongside a tree (optional).
-    """
     cmax = cmax or int(np.max(input_df.values.astype(int)))
     sample_labels = input_df.index.get_level_values("leaf_name").unique()
     input_df = input_df.sort_index(level="comparison_IDs")
@@ -775,6 +754,10 @@ def plot_multiple_clusters(
         tree_ax.set_axis_off()
         fig.set_constrained_layout_pads(w_pad=0, h_pad=0, hspace=0.0, wspace=150)
 
+    # The heatmap axis: when a tree is present it's the second subplot,
+    # otherwise it's the single axis returned by subplots.
+    heat_ax = ax if final_tree is None else axs[1]
+
     # reorder labels to match y positions
     ind = [y_posns.get(x, -1) for x in sample_labels]
     sample_labels = sample_labels[np.argsort(ind)]
@@ -805,30 +788,26 @@ def plot_multiple_clusters(
         .loc[:, sample_labels]
         .values.T
     )
-    im = axs[-1] if final_tree is not None else ax
-    im = (ax if final_tree is None else axs[1]).pcolormesh(
-        x_pos, y_pos, data, cmap=cmap, norm=color_norm
-    )
+    heat_ax.pcolormesh(x_pos, y_pos, data, cmap=cmap, norm=color_norm)
 
     # vertical separators between solutions
     for line in solution_ends.values:
-        (ax if final_tree is None else axs[1]).axvline(
-            x_pos[line], color="black", linewidth=0.75
-        )
+        heat_ax.axvline(x_pos[line], color="black", linewidth=0.75)
 
     xtick_pos = np.append([0], x_pos[solution_ends.values][:-1])
     xtick_pos = (xtick_pos + np.roll(xtick_pos, -1)) / 2
     xtick_pos[-1] += x_pos[-1] / 2
-    (ax if final_tree is None else axs[1]).set_xticks(xtick_pos)
-    (ax if final_tree is None else axs[1]).set_xticklabels(
-        [x[3:] for x in solution_ends.index], ha="center", rotation=0, va="bottom"
+    heat_ax.set_xticks(xtick_pos)
+    heat_ax.set_xticklabels(
+        [x[3:] for x in solution_ends.index],
+        ha="center",
+        rotation=0,
+        va="bottom",
     )
-    (ax if final_tree is None else axs[1]).tick_params(width=0)
-    (ax if final_tree is None else axs[1]).xaxis.set_tick_params(
-        labelbottom=False, labeltop=True, bottom=False
-    )
-    (ax if final_tree is None else axs[1]).set_yticks([])
-    (ax if final_tree is None else axs[1]).set_ylim(len(sample_labels) + 0.5, 0.5)
+    heat_ax.tick_params(width=0)
+    heat_ax.xaxis.set_tick_params(labelbottom=False, labeltop=True, bottom=False)
+    heat_ax.set_yticks([])
+    heat_ax.set_ylim(len(sample_labels) + 0.5, 0.5)
 
     logger.debug("Finished plot_multiple_clusters")
     return fig
