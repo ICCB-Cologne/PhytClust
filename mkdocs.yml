@@ -1,0 +1,47 @@
+site_name: PhytClust
+site_description: Monophyletic phylogenetic clustering with dynamic programming
+site_url: https://iccb-cologne.github.io/PhytClust/
+repo_name: ICCB-Cologne/PhytClust
+repo_url: https://github.com/ICCB-Cologne/PhytClust
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - toc.follow
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Tutorials:
+      - CLI End-to-End: tutorials/cli-end-to-end.md
+      - Python End-to-End: tutorials/python-end-to-end.md
+  - Reference:
+      - CLI Flags: reference/cli.md
+      - Configuration: reference/configuration.md
+      - Python API: reference/api.md
