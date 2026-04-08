@@ -7,10 +7,11 @@ import numpy as np
 from Bio import Phylo
 
 from phytclust.algo.core import PhytClust
-from phytclust.viz.scores_plot import plot_scores
-from phytclust.viz.cluster_plot import plot_clusters
+from phytclust.exceptions import InvalidClusteringError, ConfigurationError
+from phytclust.viz.scores import plot_scores
+from phytclust.viz.cluster import plot_clusters
 
-TREE_PATH = pathlib.Path(__file__).parent / "test_tree.nwk"
+TREE_PATH = pathlib.Path(__file__).parent.parent / "examples" / "sample_tree.nwk"
 
 
 def _load_tree():
@@ -61,7 +62,7 @@ class TestScoresPlot:
         pc = PhytClust(tree=tree)
         pc.scores = np.array([])
 
-        with pytest.raises(ValueError, match="Scores are empty"):
+        with pytest.raises(InvalidClusteringError, match="Scores are empty"):
             plot_scores(pc)
 
     def test_plot_scores_invalid_axis_mode_raises_error(self):
@@ -70,7 +71,7 @@ class TestScoresPlot:
         pc = PhytClust(tree=tree)
         pc.run(top_n=1, max_k=10, plot_scores=False)
 
-        with pytest.raises(ValueError, match="x_axis_mode must be"):
+        with pytest.raises(ConfigurationError, match="x_axis_mode must be"):
             plot_scores(pc, x_axis_mode="invalid")
 
 

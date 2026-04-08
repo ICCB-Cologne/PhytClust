@@ -11,8 +11,9 @@ from phytclust.validation import (
     resolve_polytomies,
     ensure_branch_lengths,
 )
+from phytclust.exceptions import InvalidTreeError
 
-TREE_PATH = pathlib.Path(__file__).parent / "test_tree.nwk"
+TREE_PATH = pathlib.Path(__file__).parent.parent / "examples" / "sample_tree.nwk"
 
 
 def _load_tree() -> Tree:
@@ -44,9 +45,9 @@ class TestValidateAndSetOutgroup:
         assert result_outgroup is None
 
     def test_with_invalid_outgroup_raises_error(self):
-        """Test that invalid outgroup name raises ValueError."""
+        """Test that invalid outgroup name raises InvalidTreeError."""
         tree = _load_tree()
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidTreeError):
             validate_and_set_outgroup(tree, "nonexistent_taxon_xyz")
 
 

@@ -48,3 +48,25 @@ def test_cli_resolution_mode(tmp_path):
     _assert_ok(result)
     assert out_dir.exists()
     assert any(out_dir.iterdir())
+
+
+def test_cli_soft_polytomy_mode(tmp_path):
+    out_dir = tmp_path / "results"
+    result = run_cli(
+        [
+            str(TREE_FILE),
+            "--k",
+            "2",
+            "--polytomy-mode",
+            "soft",
+            "--soft-polytomy-max-degree",
+            "8",
+            "--save-fig",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    _assert_ok(result)
+    assert out_dir.exists()
+    assert any(out_dir.iterdir())

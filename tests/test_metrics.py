@@ -13,7 +13,7 @@ from phytclust.metrics.indices import (
     variance_ratio,
 )
 
-TREE_PATH = pathlib.Path(__file__).parent / "test_tree.nwk"
+TREE_PATH = pathlib.Path(__file__).parent.parent / "examples" / "sample_tree.nwk"
 
 
 def _load_tree():
@@ -37,12 +37,14 @@ class TestCollessIndex:
         # Create a simple balanced tree
         from Bio.Phylo.BaseTree import Clade, Tree
 
-        tree = Tree(Clade(
-            clades=[
-                Clade(clades=[Clade(name="A"), Clade(name="B")], name="AB"),
-                Clade(clades=[Clade(name="C"), Clade(name="D")], name="CD"),
-            ]
-        ))
+        tree = Tree(
+            Clade(
+                clades=[
+                    Clade(clades=[Clade(name="A"), Clade(name="B")], name="AB"),
+                    Clade(clades=[Clade(name="C"), Clade(name="D")], name="CD"),
+                ]
+            )
+        )
 
         index = colless_index_calc(tree)
         # Balanced tree should have Colless = 0

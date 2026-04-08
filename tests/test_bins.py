@@ -1,5 +1,6 @@
 import pytest
 from phytclust.algo.bins import define_bins
+from phytclust.exceptions import InvalidKError
 
 
 class _PC:
@@ -25,5 +26,5 @@ def test_define_bins_basic_properties():
 
 def test_define_bins_rejects_invalid_range():
     pc = _PC(10)
-    with pytest.raises(ValueError, match="k_hi must be > k_lo"):
+    with pytest.raises(InvalidKError, match="k_hi must be > k_lo"):
         define_bins(pc, num_bins=3, k_lo=5, k_hi=5)

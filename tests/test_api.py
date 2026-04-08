@@ -5,12 +5,23 @@ from Bio.Phylo.BaseTree import Clade
 
 from phytclust.algo.core import PhytClust
 from phytclust.algo.dp import compute_dp_table
+from phytclust.exceptions import ConfigurationError, InvalidKError
 
-TREE_PATH = pathlib.Path(__file__).parent / "test_tree.nwk"
+TREE_PATH = pathlib.Path(__file__).parent.parent / "examples" / "sample_tree.nwk"
 
 
 def _load_tree():
     return Phylo.read(TREE_PATH, "newick")
+
+
+def _leaf_groups(cmap):
+    """Return a frozenset of frozensets of leaf names, one per cluster."""
+    from collections import defaultdict
+
+    buckets = defaultdict(set)
+    for terminal, cid in cmap.items():
+        buckets[cid].add(terminal.name)
+    return frozenset(frozenset(s) for s in buckets.values())
 
 
 def _assert_cluster_map_valid(tree, cmap, k_expected: int):
@@ -39,7 +50,9 @@ def test_run_exact_k_partition_returns_result_dict():
     assert result["peaks"] == [2]
     assert result["scores"] is None
 
-    cmap = result["clusters"]
+    assert isinstance(result["clusters"], list)
+    assert len(result["clusters"]) == 1
+    cmap = result["clusters"][0]
     _assert_cluster_map_valid(tree, cmap, k_expected=2)
 
 
@@ -115,15 +128,55 @@ def test_run_rejects_invalid_argument_combinations():
     pc = PhytClust(tree=tree)
 
     with pytest.raises(
-        ValueError, match="Cannot combine `k` with `by_resolution=True`"
+        ConfigurationError, match="Cannot combine `k` with `by_resolution=True`"
     ):
         pc.run(k=2, by_resolution=True, plot_scores=False)
 
-    with pytest.raises(ValueError, match="`top_n` is meaningless when `k` is given"):
+    with pytest.raises(
+        ConfigurationError, match="`top_n` is meaningless when `k` is given"
+    ):
         pc.run(k=2, top_n=2, plot_scores=False)
 
-    with pytest.raises(ValueError, match="k must be"):
+    with pytest.raises(InvalidKError, match="k must be"):
         pc.run(k=0, plot_scores=False)
 
-    with pytest.raises(ValueError, match="`top_n` must be"):
+    with pytest.raises(InvalidKError, match="`top_n` must be"):
         pc.run(top_n=0, plot_scores=False)
+
+
+def test_k2_partition_is_root_split():
+    """
+    sample_tree.nwk has root children A13={A,B,C,D} and {E,F,G,H}.
+    k=2 must split exactly there, verified against expected leaf sets.
+
+    Tree: (((A:5,B:3):6,(C:3,D:7):4):22,(((E:7,F:13):5,G:6):10,H:60):35):0;
+    """
+    tree = _load_tree()
+    pc = PhytClust(tree=tree)
+    pc.run(k=2, plot_scores=False)
+    cmap = pc.get_clusters(2)
+
+    groups = _leaf_groups(cmap)
+    assert groups == frozenset(
+        [
+            frozenset(["A", "B", "C", "D"]),
+            frozenset(["E", "F", "G", "H"]),
+        ]
+    )
+
+
+def test_k4_partition_segregates_leaf_pairs():
+    """
+    k=4 on sample_tree.nwk should produce 4 clusters each covering a known clade.
+    The two shallow binary pairs {A,B} and {C,D} must each be in their own clusters.
+    """
+    tree = _load_tree()
+    pc = PhytClust(tree=tree)
+    pc.run(k=4, plot_scores=False)
+    cmap = pc.get_clusters(4)
+
+    groups = _leaf_groups(cmap)
+    assert len(groups) == 4
+    # Each of the two leaf-pair clades must appear as an intact cluster
+    assert frozenset(["A", "B"]) in groups
+    assert frozenset(["C", "D"]) in groups
