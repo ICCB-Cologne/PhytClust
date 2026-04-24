@@ -9,7 +9,7 @@ where = ["src"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-phytclust = ["*.png", "ascii_logo.txt"]
+phytclust = ["assets/*"]
 
 [project]
 name = "phytclust"
@@ -34,7 +34,7 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 
@@ -59,11 +59,18 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.0",
 ]
+gui = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10"]
 
 [project.urls]
-Documentation = "https://bitbucket.org/schwarzlab/phytclust"
-Source = "https://bitbucket.org/schwarzlab/phytclust"
-Tracker = "https://bitbucket.org/schwarzlab/phytclust/issues"
+Documentation = "https://iccb-cologne.github.io/PhytClust/"
+Source = "https://github.com/ICCB-Cologne/PhytClust"
+Tracker = "https://github.com/ICCB-Cologne/PhytClust/issues"
 
 [project.scripts]
 phytclust = "phytclust.cli:main"

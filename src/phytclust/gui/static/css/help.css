@@ -1,0 +1,72 @@
+/* ===================== HELP SIDEBAR ===================== */
+.help-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100%;
+  background: var(--pc-surface);
+  border-left: 1px solid var(--pc-border);
+  z-index: 1040;
+  overflow-y: auto;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.1);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.help-sidebar.open {
+  transform: translateX(0);
+}
+.help-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--pc-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: var(--pc-surface);
+  z-index: 1;
+}
+.help-header h4 {
+  font-size: 15px;
+}
+.help-body {
+  padding: 18px;
+}
+.help-body h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pc-text);
+  margin-bottom: 6px;
+  margin-top: 18px;
+}
+.help-body h5:first-child {
+  margin-top: 0;
+}
+.help-body ul,
+.help-body ol {
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--pc-text-secondary);
+  margin-bottom: 0;
+}
+.help-body code {
+  background: var(--pc-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: "JetBrains Mono", monospace;
+}
+.help-body kbd {
+  background: var(--pc-bg);
+  border: 1px solid var(--pc-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+}
+.help-body .example-btn {
+  width: 100%;
+  margin-top: 12px;
+}

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import statistics
-from typing import Optional, List
+from collections import defaultdict
+from typing import Any, Optional, List
 import numpy as np
 from Bio.Phylo.BaseTree import Tree, Clade
 
@@ -190,6 +191,62 @@ def variance_ratio(tree: Tree) -> float:
 def colless_ratio(tree: Tree) -> float:
     """Backward-compatible normalized Colless ratio in [0, 1] for binary trees."""
     return normalized_colless(tree)
+
+
+def cluster_alpha(tree: Any, cmap: dict[Clade, int]) -> dict[str, Any]:
+    """
+    Alpha = mean extra-cluster branch length / mean intra-cluster branch length.
+
+    Intra-cluster nodes are the strict descendants of each cluster's MRCA (the
+    MRCA itself is counted as extra-cluster, along with every node outside any
+    cluster's MRCA subtree). Each node contributes its ``branch_length`` once;
+    ``None`` is treated as 0.
+    """
+    cluster_terms: dict[int, list[Clade]] = defaultdict(list)
+    for term, cid in cmap.items():
+        cluster_terms[cid].append(term)
+
+    intra_ids: set[int] = set()
+    for terms in cluster_terms.values():
+        if len(terms) == 1:
+            mrca = terms[0]
+        else:
+            mrca = tree.common_ancestor(terms)
+        if mrca is None:
+            continue
+        for node in mrca.find_clades():
+            if node is not mrca:
+                intra_ids.add(id(node))
+
+    intra_sum = 0.0
+    intra_count = 0
+    extra_sum = 0.0
+    extra_count = 0
+    for node in tree.find_clades():
+        bl = float(node.branch_length or 0.0)
+        if id(node) in intra_ids:
+            intra_sum += bl
+            intra_count += 1
+        else:
+            extra_sum += bl
+            extra_count += 1
+
+    avg_intra = intra_sum / intra_count if intra_count else float("nan")
+    avg_extra = extra_sum / extra_count if extra_count else float("nan")
+    if intra_count == 0 or avg_intra == 0:
+        alpha = float("inf")
+    else:
+        alpha = avg_extra / avg_intra
+
+    return {
+        "alpha": alpha,
+        "avg_extra_branch_length": avg_extra,
+        "avg_intra_branch_length": avg_intra,
+        "sum_extra_branch_length": extra_sum,
+        "sum_intra_branch_length": intra_sum,
+        "n_extra_nodes": extra_count,
+        "n_intra_nodes": intra_count,
+    }
 
 
 def variance_indices(tree: Tree) -> dict[str, float]:

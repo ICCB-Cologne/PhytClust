@@ -1,5 +1,6 @@
 import os
 import logging
+import warnings
 import numpy as np
 from typing import Any, Optional, Callable, Tuple, List
 import matplotlib.pyplot as plt
@@ -19,6 +20,43 @@ def _get_map(pc, k: int):
     except Exception:
         pass
     return cluster_map(pc, int(k))
+
+
+def _resolve_plot_targets(
+    pc,
+    *,
+    top_n: int,
+    k: Optional[int],
+    n: Optional[int],
+) -> list[tuple[int, dict]]:
+    """Resolve which k-values to plot.
+
+    Precedence is preserved for backward compatibility:
+    explicit ``k`` > compatibility alias ``n`` > ``pc.k`` > ranked peaks.
+    """
+    clusters_to_plot: list[tuple[int, dict]] = []
+    if n is not None and k is None:
+        warnings.warn(
+            "Parameter 'n' is deprecated; use 'k' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+    selected_k = k if k is not None else n if n is not None else pc.k
+
+    if selected_k is not None:
+        k_val = int(selected_k)
+        clmap = _get_map(pc, k_val)
+        if clmap is not None:
+            clusters_to_plot.append((k_val, clmap))
+        return clusters_to_plot
+
+    for k_val in (pc.peaks_by_rank or [])[:top_n]:
+        kv = int(k_val)
+        clmap = _get_map(pc, kv)
+        if clmap is not None:
+            clusters_to_plot.append((kv, clmap))
+    return clusters_to_plot
 
 
 def plot_clusters(
@@ -44,34 +82,9 @@ def plot_clusters(
         pc.clusters = {}
 
     if pc.k is None and (pc.scores is None):
-        logger.info(
-            "Scores not available - continuing without a score plot."
-        )
+        logger.info("Scores not available - continuing without a score plot.")
 
-    clusters_to_plot: list[tuple[int, dict]] = []
-
-    # Priority: explicit k param > n param > pc.k > peaks
-    if k is not None:
-        k_val = int(k)
-        clmap = _get_map(pc, k_val)
-        if clmap is not None:
-            clusters_to_plot.append((k_val, clmap))
-    elif n is not None:
-        k_val = int(n)
-        clmap = _get_map(pc, k_val)
-        if clmap is not None:
-            clusters_to_plot.append((k_val, clmap))
-    elif pc.k is not None:
-        k_val = int(pc.k)
-        clmap = _get_map(pc, k_val)
-        if clmap is not None:
-            clusters_to_plot.append((k_val, clmap))
-    else:
-        for k_val in (pc.peaks_by_rank or [])[:top_n]:
-            kv = int(k_val)
-            clmap = _get_map(pc, kv)
-            if clmap is not None:
-                clusters_to_plot.append((kv, clmap))
+    clusters_to_plot = _resolve_plot_targets(pc, top_n=top_n, k=k, n=n)
 
     if not clusters_to_plot:
         logger.warning("No clusters to plot - check your arguments.")
@@ -171,9 +184,7 @@ def plot_multiple_k(
             if clmap is not None:
                 clusters_to_plot.append((int(k_val), clmap))
         except Exception:
-            logger.warning(
-                "Could not compute clusters for k=%d", k_val
-            )
+            logger.warning("Could not compute clusters for k=%d", k_val)
 
     if not clusters_to_plot:
         logger.warning("No clusters to plot - check your arguments.")
@@ -203,9 +214,7 @@ def plot_multiple_k(
                 out_dir = results_dir or "."
                 out_name = f"tree_k{k_val}.png"
                 out_path = os.path.join(out_dir, out_name)
-                fig_single.savefig(
-                    out_path, bbox_inches="tight", dpi=150
-                )
+                fig_single.savefig(out_path, bbox_inches="tight", dpi=150)
                 plt.close(fig_single)
             else:
                 plt.show()

@@ -1,0 +1,69 @@
+/* ===================== TOAST NOTIFICATIONS ===================== */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 16px;
+  border-radius: var(--pc-radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--pc-shadow-lg);
+  pointer-events: auto;
+  animation: toastIn 0.25s ease;
+  max-width: 380px;
+  backdrop-filter: blur(8px);
+}
+.toast.info {
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+}
+.toast.success {
+  background: rgba(75, 130, 115, 0.92);
+  color: #fff;
+}
+.toast.danger {
+  background: rgba(196, 84, 84, 0.92);
+  color: #fff;
+}
+.toast.fade-out {
+  animation: toastOut 0.25s ease forwards;
+}
+
+/* ===================== STATUS BAR ===================== */
+.status-bar {
+  padding: 6px 20px;
+  font-size: 12px;
+  color: var(--pc-text-muted);
+  background: var(--pc-surface);
+  border-top: 1px solid var(--pc-border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pc-border);
+}
+.status-dot.ready {
+  background: #5a9e8f;
+}
+.status-dot.running {
+  background: var(--pc-warning);
+  animation: pulse 1s infinite;
+}
+.status-dot.error {
+  background: var(--pc-danger);
+}

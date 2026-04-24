@@ -592,11 +592,14 @@ def plot_cluster(
 
         palette = expand_palette(n_unique)
 
-    palette = [tuple(col[:3]) for col in palette]
+    # Keep RGBA channels (including alpha) and map actual cluster IDs to unique
+    # palette indices. This avoids modulo collisions for sparse/non-contiguous IDs.
+    palette = [tuple(col[:4]) for col in palette]
 
     ids = np.fromiter(cluster.values(), dtype=int)
-    colour_idx = np.mod(ids, len(palette))
-    colours: list[Any] = [palette[i] for i in colour_idx]
+    unique_ids = sorted(set(int(v) for v in ids.tolist()))
+    id_to_idx = {cid: i for i, cid in enumerate(unique_ids)}
+    colours: list[Any] = [palette[id_to_idx[int(cid)] % len(palette)] for cid in ids]
 
     # outgroup → grey
     if outgroup is not None:

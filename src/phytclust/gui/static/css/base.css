@@ -1,0 +1,144 @@
+/* ============================================================
+   PhytClust – Modern Design System
+   ============================================================
+   Light/dark theming via [data-theme] on <html>.
+   All colors use CSS custom properties so switching theme
+   swaps everything at once.
+   ============================================================ */
+
+/* --- Light Theme (default) --- */
+:root,
+[data-theme="light"] {
+  --pc-primary: #2b2638;
+  --pc-primary-light: #6b61ac;
+  --pc-accent: #3d8b7a;
+  --pc-accent-hover: #327565;
+  --pc-accent-subtle: rgba(61, 139, 122, 0.1);
+  --pc-accent-glow: rgba(61, 139, 122, 0.25);
+
+  --pc-green: #5a9e8f;
+  --pc-warning: #c9a84e;
+  --pc-danger: #b85454;
+  --pc-danger-subtle: rgba(184, 84, 84, 0.1);
+
+  --pc-bg: #f6f7f8;
+  --pc-surface: #ffffff;
+  --pc-surface-glass: rgba(255, 255, 255, 0.82);
+  --pc-border: #e0e4e8;
+  --pc-border-subtle: #eef0f2;
+
+  --pc-text: #1e293b;
+  --pc-text-secondary: #475569;
+  --pc-text-muted: #94a3b8;
+
+  --pc-shadow-sm: 0 1px 3px rgba(52, 36, 94, 0.06);
+  --pc-shadow-md: 0 4px 14px rgba(52, 36, 94, 0.09);
+  --pc-shadow-lg: 0 8px 28px rgba(52, 36, 94, 0.13);
+
+  --pc-radius-sm: 8px;
+  --pc-radius-md: 12px;
+  --pc-radius-lg: 16px;
+  --pc-sidebar-width: 340px;
+  --pc-header-height: 52px;
+  --pc-transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --pc-link-color: #64748b;
+  --pc-tree-branch: #000000;
+  --pc-tree-label: #334155;
+  --pc-tree-internal: #64748b;
+}
+
+/* --- Dark Theme --- */
+[data-theme="dark"] {
+  --pc-primary: #1a1e25;
+  --pc-primary-light: #6bb5a5;
+  --pc-accent: #5bbaa6;
+  --pc-accent-hover: #72c9b6;
+  --pc-accent-subtle: rgba(91, 186, 166, 0.14);
+  --pc-accent-glow: rgba(91, 186, 166, 0.3);
+
+  --pc-green: #6bb5a5;
+  --pc-warning: #d4bf6a;
+  --pc-danger: #d87171;
+  --pc-danger-subtle: rgba(216, 113, 113, 0.12);
+
+  --pc-bg: #1a1e25;
+  --pc-surface: #232830;
+  --pc-surface-glass: rgba(35, 40, 48, 0.9);
+  --pc-border: #333a44;
+  --pc-border-subtle: #2a3038;
+
+  --pc-text: #e2e8f0;
+  --pc-text-secondary: #94a3b8;
+  --pc-text-muted: #64748b;
+
+  --pc-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --pc-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.28);
+  --pc-shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.36);
+
+  --pc-link-color: #b0a8c8;
+  --pc-tree-branch: #000000;
+  --pc-tree-label: #d0c8e0;
+  --pc-tree-internal: #8a80a8;
+}
+
+/* --- Reset & Base --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background: var(--pc-bg);
+  color: var(--pc-text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pc-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pc-text-muted);
+}
+
+/* --- Typography --- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--pc-text);
+}

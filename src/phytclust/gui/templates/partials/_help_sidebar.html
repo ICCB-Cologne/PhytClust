@@ -1,0 +1,96 @@
+    <!-- ===================== HELP SIDEBAR ===================== -->
+    <div class="help-sidebar" id="help-sidebar">
+      <div class="help-header">
+        <h4>Help</h4>
+        <button id="btn-help-close" class="btn-icon" type="button">
+          &times;
+        </button>
+      </div>
+      <div class="help-body">
+        <h5>Input format</h5>
+        <ul>
+          <li>Trees must be in <strong>Newick</strong> format.</li>
+          <li>Example: <code>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</code></li>
+          <li>
+            Accepted extensions: <code>.nwk</code> <code>.newick</code>
+            <code>.new</code> <code>.txt</code> <code>.tree</code>
+          </li>
+        </ul>
+
+        <h5>Clustering modes</h5>
+        <ul>
+          <li>
+            <strong>Auto</strong> &mdash; Finds optimal k using CalBow score
+            peak detection.
+          </li>
+          <li>
+            <strong>Fixed k</strong> &mdash; Partitions the tree into exactly k
+            clusters.
+          </li>
+          <li>
+            <strong>Multi-resolution</strong> &mdash; Finds one optimal k per
+            log-spaced bin.
+          </li>
+        </ul>
+
+        <h5>How to use</h5>
+        <ol>
+          <li>Upload a Newick file or paste a tree string.</li>
+          <li>Select clustering mode and set parameters.</li>
+          <li>
+            Click <strong>Run PhytClust</strong> (or press
+            <kbd>Ctrl</kbd>+<kbd>Enter</kbd>).
+          </li>
+          <li>Explore results in the tabs.</li>
+          <li>Use Export to download results.</li>
+        </ol>
+
+        <h5>Tree interaction</h5>
+        <ul>
+          <li>
+            <strong>Click</strong> internal nodes to collapse/expand subtrees.
+          </li>
+          <li>
+            <strong>Right-click</strong> any node to rename, highlight, or
+            resize.
+          </li>
+          <li>
+            <strong>Scroll</strong> to zoom, <strong>drag</strong> to pan.
+          </li>
+          <li>Use the search box to find and highlight nodes by name.</li>
+        </ul>
+
+        <h5>Comparison mode</h5>
+        <ul>
+          <li>
+            Enable "Compute all clusters" to compare multiple k results from one
+            run.
+          </li>
+          <li>
+            Click <strong>Add comparison bar</strong> to add any number of
+            cluster bars.
+          </li>
+          <li>
+            Each bar can be sourced from computed k values or from a CSV/TSV
+            file with two columns: <code>leaf_name</code> and
+            <code>cluster_id</code>.
+          </li>
+          <li>
+            You can set a custom title per comparison bar; this title appears
+            above each bar in the plot.
+          </li>
+        </ul>
+
+        <h5>Quick start</h5>
+        <p style="font-size: 13px; color: var(--pc-text-secondary)">
+          Load an example tree to see PhytClust in action:
+        </p>
+        <button
+          id="btn-help-load-example"
+          class="btn-primary example-btn"
+          type="button"
+        >
+          Load example tree
+        </button>
+      </div>
+    </div>

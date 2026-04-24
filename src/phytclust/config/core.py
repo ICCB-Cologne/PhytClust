@@ -10,3 +10,4 @@ class CoreConfig:
     polytomy_mode: Literal["hard", "soft"] = "hard"
     soft_polytomy_max_degree: int = 18
     no_split_zero_length: bool = False
+    preserve_dp_tables: bool = False

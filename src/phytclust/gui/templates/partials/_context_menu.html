@@ -1,0 +1,29 @@
+    <!-- Node context menu -->
+    <div id="node-context-menu" class="node-context-menu" style="display: none">
+      <button id="ctx-rename" type="button">Rename node</button>
+      <button id="ctx-highlight" type="button">Toggle highlight</button>
+      <div class="ctx-slider-row">
+        <span class="ctx-slider-label">Size</span>
+        <input
+          type="range"
+          id="ctx-size-slider"
+          min="0.5"
+          max="5"
+          step="0.25"
+          value="1"
+        />
+        <span id="ctx-size-value" class="ctx-slider-val">1.0</span>
+      </div>
+      <button id="ctx-copy-subtree" type="button">Copy subtree names</button>
+      <button id="ctx-original-size" type="button">Keep original size</button>
+      <button id="ctx-select-cluster" type="button">Focus cluster</button>
+      <button id="ctx-rename-cluster" type="button">Rename cluster box</button>
+      <button id="ctx-adjust-box" type="button">Adjust box padding</button>
+      <button id="ctx-reset" type="button">Reset node</button>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Hidden loading indicator (referenced by JS) -->
+    <div id="app-loading" style="display: none"></div>

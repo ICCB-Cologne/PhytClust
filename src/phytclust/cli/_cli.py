@@ -554,10 +554,12 @@ def main(argv=None) -> int:
 
             ks = []
             if isinstance(result, dict):
-                if "k" in result and result["k"] is not None:
-                    ks = [int(result["k"])]
+                if "k_values" in result and result["k_values"] is not None:
+                    ks = [int(x) for x in result["k_values"]]
                 elif "ks" in result and result["ks"] is not None:
                     ks = [int(x) for x in result["ks"]]
+                elif "k" in result and result["k"] is not None:
+                    ks = [int(result["k"])]
 
             if ks:
                 LOG.info("Selected k: %s", ks if len(ks) > 1 else ks[0])
@@ -577,7 +579,7 @@ def main(argv=None) -> int:
                         args.out_dir if (args.save_fig or args.save_tree) else None
                     ),
                     save=(args.save_fig or args.save_tree),
-                    n=args.k,
+                    k=args.k,
                     **plot_cfg,
                 )
     except Exception as exc:

@@ -19,6 +19,7 @@ from .indices import (
     calculate_coefficient_of_variation,
     calculate_proportions,
     gini_coefficient,
+    cluster_alpha,
 )
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "calculate_coefficient_of_variation",
     "calculate_proportions",
     "gini_coefficient",
+    "cluster_alpha",
 ]

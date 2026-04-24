@@ -46,6 +46,8 @@ def test_run_exact_k_partition_returns_result_dict():
 
     assert isinstance(result, dict)
     assert result["mode"] == "k"
+    assert result["selected_k"] == 2
+    assert result["k_values"] == [2]
     assert result["k"] == 2
     assert result["peaks"] == [2]
     assert result["scores"] is None
@@ -86,6 +88,9 @@ def test_run_global_mode_returns_list_of_cluster_maps():
     assert len(clusters) >= 0
 
     if clusters:
+        assert isinstance(result["k_values"], list)
+        assert result["k_values"] == result["ks"]
+        assert result["selected_k"] == result["k_values"][0]
         assert isinstance(result["ks"], list)
         assert isinstance(result["peaks"], list)
         assert len(result["peaks"]) == len(result["ks"])
@@ -102,6 +107,9 @@ def test_run_resolution_mode_falls_back_for_small_trees():
 
     assert result["mode"] == "resolution"
     assert isinstance(result["clusters"], list)
+    assert isinstance(result["k_values"], list)
+    if result["k_values"]:
+        assert result["selected_k"] == result["k_values"][0]
     assert isinstance(result["ks"], list)
     assert isinstance(result["peaks"], list)
 

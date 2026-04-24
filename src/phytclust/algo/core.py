@@ -1,4 +1,5 @@
 import logging
+import warnings
 from dataclasses import dataclass, field
 from math import ceil
 from typing import Any, Optional
@@ -25,6 +26,7 @@ from ..algo.dp import (
 )
 from ..algo.scoring import calculate_scores, find_score_peaks
 from ..config import OutlierConfig, PeakConfig, RuntimeConfig
+from ..metrics.indices import cluster_alpha
 
 logger = logging.getLogger("phytclust")
 
@@ -114,6 +116,9 @@ class PhytClust:
         Hard mode forbids cross-child partial merges; soft mode allows them.
     soft_polytomy_max_degree : int, default=18
         Degree guardrail for soft mode's exponential subset DP.
+    preserve_dp_tables : bool, default=False
+        Keep intermediate child DP rows instead of freeing them after merge.
+        Useful for debugging/inspection; increases memory usage.
     compute_all_clusters : bool, default=False
         If True in best_global, compute and cache all k clusterings up to max_k.
     """
@@ -141,6 +146,7 @@ class PhytClust:
     optimize_polytomies: bool = True
     polytomy_mode: str = "hard"
     soft_polytomy_max_degree: int = 18
+    preserve_dp_tables: bool = False
 
     compute_all_clusters: bool = False
     runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -160,9 +166,14 @@ class PhytClust:
 
         self.scores = None
         self.peaks_by_rank = None
+        self.alpha_by_k: dict[int, dict[str, Any]] = {}
 
         self._dp_ready = False
-        self._tree_hash: Optional[int] = None
+        # Full cache key for the DP table: tree hash + every parameter that
+        # changes the contents of dp_table/raw_dp_table/backptr.
+        self._dp_cache_sig: Optional[tuple] = None
+        # Cache key for pc.scores: depends on DP + max_k + scoring flags.
+        self._scores_cache_sig: Optional[tuple] = None
         self.clusters: dict[int, IntMap] = {}
         self._last_result: Optional[dict[str, Any]] = None
 
@@ -175,31 +186,153 @@ class PhytClust:
         except Exception:
             return hash(repr(self.tree))
 
-    def _ensure_dp(self) -> None:
-        current = self._hash_tree()
+    def _dp_signature(self) -> tuple:
+        """
+        Full cache key for the DP table.
 
-        if self._dp_ready and (self._tree_hash == current):
+        Anything that can change the contents of dp_table / raw_dp_table /
+        backptr must be included here, otherwise ``_ensure_dp`` will reuse
+        stale results after a parameter change on the same instance.
+        """
+        return (
+            self._hash_tree(),
+            self.outgroup,
+            self.min_cluster_size,
+            self.no_split_zero_length,
+            getattr(self, "zero_length_eps", 1e-12),
+            self.use_branch_support,
+            self.min_support,
+            self.support_weight,
+            self.optimize_polytomies,
+            self.polytomy_mode,
+            self.soft_polytomy_max_degree,
+            self.preserve_dp_tables,
+            self.outlier.size_threshold,
+            self.outlier.prefer_fewer,
+        )
+
+    def _scores_signature(self) -> tuple:
+        """Cache key for ``pc.scores`` (depends on DP sig + scoring knobs)."""
+        return (
+            self._dp_cache_sig,
+            self.max_k,
+            bool(getattr(self, "use_penalized_beta_for_scoring", False)),
+        )
+
+    def _ensure_dp(self) -> None:
+        current = self._dp_signature()
+
+        if self._dp_ready and (self._dp_cache_sig == current):
             logger.debug("DP exists, not recalculating")
             return
 
+        # DP is being rebuilt; every downstream cache must be invalidated.
         self.clusters = {}
         self.scores = None
         self.peaks_by_rank = None
+        self.alpha_by_k = {}
+        self._scores_cache_sig = None
 
         validate_args(self)
         compute_dp_table(self)
 
         self._dp_ready = True
-        self._tree_hash = current
+        self._dp_cache_sig = current
 
         if self.max_k is None or self.max_k < 1:
             self.max_k = max(2, ceil(self.num_terminals * self.max_k_limit))
 
     def _effective_max_k(self, max_k: Optional[int] = None) -> int:
-        """Resolve max_k without mutating self."""
+        """Resolve max_k without mutating self.
+
+        Precedence is:
+        1. explicit method argument ``max_k``
+        2. instance attribute ``self.max_k`` if already set
+        3. derived cap from ``max_k_limit``
+        """
         if max_k is not None:
             return min(self.num_terminals, max_k)
+        if self.max_k is not None:
+            return min(self.num_terminals, self.max_k)
         return max(2, ceil(self.num_terminals * self.max_k_limit))
+
+    def _build_run_result(
+        self,
+        *,
+        mode: str,
+        clusters: list[IntMap],
+        selected_ks: list[int],
+        exact_k: Optional[int] = None,
+        include_scores: bool = True,
+    ) -> dict[str, Any]:
+        """Build a stable run() result payload.
+
+        Canonical keys are ``k_values`` (list[int]) and ``selected_k`` (int|None).
+        Legacy keys (``ks``, ``peaks``, ``k``) are retained for compatibility.
+        """
+        selected_k = (
+            int(exact_k)
+            if exact_k is not None
+            else (int(selected_ks[0]) if selected_ks else None)
+        )
+        alpha_info = self._compute_and_log_alphas(selected_ks, clusters)
+        result: dict[str, Any] = {
+            "mode": mode,
+            "k_values": list(selected_ks),
+            "selected_k": selected_k,
+            "ks": list(selected_ks),
+            "clusters": clusters,
+            "scores": (
+                None
+                if (not include_scores or self.scores is None)
+                else self.scores.copy()
+            ),
+            "peaks": list(selected_ks),
+            "alphas": [info["alpha"] for info in alpha_info],
+            "alpha_details": alpha_info,
+        }
+        if exact_k is not None:
+            result["k"] = int(exact_k)
+        return result
+
+    def _compute_and_log_alphas(
+        self,
+        selected_ks: list[int],
+        clusters: list[IntMap],
+    ) -> list[dict[str, Any]]:
+        """Compute alpha per selected k, cache on ``self.alpha_by_k``, and print it.
+
+        Alpha = mean extra-cluster branch length / mean intra-cluster branch length.
+        """
+        active_tree = (
+            self._tree_wo_outgroup
+            if (self.outgroup and self._tree_wo_outgroup is not None)
+            else self.tree
+        )
+        details: list[dict[str, Any]] = []
+        for k_val, cmap in zip(selected_ks, clusters):
+            info = cluster_alpha(active_tree, cmap)
+            info_with_k = {"k": int(k_val), **info}
+            self.alpha_by_k[int(k_val)] = info_with_k
+            details.append(info_with_k)
+            logger.info(
+                "alpha(k=%d) = %.6g  (avg_extra=%.6g, avg_intra=%.6g, "
+                "n_extra=%d, n_intra=%d)",
+                k_val,
+                info["alpha"],
+                info["avg_extra_branch_length"],
+                info["avg_intra_branch_length"],
+                info["n_extra_nodes"],
+                info["n_intra_nodes"],
+            )
+            print(
+                f"[phytclust] alpha(k={k_val}) = {info['alpha']:.6g}  "
+                f"(avg_extra={info['avg_extra_branch_length']:.6g}, "
+                f"avg_intra={info['avg_intra_branch_length']:.6g}, "
+                f"n_extra={info['n_extra_nodes']}, "
+                f"n_intra={info['n_intra_nodes']})"
+            )
+        return details
 
     @property
     def plot_config(self):
@@ -236,24 +369,19 @@ class PhytClust:
         self.peaks_by_rank = []
         return []
 
-    def best_global(
+    def _run_peak_mode(
         self,
         *,
+        resolution_on: bool,
         top_n: int = 1,
+        num_bins: int = 3,
         max_k: Optional[int] = None,
         plot_scores: bool = True,
         compute_all_clusters: bool = False,
         peak_config: Optional[PeakConfig] = None,
     ) -> list[IntMap]:
-        """
-        Cluster-validity index-based global peak search.
-
-        Returns a list of cluster maps in peak-rank order.
-        """
+        """Internal shared implementation for global and resolution peak modes."""
         self._ensure_dp()
-
-        if top_n < 1:
-            raise InvalidKError("`top_n` must be >= 1.")
 
         eff_max_k = self._effective_max_k(max_k)
         self.max_k = eff_max_k
@@ -261,29 +389,69 @@ class PhytClust:
         if eff_max_k < 4:
             raise InvalidKError("max_k must be at least 4.")
 
-        calculate_scores(self, plot=plot_scores)
-
+        # Scores are a pure function of (DP table, max_k, scoring flags).
+        # Recompute only if the signature has changed since the last call;
+        # this is what lets back-to-back `run(top_n=...)` calls be cheap.
+        scores_sig = self._scores_signature()
+        if self.scores is None or self._scores_cache_sig != scores_sig:
+            calculate_scores(self, plot=plot_scores)
+            self._scores_cache_sig = scores_sig
+        else:
+            logger.debug("Scores cached, not recalculating")
         if self.scores is None or len(self.scores) == 0:
             return self._no_peaks_fallback()
 
-        score_len = min(eff_max_k, len(self.scores))
-        if score_len <= 2:
+        score_k_count = min(eff_max_k, len(self.scores))
+        if score_k_count < 4:
             return self._no_peaks_fallback()
 
         active_peak_config = peak_config or self.peak_config
 
-        find_score_peaks(
-            self,
-            global_peaks=top_n,
-            resolution_on=False,
-            k_start=1,
-            k_end=score_len,
-            plot=plot_scores,
-            peak_config=active_peak_config,
-        )
+        if resolution_on:
+            # Keep existing behavior for small trees: fallback to global peaks.
+            if score_k_count < 50:
+                top = max(1, min(3, score_k_count - 1))
+                return self._run_peak_mode(
+                    resolution_on=False,
+                    top_n=top,
+                    max_k=eff_max_k,
+                    plot_scores=plot_scores,
+                    compute_all_clusters=False,
+                    peak_config=active_peak_config,
+                )
 
-        self.clusters = {}
-        if compute_all_clusters:
+            score_len = score_k_count - 1
+            find_score_peaks(
+                self,
+                resolution_on=True,
+                num_bins=num_bins,
+                peaks_per_bin=1,
+                k_start=2,
+                k_end=score_len,
+                plot=plot_scores,
+                peak_config=active_peak_config,
+            )
+        else:
+            score_len = min(eff_max_k, len(self.scores))
+            if score_len <= 2:
+                return self._no_peaks_fallback()
+
+            find_score_peaks(
+                self,
+                global_peaks=top_n,
+                resolution_on=False,
+                k_start=1,
+                k_end=score_len,
+                plot=plot_scores,
+                peak_config=active_peak_config,
+            )
+
+        # NOTE: do NOT clear ``self.clusters`` here. ``get_clusters(k)`` is a
+        # per-k backtrack cache, and the DP table it was built from hasn't
+        # changed (``_ensure_dp`` already cleared it on a true DP miss). Keeping
+        # the cache means back-to-back runs with different ``top_n`` only run
+        # backtrack for k values that are actually new this round.
+        if (not resolution_on) and compute_all_clusters:
             for k_val in range(1, eff_max_k + 1):
                 try:
                     self.get_clusters(k_val)
@@ -300,6 +468,31 @@ class PhytClust:
             if kv in self.clusters
         ]
 
+    def best_global(
+        self,
+        *,
+        top_n: int = 1,
+        max_k: Optional[int] = None,
+        plot_scores: bool = True,
+        compute_all_clusters: bool = False,
+        peak_config: Optional[PeakConfig] = None,
+    ) -> list[IntMap]:
+        """
+        Cluster-validity index-based global peak search.
+
+        Returns a list of cluster maps in peak-rank order.
+        """
+        if top_n < 1:
+            raise InvalidKError("`top_n` must be >= 1.")
+        return self._run_peak_mode(
+            resolution_on=False,
+            top_n=top_n,
+            max_k=max_k,
+            plot_scores=plot_scores,
+            compute_all_clusters=compute_all_clusters,
+            peak_config=peak_config,
+        )
+
     def best_by_resolution(
         self,
         *,
@@ -308,55 +501,13 @@ class PhytClust:
         plot_scores: bool = True,
         peak_config: Optional[PeakConfig] = None,
     ) -> list[IntMap]:
-        self._ensure_dp()
-
-        eff_max_k = self._effective_max_k(max_k)
-        self.max_k = eff_max_k
-
-        calculate_scores(self, plot=plot_scores)
-
-        if self.scores is None:
-            return self._no_peaks_fallback()
-
-        score_k_count = min(eff_max_k, len(self.scores))
-
-        if score_k_count < 4:
-            return self._no_peaks_fallback()
-
-        if score_k_count < 50:
-            top = max(1, min(3, score_k_count - 1))
-            return self.best_global(
-                top_n=top,
-                max_k=eff_max_k,
-                plot_scores=plot_scores,
-                compute_all_clusters=False,
-                peak_config=peak_config,
-            )
-
-        score_len = score_k_count - 1
-        active_peak_config = peak_config or self.peak_config
-
-        find_score_peaks(
-            self,
+        return self._run_peak_mode(
             resolution_on=True,
             num_bins=num_bins,
-            peaks_per_bin=1,
-            k_start=2,
-            k_end=score_len,
-            plot=plot_scores,
-            peak_config=active_peak_config,
+            max_k=max_k,
+            plot_scores=plot_scores,
+            peak_config=peak_config,
         )
-
-        self.clusters = {}
-        for k_val in self.peaks_by_rank or []:
-            self.get_clusters(k_val)
-
-        self.k = None
-        return [
-            self.clusters[kv]
-            for kv in (self.peaks_by_rank or [])
-            if kv in self.clusters
-        ]
 
     # ------------------------------------------------------------------ #
     #  Unified entry point                                                #
@@ -397,6 +548,8 @@ class PhytClust:
         -------
         dict with keys:
             mode : str — "k", "global", or "resolution"
+            k_values : list[int] — canonical selected k values
+            selected_k : int | None — first selected k for convenience
             ks : list[int] — selected k values
             clusters : list[dict] — cluster maps in rank order
             scores : ndarray | None — score vector
@@ -450,15 +603,13 @@ class PhytClust:
 
             self.k = int(k_val)
             self.peaks_by_rank = [int(k_val)]
-
-            return {
-                "mode": "k",
-                "ks": [int(k_val)],
-                "k": int(k_val),
-                "clusters": [cmap],
-                "scores": None,
-                "peaks": [int(k_val)],
-            }
+            return self._build_run_result(
+                mode="k",
+                clusters=[cmap],
+                selected_ks=[int(k_val)],
+                exact_k=int(k_val),
+                include_scores=False,
+            )
 
         if top_n < 1:
             raise InvalidKError("`top_n` must be >= 1.")
@@ -470,29 +621,25 @@ class PhytClust:
                 plot_scores=plot_scores,
                 peak_config=peak_config or self.peak_config,
             )
-            return {
-                "mode": "resolution",
-                "ks": list(self.peaks_by_rank or []),
-                "clusters": clusters,
-                "scores": (None if self.scores is None else self.scores.copy()),
-                "peaks": list(self.peaks_by_rank or []),
-            }
+            return self._build_run_result(
+                mode="resolution",
+                clusters=clusters,
+                selected_ks=list(self.peaks_by_rank or []),
+            )
 
         # global peak mode
         clusters = self.best_global(
             top_n=top_n,
             max_k=max_k,
             plot_scores=plot_scores,
-            compute_all_clusters=False,
+            compute_all_clusters=self.compute_all_clusters,
             peak_config=peak_config or self.peak_config,
         )
-        return {
-            "mode": "global",
-            "ks": list(self.peaks_by_rank or []),
-            "clusters": clusters,
-            "scores": (None if self.scores is None else self.scores.copy()),
-            "peaks": list(self.peaks_by_rank or []),
-        }
+        return self._build_run_result(
+            mode="global",
+            clusters=clusters,
+            selected_ks=list(self.peaks_by_rank or []),
+        )
 
     # ------------------------------------------------------------------ #
     #  Convenience wrappers                                               #
@@ -510,10 +657,21 @@ class PhytClust:
         top_n: int = 1,
         filename: str = "phytclust_results.tsv",
         outlier: bool = True,
+        k: Optional[int] = None,
         n: Optional[int] = None,
         output_all: bool = False,
     ) -> Optional[str]:
-        """Save clustering results to file (requires pandas)."""
+        """Save clustering results to file (requires pandas).
+
+        ``k`` is the standard selector name. ``n`` is retained as a backwards-
+        compatible alias and is only used if ``k`` is not provided.
+        """
+        if n is not None and k is None:
+            warnings.warn(
+                "Parameter 'n' is deprecated; use 'k' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         from ..io.save import save_clusters
 
         return save_clusters(
@@ -522,6 +680,6 @@ class PhytClust:
             top_n=top_n,
             filename=filename,
             outlier=outlier,
-            n=n,
+            n=(k if k is not None else n),
             output_all=output_all,
         )

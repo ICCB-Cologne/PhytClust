@@ -1,0 +1,56 @@
+    <!-- ===================== CLUSTER EDITOR MODAL ===================== -->
+    <div class="modal-backdrop-custom" id="clusterEditorBackdrop"></div>
+    <div class="modal-custom cluster-editor-modal" id="clusterEditorModal">
+      <div class="modal-header-custom">
+        <h3>Edit cluster labels</h3>
+        <button id="btn-cluster-editor-close" class="btn-icon" type="button">
+          &times;
+        </button>
+      </div>
+      <div class="modal-body-custom">
+        <div class="cluster-editor-controls">
+          <label for="cluster-label-size-input">Cluster label size</label>
+          <input
+            type="number"
+            id="cluster-label-size-input"
+            min="6"
+            max="36"
+            step="1"
+            value="8"
+          />
+          <label for="cluster-filter-text">Filter</label>
+          <input
+            type="text"
+            id="cluster-filter-text"
+            placeholder="Search ID or label"
+          />
+          <label class="check-row" style="margin-left: 2px"
+            ><input type="checkbox" id="cluster-filter-show-outliers" checked />
+            Include outliers</label
+          >
+        </div>
+        <div class="cluster-editor-table-wrap">
+          <table class="cluster-editor-table" id="cluster-editor-table">
+            <thead>
+              <tr>
+                <th>Cluster ID</th>
+                <th>Label</th>
+              </tr>
+            </thead>
+            <tbody id="cluster-editor-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer-custom">
+        <button
+          id="btn-cluster-editor-cancel"
+          class="btn-secondary"
+          type="button"
+        >
+          Cancel
+        </button>
+        <button id="btn-cluster-editor-save" class="btn-primary" type="button">
+          Apply
+        </button>
+      </div>
+    </div>

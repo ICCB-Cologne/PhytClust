@@ -1,0 +1,43 @@
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 280px;
+  }
+  .toolbar {
+    padding: 8px 14px;
+  }
+  .toolbar-collapsible {
+    right: auto;
+    left: 0;
+    min-width: min(92vw, 640px);
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+  .search-box input {
+    width: 90px;
+  }
+}
+@media (max-width: 700px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--pc-border);
+  }
+  .main-content {
+    flex: 1;
+  }
+  .search-box {
+    display: none;
+  }
+}
+
+/* ===================== UTILITY CLASSES ===================== */
+.text-muted {
+  color: var(--pc-text-muted);
+}
+.text-sm {
+  font-size: 12px;
+}

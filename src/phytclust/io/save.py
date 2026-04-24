@@ -6,6 +6,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from ..algo.dp import cluster_map
+from ..metrics.indices import cluster_alpha
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,28 @@ def save_clusters(
 
     outlier_thresh = pc.outlier.size_threshold
     records: list[dict[str, Any]] = []
+    alpha_rows: list[dict[str, Any]] = []
+    active_tree = (
+        pc._tree_wo_outgroup
+        if (pc.outgroup and pc._tree_wo_outgroup is not None)
+        else pc.tree
+    )
 
     for k_val in ks:
         cmap = cluster_map(pc, k_val)
         if cmap is None:
             continue
         counts = Counter(cmap.values())
+
+        cached_alpha = getattr(pc, "alpha_by_k", {}).get(int(k_val))
+        if cached_alpha is None:
+            alpha_info = cluster_alpha(active_tree, cmap)
+            alpha_info = {"k": int(k_val), **alpha_info}
+            if hasattr(pc, "alpha_by_k"):
+                pc.alpha_by_k[int(k_val)] = alpha_info
+        else:
+            alpha_info = cached_alpha
+        alpha_rows.append(alpha_info)
 
         for node, cid in cmap.items():
             if outlier_thresh is not None:
@@ -78,5 +95,10 @@ def save_clusters(
             for rank, k_val in enumerate(pc.peaks_by_rank, 1):
                 fh.write(f"Rank {rank}: {k_val} clusters\n")
         logger.info("Wrote peaks_by_rank.txt")
+
+    if alpha_rows:
+        alpha_path = os.path.join(results_dir, "alphas.tsv")
+        pd.DataFrame(alpha_rows).to_csv(alpha_path, sep="\t", index=False)
+        logger.info("Wrote alphas.tsv")
 
     return out_path

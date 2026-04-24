@@ -21,49 +21,74 @@ def _find_zero_length_split_k(pc, max_k: int, eps: float = 1e-12) -> Optional[in
     connected by a zero-length branch into different clusters.
 
     Returns that k value, or None if no zero-length split occurs up to max_k.
-    """
-    from .dp import backtrack
 
-    # Step 1: collect zero-length terminal pairs (strictly two terminals).
-    # Warning is emitted only when such a pair is first split from k-1 to k.
+    Notes
+    -----
+    This is a diagnostic / warning helper only. It must not dominate runtime,
+    so:
+
+    1. If the user already set ``pc.no_split_zero_length=True``, the DP has
+       already forbidden any such split; return ``None`` immediately.
+    2. Otherwise walk k in order and return as soon as the first split is
+       observed (early exit). The common case is a small k, so the loop
+       almost never runs to ``max_k``.
+    3. Cluster lookups go through ``pc.get_clusters(k)``, which hits the
+       per-k backtrack cache on ``pc.clusters`` and cooperates with the
+       cache invalidation in ``_ensure_dp``.
+    """
+    # 1. Short-circuit: if splits are structurally forbidden, there's nothing
+    #    to find. This alone turns an O(max_k) loop into O(1) for configs
+    #    where the user already opted into `no_split_zero_length=True`.
+    if getattr(pc, "no_split_zero_length", False):
+        return None
+
+    # 2. Collect zero-length sibling pairs (clades with a zero-length branch
+    #    whose subtree contains exactly two terminals).
     active_tree = pc._tree_wo_outgroup if pc.outgroup else pc.tree
-    zero_length_pairs = []
+    zero_length_pairs: list[tuple] = []
     for node in active_tree.get_nonterminals():
         for child in node.clades:
             bl = child.branch_length or 0.0
             if bl <= eps:
-                terms = list(child.get_terminals())
+                # Prefer the pre-cached terminal list over a fresh DFS.
+                cached = getattr(pc, "name_leaves_per_node", None)
+                terms = cached.get(child) if cached is not None else None
+                if terms is None:
+                    terms = list(child.get_terminals())
                 if len(terms) == 2:
-                    zero_length_pairs.append(tuple(terms))
+                    zero_length_pairs.append((terms[0], terms[1]))
 
     if not zero_length_pairs:
-        return None  # no zero-length branches to split
+        return None
 
-    # Step 2: find first k where a zero-length terminal pair was together at k-1
-    # and split at k.
-    cluster_cache = {}
-    for k in range(1, max_k + 1):
-        try:
-            cluster_cache[k] = backtrack(pc, k)
-        except (ValueError, RuntimeError):
-            cluster_cache[k] = None
+    # 3. Walk k in order, using the cached backtrack. Early-exit on the first
+    #    split — in practice this terminates at very small k (often k=2).
+    try:
+        prev = pc.get_clusters(1)
+    except (ValueError, RuntimeError, InvalidClusteringError, MissingDPTableError):
+        prev = None
 
     for k in range(2, max_k + 1):
-        prev_clusters = cluster_cache.get(k - 1)
-        cur_clusters = cluster_cache.get(k)
-        if prev_clusters is None or cur_clusters is None:
+        try:
+            cur = pc.get_clusters(k)
+        except (ValueError, RuntimeError, InvalidClusteringError, MissingDPTableError):
+            prev = None
             continue
 
-        for t1, t2 in zero_length_pairs:
-            if t1 not in prev_clusters or t2 not in prev_clusters:
-                continue
-            if t1 not in cur_clusters or t2 not in cur_clusters:
-                continue
+        if prev is not None:
+            for t1, t2 in zero_length_pairs:
+                pc1 = prev.get(t1)
+                pc2 = prev.get(t2)
+                if pc1 is None or pc2 is None or pc1 != pc2:
+                    continue
+                cc1 = cur.get(t1)
+                cc2 = cur.get(t2)
+                if cc1 is None or cc2 is None:
+                    continue
+                if cc1 != cc2:
+                    return k
 
-            together_before = prev_clusters[t1] == prev_clusters[t2]
-            split_now = cur_clusters[t1] != cur_clusters[t2]
-            if together_before and split_now:
-                return k
+        prev = cur
 
     return None
 
@@ -523,7 +548,13 @@ def find_score_peaks(
         else:
             auto_prom = min_prominence
 
-        peaks_idx, props = find_peaks(peak_input, prominence=auto_prom)
+        # Prepend a sentinel strictly below peak_input so k=3 (original
+        # index 0) can be detected by scipy.signal.find_peaks, which
+        # otherwise excludes the first sample as a boundary.
+        sentinel = float(np.min(peak_input)) - 1.0
+        padded_input = np.concatenate([[sentinel], peak_input])
+        peaks_idx_padded, props = find_peaks(padded_input, prominence=auto_prom)
+        peaks_idx = peaks_idx_padded - 1
         prominences = props["prominences"]
 
         for i, pidx in enumerate(peaks_idx):

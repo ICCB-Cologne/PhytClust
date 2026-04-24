@@ -1,7 +1,8 @@
 """PhytClust brand palette — single source of truth for all colors.
 
-The 8 base colors are derived from the PhytClust logo. When more colors
-are needed, lighter/more transparent variants are generated automatically.
+The base palette starts from logo-derived tones and extends with harmonized
+accents. When more colors are needed, lighter/less opaque variants are
+generated automatically while preserving a readable alpha floor.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import numpy as np
 import matplotlib.colors as mcolors
 from matplotlib.colors import ListedColormap
 
-# 8 logo-derived base colors (same as GUI BASE_COLORS)
+# Base colors shared with the GUI palette.
 BASE_HEX: list[str] = [
     "#b84b4b",  # red
     "#849060",  # olive
@@ -20,6 +21,14 @@ BASE_HEX: list[str] = [
     "#3f648a",  # steel blue
     "#3f408a",  # indigo
     "#da63aa",  # pink
+    "#c06f2e",  # amber brown
+    "#2f6f93",  # ocean blue
+    "#4f8f4a",  # green
+    "#ad5c7a",  # rose
+    "#7a5d3b",  # earth
+    "#2f8a85",  # cyan teal
+    "#8f4b7f",  # magenta plum
+    "#5b6bb3",  # slate blue
 ]
 
 # Colorblind-safe accent palette (for score-plot peaks / bin labels)
@@ -34,9 +43,7 @@ ACCENT_HEX: list[str] = [
     "#000000",
 ]
 
-BASE_RGBA: list[tuple[float, ...]] = [
-    mcolors.to_rgba(h) for h in BASE_HEX
-]
+BASE_RGBA: list[tuple[float, ...]] = [mcolors.to_rgba(h) for h in BASE_HEX]
 
 
 def expand_palette(
@@ -55,10 +62,13 @@ def expand_palette(
         return base_rgba[:n]
 
     colors: list[tuple[float, ...]] = []
+    min_alpha = 0.58
+    alpha_step = 0.12
+    light_step = 0.14
     repeats = int(np.ceil(n / len(base_rgba)))
     for r in range(repeats):
-        factor = (r - 1) * 0.18 if r > 0 else 0.0
-        alpha = max(1.0 - r * 0.15, 0.3)
+        factor = r * light_step
+        alpha = max(1.0 - r * alpha_step, min_alpha)
         for rgba in base_rgba:
             adjusted = _adjust_lightness(rgba, factor)
             colors.append((*adjusted[:3], alpha))
@@ -70,9 +80,7 @@ def get_cmap(n: int = 20) -> ListedColormap:
     return ListedColormap(expand_palette(n), name="phytclust")
 
 
-def _adjust_lightness(
-    rgba: tuple[float, ...], factor: float
-) -> tuple[float, ...]:
+def _adjust_lightness(rgba: tuple[float, ...], factor: float) -> tuple[float, ...]:
     """Shift lightness of an RGBA color by *factor* (-1..1)."""
     r, g, b = rgba[:3]
     if factor > 0:

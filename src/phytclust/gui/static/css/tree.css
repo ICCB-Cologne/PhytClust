@@ -1,0 +1,102 @@
+/* ===================== D3 TOOLTIP ===================== */
+.d3-tooltip {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e2e8f0;
+  padding: 7px 11px;
+  border-radius: var(--pc-radius-sm);
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 280px;
+  z-index: 1050;
+  backdrop-filter: blur(4px);
+  box-shadow: var(--pc-shadow-md);
+}
+
+/* ===================== LOADING SPINNER ===================== */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ===================== NODE CONTEXT MENU ===================== */
+.node-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 10px;
+  box-shadow: var(--pc-shadow-lg);
+  padding: 4px 0;
+  min-width: 170px;
+  backdrop-filter: blur(12px);
+}
+.node-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--pc-text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--pc-transition);
+}
+.node-context-menu button:hover {
+  background: var(--pc-accent-subtle);
+  color: var(--pc-accent);
+}
+
+.ctx-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--pc-text-secondary);
+}
+.ctx-slider-label {
+  font-weight: 500;
+  min-width: 28px;
+}
+.ctx-slider-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--pc-border);
+  border-radius: 2px;
+  outline: none;
+}
+.ctx-slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pc-accent);
+  cursor: pointer;
+  border: 2px solid var(--pc-surface);
+}
+.ctx-slider-row input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pc-accent);
+  cursor: pointer;
+  border: 2px solid var(--pc-surface);
+}
+.ctx-slider-val {
+  font-size: 11px;
+  min-width: 24px;
+  text-align: right;
+  color: var(--pc-text-muted);
+}

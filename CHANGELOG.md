@@ -13,6 +13,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-## [0.1.0] – (add date)
+## [0.1.1] – 2026-03-04
+
+### Updated plotting
+
+## [0.1.0] – 2026-03-04
 
 ### Added

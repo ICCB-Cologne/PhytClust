@@ -1,0 +1,210 @@
+/* ===================== VIZ CONTAINER ===================== */
+.viz-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  background: var(--pc-bg);
+  position: relative;
+  z-index: 1;
+}
+.viz-panel {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+.viz-panel.active {
+  display: block;
+}
+#tree_display {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+#optimalk_plot {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  padding: 16px;
+}
+
+.json-panel {
+  padding: 20px 24px;
+}
+.json-panel pre {
+  background: var(--pc-primary);
+  color: #e2e8f0;
+  padding: 16px 20px;
+  border-radius: var(--pc-radius-md);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 65vh;
+  overflow: auto;
+  margin: 0;
+}
+
+/* ===================== COMPARE VIEW ===================== */
+.compare-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.compare-header {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pc-text-secondary);
+  background: var(--pc-surface);
+  border-bottom: 1px solid var(--pc-border-subtle);
+  text-align: center;
+}
+.compare-tree {
+  flex: 1;
+  overflow: auto;
+  min-height: 400px;
+}
+
+.compare-config-list {
+  display: none;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 20px;
+  background: var(--pc-surface);
+  border-bottom: 1px solid var(--pc-border-subtle);
+  overflow-x: auto;
+}
+.compare-config-list.visible {
+  display: flex;
+}
+
+.compare-config-card {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-sm);
+  padding: 8px;
+  min-width: 300px;
+  background: var(--pc-bg);
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.compare-config-card .full-row {
+  grid-column: 1 / -1;
+}
+
+.compare-config-card .form-input {
+  height: 30px;
+}
+
+/* ===================== CLUSTER SELECTOR ===================== */
+.cluster-selector {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cluster-selector.visible {
+  display: flex;
+}
+.cluster-selector label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pc-text-muted);
+}
+.cluster-selector select {
+  height: 28px;
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-sm);
+  padding: 0 24px 0 8px;
+  font-size: 12px;
+  background: var(--pc-bg);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%239a91b2' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  cursor: pointer;
+  color: var(--pc-text);
+}
+.cluster-selector .badge {
+  font-size: 11px;
+  color: var(--pc-text-muted);
+}
+
+#btn-edit-clusters {
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+/* ===================== PALETTE PREVIEW ===================== */
+.palette-preview {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.palette-preview span {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ===================== CHECKBOX CONTROLS ===================== */
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--pc-text-secondary);
+  cursor: pointer;
+}
+.check-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  accent-color: var(--pc-accent);
+  cursor: pointer;
+}
+
+/* ===================== SLIDER CONTROLS ===================== */
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.slider-control input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--pc-border);
+  border-radius: 2px;
+  outline: none;
+  width: 72px;
+}
+.slider-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pc-accent);
+  cursor: pointer;
+  border: 2px solid var(--pc-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.slider-control input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pc-accent);
+  cursor: pointer;
+  border: 2px solid var(--pc-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.slider-label {
+  font-size: 11px;
+  color: var(--pc-text-muted);
+  min-width: 14px;
+  text-align: center;
+}

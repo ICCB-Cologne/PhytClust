@@ -1,13 +1,19 @@
 # src/phytclust/gui/api.py
 
 import logging
+import os
 import tempfile
+import uuid
+from collections import OrderedDict
+from io import StringIO
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException
+from Bio import Phylo
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from phytclust.algo.core import PhytClust
@@ -15,27 +21,111 @@ from phytclust.config import OutlierConfig, PeakConfig
 
 logger = logging.getLogger("phytclust.gui")
 
+
+def _normalize_newick(newick: str) -> str:
+    """Quote any unquoted names containing spaces so JS and BioPython parse the same names.
+
+    The JS newick tokenizer splits only on ( ) , : ; so spaces are part of names.
+    BioPython splits on whitespace too, so it only keeps the last word. This
+    pre-pass wraps such names in single quotes before BioPython ever sees the string.
+    """
+    result: list[str] = []
+    i = 0
+    n = len(newick)
+
+    while i < n:
+        ch = newick[i]
+
+        if ch in "(),;":
+            result.append(ch)
+            i += 1
+
+        elif ch in "'\"":
+            # Already-quoted string — pass through unchanged
+            quote = ch
+            j = i + 1
+            while j < n and newick[j] != quote:
+                j += 1
+            result.append(newick[i : j + 1])
+            i = j + 1
+
+        elif ch == ":":
+            result.append(":")
+            i += 1
+            # Read the branch-length value verbatim (digits, dot, sign, exponent)
+            while i < n and newick[i] not in "(),;":
+                result.append(newick[i])
+                i += 1
+
+        else:
+            # Unquoted name token (leaf or internal node label)
+            j = i
+            while j < n and newick[j] not in "(),;:'\"\\":
+                j += 1
+            token = newick[i:j]
+            stripped = token.strip()
+            if stripped and " " in stripped:
+                leading = token[: len(token) - len(token.lstrip())]
+                result.append(leading + "'" + stripped + "'")
+            else:
+                result.append(token)
+            i = j
+
+    return "".join(result)
+
+# Set PHYTCLUST_PUBLIC_MODE=1 to enable public-safe restrictions:
+#   - leaf count capped at PUBLIC_MAX_TIPS
+#   - /api/save disabled (arbitrary server-path writes)
+#   - per-run result cache so concurrent users don't clobber each other
+PUBLIC_MODE: bool = os.getenv("PHYTCLUST_PUBLIC_MODE", "0") == "1"
+PUBLIC_MAX_TIPS: int = int(os.getenv("PHYTCLUST_MAX_TIPS", "10000"))
+
+# LRU result cache keyed by run_id (UUID). Holds last _CACHE_MAX results.
+_CACHE: OrderedDict[str, tuple[PhytClust, dict[str, Any]]] = OrderedDict()
+_CACHE_MAX = 20
+
 # ------------------------------------------------------
 # Create the FastAPI app
 # ------------------------------------------------------
 app = FastAPI(title="PhytClust Web API")
 
 STATIC_DIR = Path(__file__).parent / "static"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Keep the last PhytClust instance and result in memory (simple session)
+# Single-user fallback (local use). In PUBLIC_MODE the per-run cache is used
+# instead, so concurrent users don't clobber each other's results.
 LAST_PC: Optional[PhytClust] = None
 LAST_RESULT: Optional[dict[str, Any]] = None
 LAST_NEWICK: Optional[str] = None
+LAST_CONSTRUCTION_KEY: Optional[tuple] = None
+
+
+def _cache_put(run_id: str, pc: PhytClust, result: dict[str, Any]) -> None:
+    _CACHE[run_id] = (pc, result)
+    _CACHE.move_to_end(run_id)
+    while len(_CACHE) > _CACHE_MAX:
+        _CACHE.popitem(last=False)
+
+
+def _cache_get(run_id: Optional[str]) -> tuple[PhytClust, dict[str, Any]]:
+    if run_id and run_id in _CACHE:
+        return _CACHE[run_id]
+    if LAST_PC is not None and LAST_RESULT is not None:
+        return LAST_PC, LAST_RESULT
+    raise HTTPException(
+        status_code=400,
+        detail="No PhytClust result available. Please run PhytClust first.",
+    )
 
 
 # ------------------------------------------------------
 # Serve index.html at root URL
 # ------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def serve_frontend():
-    index_path = Path(__file__).parent / "templates" / "index.html"
-    return index_path.read_text()
+def serve_frontend(request: Request):
+    return templates.TemplateResponse(request, "index.html")
 
 
 # ------------------------------------------------------
@@ -82,6 +172,10 @@ class PhytclustRequest(BaseModel):
 # ------------------------------------------------------
 # Helpers
 # ------------------------------------------------------
+def _require_last_result(run_id: Optional[str] = None) -> tuple[PhytClust, dict[str, Any]]:
+    return _cache_get(run_id)
+
+
 def _leaf_key_to_name(x: Any) -> str:
     name = getattr(x, "name", None)
     if name is not None:
@@ -108,13 +202,46 @@ def _serialize_clusters(raw_clusters: Any) -> list[dict[str, int]]:
 # ------------------------------------------------------
 # API endpoint
 # ------------------------------------------------------
+def _construction_key(req: PhytclustRequest, newick: str) -> tuple:
+    """Hashable key covering all PhytClust constructor parameters."""
+    return (
+        newick,
+        req.outgroup,
+        req.root_taxon,
+        req.min_cluster_size,
+        req.use_branch_support,
+        req.min_support,
+        req.support_weight,
+        req.outlier_size_threshold,
+        req.outlier_prefer_fewer,
+        req.outlier_ratio_weight,
+        req.outlier_ratio_mode,
+        req.no_split_zero_length,
+        req.optimize_polytomies,
+    )
+
+
 @app.post("/api/run")
 def run_phytclust(req: PhytclustRequest):
-    global LAST_PC, LAST_RESULT, LAST_NEWICK
+    global LAST_PC, LAST_RESULT, LAST_NEWICK, LAST_CONSTRUCTION_KEY
     notes: list[str] = []
 
     if not req.newick.strip():
         raise HTTPException(status_code=400, detail="Empty Newick string.")
+
+    newick = _normalize_newick(req.newick)
+
+    if PUBLIC_MODE:
+        try:
+            _t = Phylo.read(StringIO(newick.strip()), "newick")
+            n_tips = _t.count_terminals()
+        except Exception:
+            n_tips = 0
+        if n_tips > PUBLIC_MAX_TIPS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tree has {n_tips} tips; the public demo is limited to {PUBLIC_MAX_TIPS}.",
+            )
 
     mode = req.mode.lower()
     if mode not in {"k", "global", "resolution"}:
@@ -122,10 +249,11 @@ def run_phytclust(req: PhytclustRequest):
             status_code=400, detail="mode must be 'k', 'global', or 'resolution'."
         )
 
+    current_key = _construction_key(req, newick)
     if (
-        LAST_NEWICK is not None
+        LAST_CONSTRUCTION_KEY is not None
         and LAST_PC is not None
-        and str(LAST_NEWICK) == str(req.newick)
+        and LAST_CONSTRUCTION_KEY == current_key
     ):
         pc = LAST_PC
         pc.compute_all_clusters = req.compute_all_clusters
@@ -144,7 +272,7 @@ def run_phytclust(req: PhytclustRequest):
                 outlier_kwargs["ratio_mode"] = req.outlier_ratio_mode
 
             kwargs: dict[str, Any] = dict(
-                tree=req.newick,
+                tree=newick,
                 outgroup=req.outgroup,
                 compute_all_clusters=req.compute_all_clusters,
                 use_branch_support=req.use_branch_support,
@@ -236,27 +364,58 @@ def run_phytclust(req: PhytclustRequest):
     # When compute_all_clusters is on, include every cached k->cluster mapping
     all_clusters_json = None
     all_ks = None
+    all_alphas = None
     if req.compute_all_clusters and pc.clusters:
         sorted_ks = sorted(pc.clusters.keys())
         all_ks = sorted_ks
         all_clusters_json = _serialize_clusters([pc.clusters[kv] for kv in sorted_ks])
+        from ..metrics.indices import cluster_alpha
+
+        active_tree = (
+            pc._tree_wo_outgroup
+            if (pc.outgroup and pc._tree_wo_outgroup is not None)
+            else pc.tree
+        )
+        all_alphas = []
+        for kv in sorted_ks:
+            cached = pc.alpha_by_k.get(int(kv))
+            if cached is None:
+                info = cluster_alpha(active_tree, pc.clusters[kv])
+                cached = {"k": int(kv), **info}
+                pc.alpha_by_k[int(kv)] = cached
+            all_alphas.append(float(cached["alpha"]))
+
+    alpha_details = result.get("alpha_details") or []
+    alphas = result.get("alphas") or []
 
     payload = {
         "mode": result.get("mode"),
+        "selected_k": result.get("selected_k"),
+        "k_values": result.get("k_values"),
         "k": result.get("k"),
         "ks": result.get("ks"),
         "peaks": result.get("peaks"),
+        "alphas": [float(a) for a in alphas],
+        "alpha_details": [
+            {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in d.items()}
+            for d in alpha_details
+        ],
         "outgroup": result.get("outgroup"),
         "notes": [str(n) for n in notes if n is not None],
-        "newick": req.newick,
+        "newick": newick,
         "scores": scores,
         "clusters": clusters_json,
         "all_clusters": all_clusters_json,
         "all_ks": all_ks,
+        "all_alphas": all_alphas,
     }
 
+    run_id = str(uuid.uuid4())
+    payload["run_id"] = run_id
+    _cache_put(run_id, pc, payload)
     LAST_PC = pc
-    LAST_NEWICK = req.newick
+    LAST_NEWICK = newick
+    LAST_CONSTRUCTION_KEY = current_key
     LAST_RESULT = payload
     return payload
 
@@ -274,12 +433,12 @@ class SaveRequest(BaseModel):
 
 @app.post("/api/save")
 def save_results(req: SaveRequest):
-    global LAST_PC, LAST_RESULT
-    if LAST_PC is None or LAST_RESULT is None:
+    if PUBLIC_MODE:
         raise HTTPException(
-            status_code=400,
-            detail="No PhytClust result available. Please run PhytClust before saving.",
+            status_code=403,
+            detail="Save to server is disabled in public mode. Use Export TSV instead.",
         )
+    pc, _ = _require_last_result()
 
     try:
         out_dir = Path(req.results_dir)
@@ -291,7 +450,7 @@ def save_results(req: SaveRequest):
         )
 
     try:
-        LAST_PC.save(
+        pc.save(
             results_dir=req.results_dir,
             top_n=req.top_n,
             filename=req.filename,
@@ -312,20 +471,16 @@ class ExportTSVRequest(BaseModel):
     top_n: int = 1
     outlier: bool = True
     output_all: bool = False
+    run_id: Optional[str] = None
 
 
 @app.post("/api/export_tsv")
 def export_tsv(req: ExportTSVRequest):
-    global LAST_PC, LAST_RESULT
-    if LAST_PC is None or LAST_RESULT is None:
-        raise HTTPException(
-            status_code=400,
-            detail="No PhytClust result available. Please run PhytClust before saving.",
-        )
+    pc, _ = _require_last_result(req.run_id)
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            LAST_PC.save(
+            pc.save(
                 results_dir=tmpdir,
                 top_n=req.top_n,
                 filename=req.filename,

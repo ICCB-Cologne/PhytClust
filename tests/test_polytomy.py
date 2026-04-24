@@ -6,7 +6,9 @@ from Bio import Phylo
 from phytclust import PhytClust
 
 POLYTOMY_PATH = (
-    pathlib.Path(__file__).parent.parent / "examples" / "sample_polytomy.newick"
+    pathlib.Path(__file__).parent.parent
+    / "examples"
+    / "sample_polytomy.newick"
 )
 
 
@@ -40,15 +42,18 @@ def test_internal_polytomy_exact_k_backtracking():
 
 
 def test_root_polytomy_exact_k_backtracking():
+    # Hard mode requires each cluster to be contained within exactly one child
+    # subtree of the polytomy. With 4 root children the minimum feasible k is 4
+    # (one cluster per root child); k=2 would need cross-child merges (soft mode).
     tree = _load_tree("(A:0.1,B:0.1,C:10,(D:1,E:1):1);")
     pc = PhytClust(tree, optimize_polytomies=True)
 
-    result = pc.run(k=2, plot_scores=False)
+    result = pc.run(k=4, plot_scores=False)
 
     assert result["mode"] == "k"
     groups = _cluster_groups(result["clusters"][0])
     _assert_valid_partition(
-        groups, expected_k=2, expected_leaves=["A", "B", "C", "D", "E"]
+        groups, expected_k=4, expected_leaves=["A", "B", "C", "D", "E"]
     )
 
 
@@ -111,7 +116,10 @@ def test_sample_polytomy_soft_k4_recovers_four_branch_groups():
     """Same grouping must hold under soft polytomy mode."""
     tree = Phylo.read(POLYTOMY_PATH, "newick")
     pc = PhytClust(
-        tree, optimize_polytomies=True, polytomy_mode="soft", soft_polytomy_max_degree=8
+        tree,
+        optimize_polytomies=True,
+        polytomy_mode="soft",
+        soft_polytomy_max_degree=8,
     )
 
     result = pc.run(k=4, plot_scores=False)

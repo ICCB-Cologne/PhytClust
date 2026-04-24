@@ -41,8 +41,16 @@
 
 .md-main {
   background:
-    radial-gradient(circle at 12% -10%, rgba(42, 166, 177, 0.12), transparent 32%),
-    radial-gradient(circle at 88% -12%, rgba(216, 154, 31, 0.1), transparent 30%),
+    radial-gradient(
+      circle at 12% -10%,
+      rgba(42, 166, 177, 0.12),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 88% -12%,
+      rgba(216, 154, 31, 0.1),
+      transparent 30%
+    ),
     #ffffff;
 }
 
